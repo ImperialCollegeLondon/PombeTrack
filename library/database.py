@@ -100,16 +100,20 @@ def getExperiments():
     SELECT *
     FROM experiments;
     """
-    results = executeQuery(query, fetchmany=True)
-    experiments = [
-        dict(zip(
-            ["experiment_id", "date", "medium", "strain", "image_path", "channels"],
-            [x[0], "{0}-{1:02d}-{2:02d}".format(x[1], x[2], x[3]),
-             x[4], x[5], x[6], {"green": bool(x[7]), "red": bool(x[8])}]
-        ))
-        for x in results 
-    ]
-    return experiments
+    try:
+        results = executeQuery(query, fetchmany=True)
+    except sqlite3.OperationalError:
+        return []
+    else:
+        experiments = [
+            dict(zip(
+                ["experiment_id", "date", "medium", "strain", "image_path", "channels"],
+                [x[0], "{0}-{1:02d}-{2:02d}".format(x[1], x[2], x[3]),
+                 x[4], x[5], x[6], {"green": bool(x[7]), "red": bool(x[8])}]
+            ))
+            for x in results 
+        ]
+        return experiments
 
 
 if __name__ == "__main__":
