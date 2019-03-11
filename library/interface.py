@@ -13,6 +13,9 @@ from . import database
 
 class Interface:
     def __init__(self):
+        if not os.path.exists(".analysis_store"):
+            os.makedirs(".analysis_store")
+
         self.app = QtWidgets.QApplication([])
         self.app.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
         main_font = QtGui.QFont("Fira Sans", 11)
@@ -30,9 +33,6 @@ class Interface:
         self.window.setLayout(self.base_layout)
 
     def initiate(self):
-        if not os.path.exists(".analysis_store"):
-            os.makedirs(".analysis_store")
-
         self.window.show()
         self.app.exec_()
 
