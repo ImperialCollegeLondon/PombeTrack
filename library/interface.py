@@ -60,10 +60,16 @@ class Interface:
                 medium_item = QtWidgets.QTableWidgetItem()
                 medium_item.setText(experiment["medium"])
                 medium_item.setTextAlignment(QtCore.Qt.AlignCenter)
+                medium_item._item_type = "experimental_setting"
+                medium_item._item_name = "medium"
+                medium_item._experiment_id = experiment["experiment_id"]
 
                 strain_item = QtWidgets.QTableWidgetItem()
                 strain_item.setText(experiment["strain"])
                 strain_item.setTextAlignment(QtCore.Qt.AlignCenter)
+                strain_item._item_type = "experimental_setting"
+                strain_item._item_name = "strain"
+                strain_item._experiment_id = experiment["experiment_id"]
 
                 outlined_item = QtWidgets.QTableWidgetItem()
                 verified_item = QtWidgets.QTableWidgetItem()
@@ -137,6 +143,7 @@ class Interface:
                     self.experiment_table.setItem(row_num, col_num, table_row[table_col][1])
 
             self.experiment_table.itemDoubleClicked.connect(self.table_click_event)
+            self.experiment_table.itemChanged.connect(self.table_change_event)
             self.experiment_table.setCurrentCell(0, 0, QtCore.QItemSelectionModel.Clear)
             self.base_layout.addWidget(self.experiment_table)
         else:
@@ -151,6 +158,22 @@ class Interface:
         # btn_row.setAlignment(QtCore.Qt.AlignLeft)
         btn_row.setAlignment(QtCore.Qt.AlignLeft)
         self.base_layout.addLayout(btn_row)
+
+    def table_change_event(self, item):
+        if not hasattr(item, "_item_type"):
+            return
+
+        if item._item_type != "experimental_setting":
+            return
+
+        data = {}
+        data[item._item_name] = item.data(QtCore.Qt.DisplayRole)
+        database.updateExperimentById(
+            item._experiment_id,
+            **data
+        )
+        self._clear_layout(self.base_layout)
+        self.decorate_window()
 
     def table_click_event(self, item):
         if hasattr(item, "_item_type") and item._item_type == "outline_btn":
