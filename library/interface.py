@@ -13,9 +13,6 @@ from . import database
 
 class Interface:
     def __init__(self):
-        if not os.path.exists(".analysis_store"):
-            os.makedirs(".analysis_store")
-
         self.app = QtWidgets.QApplication([])
         self.app.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
         main_font = QtGui.QFont("Fira Sans", 11)
@@ -73,7 +70,7 @@ class Interface:
                 analysed_item = QtWidgets.QTableWidgetItem()
                 cells_counted_item = QtWidgets.QTableWidgetItem()
 
-                experiment_dir = os.path.join(".analysis_store", str(experiment["experiment_id"]))
+                experiment_dir = os.path.join("data", str(experiment["experiment_id"]))
                 if os.path.exists(os.path.join(experiment_dir, "cells")):
                     outlined_item.setData(
                         QtCore.Qt.BackgroundRole,

@@ -126,8 +126,6 @@ class Experiment:
             image file location
             channels
 
-        Each strain/medium/experiment will have its own config file which is stored in the .analysis_store directory
-        Combining and comparing datasets will then be possible by selecting from these config files
         Note, needs a ANALYSED boolean flag somewhere, or possibly a date stamp specifying when
         """
         if not window:

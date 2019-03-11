@@ -5,7 +5,10 @@ import sqlite3
 
 
 def executeQuery(query, args=None, commit=False, fetchone=False, fetchmany=False):
-    db_path = os.path.join(".analysis_store", "pombetrack.db")
+    db_path = os.path.join("data", "pombetrack.db")
+    if not os.path.exists(os.path.dirname(db_path)):
+        os.makedirs(os.path.dirname(db_path))
+
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         if args:
