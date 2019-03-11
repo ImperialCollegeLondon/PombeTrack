@@ -42,7 +42,6 @@ class Interface:
         existing_experiments = self.get_existing_experiments()
         if len(existing_experiments) > 0:
             self.experiment_table = QtWidgets.QTableWidget()
-            self.experiment_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
             self.experiment_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
             self.experiment_table.setRowCount(len(existing_experiments))
             header_labels = [
