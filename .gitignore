@@ -2,3 +2,6 @@ __pycache__
 .ropeproject
 *.swp
 *.pyc
+build
+dist
+*.spec
