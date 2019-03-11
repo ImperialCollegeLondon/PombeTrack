@@ -120,7 +120,8 @@ def updateExperimentById(experiment_id, medium=None, strain=None, image_path=Non
 def getExperiments():
     query = """
     SELECT *
-    FROM experiments;
+    FROM experiments
+    ORDER BY experiment_id;
     """
     try:
         results = executeQuery(query, fetchmany=True)
