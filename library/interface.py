@@ -56,6 +56,7 @@ class Interface:
                 date_item = QtWidgets.QTableWidgetItem()
                 date_item.setText(experiment["date"])
                 date_item.setTextAlignment(QtCore.Qt.AlignCenter)
+                date_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 
                 medium_item = QtWidgets.QTableWidgetItem()
                 medium_item.setText(experiment["medium"])
@@ -72,9 +73,7 @@ class Interface:
                 strain_item._experiment_id = experiment["experiment_id"]
 
                 outlined_item = QtWidgets.QTableWidgetItem()
-                verified_item = QtWidgets.QTableWidgetItem()
-                analysed_item = QtWidgets.QTableWidgetItem()
-                cells_counted_item = QtWidgets.QTableWidgetItem()
+                outlined_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 
                 experiment_dir = os.path.join("data", str(experiment["experiment_id"]))
                 if os.path.exists(os.path.join(experiment_dir, "cells")):
@@ -83,7 +82,6 @@ class Interface:
                         QtGui.QBrush(QtGui.QColor("green"))
                     )
                     outlined_item.setText("YES")
-                    cells_counted_item.setText("?")
 
                 else:
                     outlined_item.setData(
@@ -91,40 +89,40 @@ class Interface:
                         QtGui.QBrush(QtGui.QColor("red"))
                     )
                     outlined_item.setText("NO")
-                    cells_counted_item.setText("0")
                 
                 outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 outlined_item._experiment_id = experiment["experiment_id"]
                 outlined_item._item_type = "outline_btn"
 
+                verified_item = QtWidgets.QTableWidgetItem()
+                verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+                print("TODO: check whether lineages have been verified")
                 verified_item.setData(
                     QtCore.Qt.BackgroundRole,
                     QtGui.QBrush(QtGui.QColor("red"))
                 )
                 verified_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 verified_item.setText("NO")
+                verified_item._experiment_id = experiment["experiment_id"]
+                verified_item._item_type = "verify_btn"
 
-                if os.path.exists(os.path.join(experiment_dir, "cells")):
-                    analysed_item.setData(
-                        QtCore.Qt.BackgroundRole,
-                        QtGui.QBrush(QtGui.QColor("green"))
-                    )
-                    analysed_item.setText("YES")
-                    cells_counted_item.setText("?")
-
-                else:
-                    analysed_item.setData(
-                        QtCore.Qt.BackgroundRole,
-                        QtGui.QBrush(QtGui.QColor("red"))
-                    )
-                    analysed_item.setText("NO")
-                    cells_counted_item.setText("0")
-
+                cells_counted_item = QtWidgets.QTableWidgetItem()
+                cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+                analysed_item = QtWidgets.QTableWidgetItem()
+                analysed_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+                print("TODO: check whether experiment has been analysed")
+                analysed_item.setData(
+                    QtCore.Qt.BackgroundRole,
+                    QtGui.QBrush(QtGui.QColor("red"))
+                )
+                analysed_item.setText("NO")
                 analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 analysed_item._experiment_id = experiment["experiment_id"]
                 analysed_item._item_type = "analysis_btn"
 
+                cells_counted_item.setText("0")
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
+
                 table_rows.append({
                     "date": (experiment["date"],
                              date_item),
