@@ -88,7 +88,7 @@ class Interface:
                     cells_counted_item.setText("0")
                 
                 outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                outlined_item._experiment_dir = experiment_dir
+                outlined_item._experiment_id = experiment["experiment_id"]
                 outlined_item._item_type = "outline_btn"
 
                 verified_item.setData(
@@ -115,7 +115,7 @@ class Interface:
                     cells_counted_item.setText("0")
 
                 analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                analysed_item._experiment_dir = experiment_dir
+                analysed_item._experiment_id = experiment["experiment_id"]
                 analysed_item._item_type = "analysis_btn"
 
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
@@ -154,7 +154,7 @@ class Interface:
 
     def table_click_event(self, item):
         if hasattr(item, "_item_type") and item._item_type == "outline_btn":
-            experiment_dir = item._experiment_dir
+            experiment_id = item._experiment_id
             # confirm analysis start
             alert = QtWidgets.QMessageBox()
             analyse_confirm = alert.question(
@@ -163,9 +163,9 @@ class Interface:
                 "Are you sure you want to start clicking cells?",
             )
             if analyse_confirm == QtWidgets.QMessageBox.Yes:
-                self.start_analysis(experiment_dir)
+                self.start_analysis(experiment_id)
 
-    def start_analysis(self, experiment_dir):
+    def start_analysis(self, experiment_id):
         print("Not implemented")
         return
 
