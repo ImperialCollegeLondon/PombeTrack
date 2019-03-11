@@ -75,9 +75,9 @@ class Experiment:
         # by definition, to overwrite, the date, medium, and strain must be the same
         database.updateExperimentById(
             old_id,
-            self.settings["image_path"],
-            self.settings["channels"]["green"],
-            self.settings["channels"]["red"],
+            image_path=self.settings["image_path"],
+            channel_green=self.settings["channels"]["green"],
+            channel_red=self.settings["channels"]["red"],
         )
         print("Experiment ID={0} overwritten".format(old_id))
         self.window.close()

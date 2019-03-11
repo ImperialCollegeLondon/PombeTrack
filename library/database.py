@@ -84,15 +84,37 @@ def insertExperiment(date_year, date_month, date_day, medium, strain, image_path
     new_id = executeQuery(query, args, commit=True)
     return new_id
 
-def updateExperimentById(experiment_id, image_path, channel_green, channel_red):
+def updateExperimentById(experiment_id, medium=None, strain=None, image_path=None, channel_green=None, channel_red=None):
+    args = []
+    set_statement = []
+    if medium:
+        set_statement.append("medium = ?")
+        args.append(medium)
+
+    if strain:
+        set_statement.append("strain = ?")
+        args.append(strain)
+
+    if image_path:
+        set_statement.append("image_path = ?")
+        args.append(image_path)
+
+    if channel_green:
+        set_statement.append("channel_green = ?")
+        args.append(channel_green)
+
+    if channel_red:
+        set_statement.append("channel_red = ?")
+        args.append(channel_red)
+
+    set_string = ", ".join(set_statement)
+    args.append(experiment_id)
+
     query = """
     UPDATE experiments
-    SET image_path = ?,
-        channel_green = ?,
-        channel_red = ?
+    SET {0}
     WHERE experiment_id = ?;
-    """
-    args = (image_path, channel_green, channel_red, experiment_id)
+    """.format(set_string)
     executeQuery(query, args, commit=True)
 
 def getExperiments():
