@@ -137,7 +137,7 @@ class Experiment:
         else:
             self.window = window
 
-        self.window.setGeometry(0, 60, 800, 100)
+        self.window.setGeometry(0, 0, 800, 100)
         self.window.setWindowTitle("Add new experiment")
 
         main_layout = QtWidgets.QVBoxLayout()
