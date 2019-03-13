@@ -9,6 +9,72 @@ import PyQt5.Qt as Qt
 
 from . import database
 
+class ExperimentView:
+    def __init__(self, experiment_id):
+        self._data = database.getExperimentById(experiment_id)
+        self.data_changed = False
+
+    def show_experiment(self, window=None):
+        if not window:
+            self.app = QtWidgets.QApplication([])
+            self.app.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
+            font = QtGui.QFont("Fira Sans", 11)
+            self.app.setFont(font)
+            self.window = QtWidgets.QWidget()
+        else:
+            self.window = window
+
+        self.window.setGeometry(0, 0, 800, 100)
+        self.window.setWindowTitle("Experiment #{0}".format(self._data["experiment_id"]))
+
+        main_layout = QtWidgets.QVBoxLayout()
+        self._addDetails(main_layout)
+        self._addOutline(main_layout)
+        self._addLineageVerification(main_layout)
+        self._addAnalysis(main_layout)
+        self.window.setLayout(main_layout)
+        self.window.show()
+        if not window:
+            self.app.exec_()
+
+    def _addDetails(self, main_layout):
+        details_box = QtWidgets.QGroupBox("Details")
+        details_layout = QtWidgets.QGridLayout()
+
+        label_font = QtGui.QFont("Fira Sans", 11)
+        label_font.setBold(True)
+
+        row_num = 0
+        col_num = 0
+        for elem_num, (label_str, kw) in enumerate([
+            ("Date", "date"),
+            ("Strain", "strain"),
+            ("Medium", "medium"),
+            ("Image", "image_path"),
+        ]):
+            label = QtWidgets.QLabel(label_str)
+            label.setFont(label_font)
+            val = QtWidgets.QLabel(self._data[kw])
+            details_layout.addWidget(label, row_num, col_num)
+            details_layout.addWidget(val, row_num, col_num + 1)
+            col_num += 2
+            if elem_num % 2 == 1:
+                row_num += 1
+                col_num = 0
+
+        details_box.setLayout(details_layout)
+        main_layout.addWidget(details_box)
+
+    def _addOutline(self, main_layout):
+        pass
+
+    def _addLineageVerification(self, main_layout):
+        pass
+
+    def _addAnalysis(self, main_layout):
+        pass
+
+
 class Experiment:
     def __init__(self):
         self._check_database()

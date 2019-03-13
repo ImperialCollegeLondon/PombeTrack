@@ -127,6 +127,16 @@ def getExperiments():
                        for x in results]
         return experiments
 
+def getExperimentById(experiment_id):
+    query = """
+    SELECT *
+    FROM experiments
+    WHERE experiment_id = ?
+    """
+    args = (experiment_id,)
+    result = executeQuery(query, args, fetchone=True)
+    return _parseExperimentRow(result)
+
 def _parseExperimentRow(row):
     return {
         "experiment_id": row[0],

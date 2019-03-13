@@ -199,10 +199,6 @@ class Interface:
     def table_click_event(self, item):
         self.edit_btn._experiment_id = item._experiment_id
 
-    def start_analysis(self, experiment_id):
-        print("Not implemented")
-        return
-
     def get_existing_experiments(self):
         experiments = database.getExperiments()
         return experiments
@@ -222,7 +218,11 @@ class Interface:
         if len(self.experiment_table.selectedItems()) == 0:
             return
 
-        print("View:", self.edit_btn._experiment_id)
+        e = experiment.ExperimentView(self.edit_btn._experiment_id)
+        dialog = QtWidgets.QDialog(self.window)
+        dialog.setModal(True)
+        dialog.finished[int].connect(self._refresh_layout)
+        e.show_experiment(window=dialog)
 
     def _clear_layout(self, l):
         for i in reversed(range(l.count())):
