@@ -194,8 +194,7 @@ class Interface:
             item._experiment_id,
             **data
         )
-        self._clear_layout(self.base_layout)
-        self.decorate_window()
+        self._refresh_layout()
 
     def table_click_event(self, item):
         self.edit_btn._experiment_id = item._experiment_id
@@ -212,7 +211,7 @@ class Interface:
         e = experiment.Experiment()
         dialog = QtWidgets.QDialog(self.window)
         dialog.setModal(True)
-        dialog.finished[int].connect(self._add_experiment_callback)
+        dialog.finished[int].connect(self._refresh_layout)
         e.create_new_experiment(window=dialog)
 
     def view_experiment(self, item=None):
@@ -233,7 +232,7 @@ class Interface:
             else:
                 w.widget().deleteLater()
 
-    def _add_experiment_callback(self, *args):
+    def _refresh_layout(self, *args):
         # refresh table
         self._clear_layout(self.base_layout)
         self.decorate_window()
