@@ -137,6 +137,14 @@ def getExperimentById(experiment_id):
     result = executeQuery(query, args, fetchone=True)
     return _parseExperimentRow(result)
 
+def deleteExperimentById(experiment_id):
+    query = """
+    DELETE FROM experiments
+    WHERE experiment_id = ?
+    """
+    args = (experiment_id,)
+    executeQuery(query, args, commit=True)
+
 def _parseExperimentRow(row):
     return {
         "experiment_id": row[0],

@@ -32,6 +32,10 @@ class ExperimentView:
 
         menubar = QtWidgets.QMenuBar()
         file_menu = menubar.addMenu("&File")
+        delete_action = QtWidgets.QAction("&Delete experiment", menubar)
+        delete_action.triggered[bool].connect(lambda: self.delete_experiment())
+        file_menu.addAction(delete_action)
+
         quit_action = QtWidgets.QAction("&Close", menubar)
         quit_action.triggered[bool].connect(lambda: self.window.close())
         file_menu.addAction(quit_action)
@@ -45,6 +49,18 @@ class ExperimentView:
         self.window.show()
         if not window:
             self.app.exec_()
+
+    def delete_experiment(self):
+        # confirm first
+        alert = QtWidgets.QMessageBox()
+        delete_confirm = alert.question(
+            self.window,
+            "Delete experiment?",
+            "Are you really sure you want to delete this experiment?"
+        )
+        if delete_confirm == QtWidgets.QMessageBox.Yes:
+            database.deleteExperimentById(self._data["experiment_id"])
+            self.window.close()
 
     def _addDetails(self, main_layout):
         details_box = QtWidgets.QGroupBox("Details")
