@@ -61,15 +61,13 @@ class Interface:
                 medium_item = QtWidgets.QTableWidgetItem()
                 medium_item.setText(experiment["medium"])
                 medium_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                medium_item._item_type = "experimental_setting"
-                medium_item._item_name = "medium"
+                medium_item._item_type = "experiment_medium"
                 medium_item._experiment_id = experiment["experiment_id"]
 
                 strain_item = QtWidgets.QTableWidgetItem()
                 strain_item.setText(experiment["strain"])
                 strain_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                strain_item._item_type = "experimental_setting"
-                strain_item._item_name = "strain"
+                strain_item._item_type = "experiment_strain"
                 strain_item._experiment_id = experiment["experiment_id"]
 
                 outlined_item = QtWidgets.QTableWidgetItem()
@@ -92,7 +90,7 @@ class Interface:
                 
                 outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 outlined_item._experiment_id = experiment["experiment_id"]
-                outlined_item._item_type = "outline_btn"
+                outlined_item._item_type = "experiment_outlined"
 
                 verified_item = QtWidgets.QTableWidgetItem()
                 verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
@@ -104,7 +102,7 @@ class Interface:
                 verified_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 verified_item.setText("NO")
                 verified_item._experiment_id = experiment["experiment_id"]
-                verified_item._item_type = "verify_btn"
+                verified_item._item_type = "experiment_verified"
 
                 cells_counted_item = QtWidgets.QTableWidgetItem()
                 cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
@@ -118,12 +116,12 @@ class Interface:
                 analysed_item.setText("NO")
                 analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 analysed_item._experiment_id = experiment["experiment_id"]
-                analysed_item._item_type = "analysis_btn"
+                analysed_item._item_type = "experiment_analysed"
 
                 cells_counted_item.setText("0")
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 cells_counted_item._experiment_id = experiment["experiment_id"]
-                cells_counted_item._item_type = "cells_counted"
+                cells_counted_item._item_type = "experiment_cells_counted"
 
                 table_rows.append({
                     "date": (experiment["date"],
@@ -167,11 +165,13 @@ class Interface:
         if not hasattr(item, "_item_type"):
             return
 
-        if item._item_type != "experimental_setting":
+        permitted_types = ["experiment_medium", "experiment_strain"]
+        if item._item_type not in permitted_types:
             return
 
         data = {}
-        data[item._item_name] = item.data(QtCore.Qt.DisplayRole)
+        item_name = item._item_type.split("experiment_")[1]
+        data[item_name] = item.data(QtCore.Qt.DisplayRole)
         database.updateExperimentById(
             item._experiment_id,
             **data
@@ -199,7 +199,8 @@ class Interface:
         e.create_new_experiment(window=dialog)
 
     def view_experiment(self, item=None):
-        if item and item._item_type == "experimental_setting":
+        forbidden_types = ["experiment_medium", "experiment_strain"]
+        if item and item._item_type in forbidden_types:
             return 
 
         if len(self.experiment_table.selectedItems()) == 0:
