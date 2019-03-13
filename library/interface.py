@@ -132,7 +132,7 @@ class Interface:
                 analysed_item._experiment_id = experiment["experiment_id"]
                 analysed_item._item_type = "experiment_analysed"
 
-                cells_counted_item.setText("0")
+                cells_counted_item.setText(self.get_cell_count(experiment["experiment_id"]))
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 cells_counted_item._experiment_id = experiment["experiment_id"]
                 cells_counted_item._item_type = "experiment_cells_counted"
@@ -174,6 +174,10 @@ class Interface:
 
         self.btn_row.setAlignment(QtCore.Qt.AlignLeft)
         self.base_layout.addLayout(self.btn_row)
+
+    def get_cell_count(self, experiment_id):
+        cell_count = 0
+        return str(cell_count)
 
     def table_change_event(self, item):
         if not hasattr(item, "_item_type"):
