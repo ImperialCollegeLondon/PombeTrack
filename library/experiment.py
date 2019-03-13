@@ -29,6 +29,14 @@ class ExperimentView:
         self.window.setWindowTitle("Experiment #{0}".format(self._data["experiment_id"]))
 
         main_layout = QtWidgets.QVBoxLayout()
+
+        menubar = QtWidgets.QMenuBar()
+        file_menu = menubar.addMenu("&File")
+        quit_action = QtWidgets.QAction("&Close", menubar)
+        quit_action.triggered[bool].connect(lambda: self.window.close())
+        file_menu.addAction(quit_action)
+        main_layout.setMenuBar(menubar)
+
         self._addDetails(main_layout)
         self._addOutline(main_layout)
         self._addLineageVerification(main_layout)
@@ -250,6 +258,13 @@ class Experiment:
         self.window.setWindowTitle("Add new experiment")
 
         main_layout = QtWidgets.QVBoxLayout()
+
+        menubar = QtWidgets.QMenuBar()
+        file_menu = menubar.addMenu("&File")
+        quit_action = QtWidgets.QAction("&Close", menubar)
+        quit_action.triggered[bool].connect(lambda: self.window.close())
+        file_menu.addAction(quit_action)
+        main_layout.setMenuBar(menubar)
 
         title_font = QtGui.QFont("Fira Sans", 20)
         title_font.setBold(True)

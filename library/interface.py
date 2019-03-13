@@ -25,8 +25,24 @@ class Interface:
         self.window.setWindowIcon(QtGui.QIcon(os.path.abspath("resources/icon.png")))
         self.base_layout = QtWidgets.QVBoxLayout()
         self.base_layout.setAlignment(QtCore.Qt.AlignTop)
+
+        self.add_menu()
         self.decorate_window()
         self.window.setLayout(self.base_layout)
+
+    def add_menu(self):
+        menubar = QtWidgets.QMenuBar()
+        file_menu = menubar.addMenu("&File")
+
+        refresh_action = QtWidgets.QAction("&Refresh", menubar)
+        refresh_action.triggered[bool].connect(lambda: self._refresh_layout())
+        file_menu.addAction(refresh_action)
+
+        quit_action = QtWidgets.QAction("&Quit", menubar)
+        quit_action.triggered[bool].connect(lambda: self.window.close())
+        file_menu.addAction(quit_action)
+
+        self.base_layout.setMenuBar(menubar)
 
     def initiate(self):
         self.window.show()
