@@ -56,7 +56,7 @@ def createExperimentsTable():
     """
     executeQuery(query, commit=True)
 
-def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain):
+def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, image_path):
     query = """
     SELECT experiment_id
     FROM experiments
@@ -64,9 +64,10 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain):
     AND date_month = ?
     AND date_day = ?
     AND medium = ?
-    AND strain = ?;
+    AND strain = ?
+    AND image_path = ?;
     """
-    args = (date_year, date_month, date_day, medium, strain)
+    args = (date_year, date_month, date_day, medium, strain, image_path)
     experiments = executeQuery(query, args, fetchone=True)
     if experiments:
         return experiments[0]

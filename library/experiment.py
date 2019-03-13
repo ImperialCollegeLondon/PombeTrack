@@ -55,7 +55,8 @@ class Experiment:
         dupl = database.checkExperimentDuplicate(
             *self.settings["date"],
             self.settings["medium"],
-            self.settings["strain"]
+            self.settings["strain"],
+            self.settings["image_path"],
         )
         if dupl:
             alert = QtWidgets.QMessageBox()
