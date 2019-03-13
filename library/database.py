@@ -123,25 +123,23 @@ def getExperiments():
     except sqlite3.OperationalError:
         return []
     else:
-        col_names = [
-            "experiment_id", "date", "medium", "strain", "image_path",
-            "channels", "outlined", "verified", "analysed"
-        ]
-        experiments = [
-            dict(zip(col_names, [
-                x[0], 
-                "{0}-{1:02d}-{2:02d}".format(x[1], x[2], x[3]),
-                x[4],
-                x[5],
-                x[6],
-                {"green": bool(x[7]), "red": bool(x[8])},
-                bool(x[9]),
-                bool(x[10]),
-                bool(x[11]),
-            ]))
-            for x in results 
-        ]
+        experiments = [_parseExperimentRow(x)
+                       for x in results]
         return experiments
+
+def _parseExperimentRow(row):
+    return {
+        "experiment_id": row[0],
+        "date": "{0}-{1:02d}-{2:02d}".format(row[1], row[2], row[3]),
+        "medium": row[4],
+        "strain": row[5],
+        "image_path": row[6],
+        "channels": {"green": bool(row[7]),
+                     "red": bool(row[8])},
+        "outlined": bool(row[9]),
+        "verified": bool(row[10]),
+        "analysed": bool(row[11]),
+    }
 
 
 if __name__ == "__main__":
