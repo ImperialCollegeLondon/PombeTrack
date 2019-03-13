@@ -87,28 +87,19 @@ def insertExperiment(date_year, date_month, date_day, medium, strain, image_path
     new_id = executeQuery(query, args, commit=True)
     return new_id
 
-def updateExperimentById(experiment_id, medium=None, strain=None, image_path=None, channel_green=None, channel_red=None):
+def updateExperimentById(experiment_id, **kwargs):
     args = []
     set_statement = []
-    if medium:
-        set_statement.append("medium = ?")
-        args.append(medium)
 
-    if strain:
-        set_statement.append("strain = ?")
-        args.append(strain)
-
-    if image_path:
-        set_statement.append("image_path = ?")
-        args.append(image_path)
-
-    if channel_green:
-        set_statement.append("channel_green = ?")
-        args.append(channel_green)
-
-    if channel_red:
-        set_statement.append("channel_red = ?")
-        args.append(channel_red)
+    permitted_columns = [
+        "medium", "strain", "image_path", "channel_green", "channel_red",
+        "outlined", "verified", "analysed",
+    ]
+    for kw, val in kwargs.items():
+        if kw not in permitted_columns:
+            raise ValueError("Column name {0} is illegal".format(kw))
+        set_statement.append("{0} = ?".format(kw))
+        args.append(val)
 
     set_string = ", ".join(set_statement)
     args.append(experiment_id)
