@@ -142,7 +142,8 @@ class Interface:
                 for col_num, table_col in enumerate(["date", "medium", "strain", "outlined", "verified", "analysed", "counted"]):
                     self.experiment_table.setItem(row_num, col_num, table_row[table_col][1])
 
-            self.experiment_table.itemDoubleClicked.connect(self.table_click_event)
+            self.experiment_table.itemClicked.connect(self.table_click_event)
+            self.experiment_table.itemDoubleClicked.connect(self.view_experiment)
             self.experiment_table.itemChanged.connect(self.table_change_event)
             self.experiment_table.setCurrentCell(0, 0, QtCore.QItemSelectionModel.Clear)
             self.base_layout.addWidget(self.experiment_table)
@@ -150,14 +151,17 @@ class Interface:
             self.experiment_table = QtWidgets.QLabel("No experiments")
             self.base_layout.addWidget(self.experiment_table)
 
-        # add new experiment button
-        btn_row = QtWidgets.QHBoxLayout()
+        self.btn_row = QtWidgets.QHBoxLayout()
         btn = QtWidgets.QPushButton("Add new experiment")
         btn.clicked[bool].connect(self.add_experiment)
-        btn_row.addWidget(btn)
-        # btn_row.setAlignment(QtCore.Qt.AlignLeft)
-        btn_row.setAlignment(QtCore.Qt.AlignLeft)
-        self.base_layout.addLayout(btn_row)
+        self.btn_row.addWidget(btn)
+
+        self.edit_btn = QtWidgets.QPushButton("View experiment")
+        self.edit_btn.clicked[bool].connect(self.view_experiment)
+        self.btn_row.addWidget(self.edit_btn)
+
+        self.btn_row.setAlignment(QtCore.Qt.AlignLeft)
+        self.base_layout.addLayout(self.btn_row)
 
     def table_change_event(self, item):
         if not hasattr(item, "_item_type"):
@@ -176,17 +180,7 @@ class Interface:
         self.decorate_window()
 
     def table_click_event(self, item):
-        if hasattr(item, "_item_type") and item._item_type == "outline_btn":
-            experiment_id = item._experiment_id
-            # confirm analysis start
-            alert = QtWidgets.QMessageBox()
-            analyse_confirm = alert.question(
-                self.window,
-                "Confirm analysis",
-                "Are you sure you want to start clicking cells?",
-            )
-            if analyse_confirm == QtWidgets.QMessageBox.Yes:
-                self.start_analysis(experiment_id)
+        self.edit_btn._experiment_id = item._experiment_id
 
     def start_analysis(self, experiment_id):
         print("Not implemented")
@@ -203,6 +197,15 @@ class Interface:
         dialog.setModal(True)
         dialog.finished[int].connect(self._add_experiment_callback)
         e.create_new_experiment(window=dialog)
+
+    def view_experiment(self, item=None):
+        if item and item._item_type == "experimental_setting":
+            return 
+
+        if len(self.experiment_table.selectedItems()) == 0:
+            return
+
+        print("View:", self.edit_btn._experiment_id)
 
     def _clear_layout(self, l):
         for i in reversed(range(l.count())):
