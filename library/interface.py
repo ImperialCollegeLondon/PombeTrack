@@ -210,7 +210,6 @@ class Interface:
 
     def add_experiment(self):
         e = experiment.Experiment()
-        # launch this as a dialog window
         dialog = QtWidgets.QDialog(self.window)
         dialog.setModal(True)
         dialog.finished[int].connect(self._add_experiment_callback)
