@@ -39,7 +39,7 @@ class ExperimentView:
 
     def _addDetails(self, main_layout):
         details_box = QtWidgets.QGroupBox("Details")
-        details_layout = QtWidgets.QGridLayout()
+        layout = QtWidgets.QGridLayout()
 
         label_font = QtGui.QFont("Fira Sans", 11)
         label_font.setBold(True)
@@ -55,24 +55,60 @@ class ExperimentView:
             label = QtWidgets.QLabel(label_str)
             label.setFont(label_font)
             val = QtWidgets.QLabel(self._data[kw])
-            details_layout.addWidget(label, row_num, col_num)
-            details_layout.addWidget(val, row_num, col_num + 1)
+            layout.addWidget(label, row_num, col_num)
+            layout.addWidget(val, row_num, col_num + 1)
             col_num += 2
             if elem_num % 2 == 1:
                 row_num += 1
                 col_num = 0
 
-        details_box.setLayout(details_layout)
+        details_box.setLayout(layout)
         main_layout.addWidget(details_box)
 
     def _addOutline(self, main_layout):
-        pass
+        outline_box = QtWidgets.QGroupBox("Cell Outlines")
+        layout = QtWidgets.QVBoxLayout()
+        if self._data["outlined"]:
+            pass
+        else:
+            pass
+
+        outline_btn = QtWidgets.QPushButton("Outline Cells")
+        outline_btn.clicked[bool].connect(lambda: print("outline btn"))
+        layout.addWidget(outline_btn)
+
+        outline_box.setLayout(layout)
+        main_layout.addWidget(outline_box)
 
     def _addLineageVerification(self, main_layout):
-        pass
+        box = QtWidgets.QGroupBox("Lineage verification")
+        layout = QtWidgets.QVBoxLayout()
+        if self._data["verified"]:
+            pass
+        else:
+            pass
+
+        outline_btn = QtWidgets.QPushButton("Verify Lineages")
+        outline_btn.clicked[bool].connect(lambda: print("lineage btn"))
+        layout.addWidget(outline_btn)
+
+        box.setLayout(layout)
+        main_layout.addWidget(box)
 
     def _addAnalysis(self, main_layout):
-        pass
+        box = QtWidgets.QGroupBox("Analysis")
+        layout = QtWidgets.QVBoxLayout()
+        if self._data["analysed"]:
+            pass
+        else:
+            pass
+
+        outline_btn = QtWidgets.QPushButton("Analyse Cells")
+        outline_btn.clicked[bool].connect(lambda: print("analysis btn"))
+        layout.addWidget(outline_btn)
+
+        box.setLayout(layout)
+        main_layout.addWidget(box)
 
 
 class Experiment:
