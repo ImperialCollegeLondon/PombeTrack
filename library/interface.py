@@ -74,7 +74,7 @@ class Interface:
                 outlined_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 
                 experiment_dir = os.path.join("data", str(experiment["experiment_id"]))
-                if os.path.exists(os.path.join(experiment_dir, "cells")):
+                if experiment["outlined"]:
                     outlined_item.setData(
                         QtCore.Qt.BackgroundRole,
                         QtGui.QBrush(QtGui.QColor("green"))
@@ -94,13 +94,21 @@ class Interface:
 
                 verified_item = QtWidgets.QTableWidgetItem()
                 verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-                print("TODO: check whether lineages have been verified")
-                verified_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("red"))
-                )
+                if experiment["verified"]:
+                    verified_item.setData(
+                        QtCore.Qt.BackgroundRole,
+                        QtGui.QBrush(QtGui.QColor("green"))
+                    )
+                    verified_item.setText("YES")
+
+                else:
+                    verified_item.setData(
+                        QtCore.Qt.BackgroundRole,
+                        QtGui.QBrush(QtGui.QColor("red"))
+                    )
+                    verified_item.setText("NO")
+
                 verified_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                verified_item.setText("NO")
                 verified_item._experiment_id = experiment["experiment_id"]
                 verified_item._item_type = "experiment_verified"
 
@@ -108,12 +116,18 @@ class Interface:
                 cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
                 analysed_item = QtWidgets.QTableWidgetItem()
                 analysed_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-                print("TODO: check whether experiment has been analysed")
-                analysed_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("red"))
-                )
-                analysed_item.setText("NO")
+                if experiment["analysed"]:
+                    analysed_item.setData(
+                        QtCore.Qt.BackgroundRole,
+                        QtGui.QBrush(QtGui.QColor("green"))
+                    )
+                    analysed_item.setText("YES")
+                else:
+                    analysed_item.setData(
+                        QtCore.Qt.BackgroundRole,
+                        QtGui.QBrush(QtGui.QColor("red"))
+                    )
+                    analysed_item.setText("NO")
                 analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 analysed_item._experiment_id = experiment["experiment_id"]
                 analysed_item._item_type = "experiment_analysed"

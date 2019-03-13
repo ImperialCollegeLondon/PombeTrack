@@ -49,7 +49,10 @@ def createExperimentsTable():
      strain          TEXT,
      image_path      TEXT,
      channel_green   INTEGER,
-     channel_red     INTEGER);
+     channel_red     INTEGER,
+     outlined        INTEGER DEFAULT 0,
+     verified        INTEGER DEFAULT 0,
+     analysed        INTEGER DEFAULT 0);
     """
     executeQuery(query, commit=True)
 
@@ -128,12 +131,22 @@ def getExperiments():
     except sqlite3.OperationalError:
         return []
     else:
+        col_names = [
+            "experiment_id", "date", "medium", "strain", "image_path",
+            "channels", "outlined", "verified", "analysed"
+        ]
         experiments = [
-            dict(zip(
-                ["experiment_id", "date", "medium", "strain", "image_path", "channels"],
-                [x[0], "{0}-{1:02d}-{2:02d}".format(x[1], x[2], x[3]),
-                 x[4], x[5], x[6], {"green": bool(x[7]), "red": bool(x[8])}]
-            ))
+            dict(zip(col_names, [
+                x[0], 
+                "{0}-{1:02d}-{2:02d}".format(x[1], x[2], x[3]),
+                x[4],
+                x[5],
+                x[6],
+                {"green": bool(x[7]), "red": bool(x[8])},
+                bool(x[9]),
+                bool(x[10]),
+                bool(x[11]),
+            ]))
             for x in results 
         ]
         return experiments
