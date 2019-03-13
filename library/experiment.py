@@ -8,6 +8,7 @@ import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
 
 from . import database
+from . import analysis
 
 class ExperimentView:
     def __init__(self, experiment_id):
@@ -65,16 +66,21 @@ class ExperimentView:
         details_box.setLayout(layout)
         main_layout.addWidget(details_box)
 
+    def outline_cells(self):
+        outliner = analysis.CellOutliner(self._data)
+        outliner.start_outlining()
+
     def _addOutline(self, main_layout):
         outline_box = QtWidgets.QGroupBox("Cell Outlines")
         layout = QtWidgets.QVBoxLayout()
         if self._data["outlined"]:
             pass
         else:
-            pass
+            no_label = QtWidgets.QLabel("No cells have been outlined yet.")
+            layout.addWidget(no_label)
 
         outline_btn = QtWidgets.QPushButton("Outline Cells")
-        outline_btn.clicked[bool].connect(lambda: print("outline btn"))
+        outline_btn.clicked.connect(lambda: self.outline_cells())
         layout.addWidget(outline_btn)
 
         outline_box.setLayout(layout)
