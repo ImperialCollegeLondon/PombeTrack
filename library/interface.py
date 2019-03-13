@@ -55,6 +55,8 @@ class Interface:
                 date_item.setText(experiment["date"])
                 date_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 date_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+                date_item._item_type = "experiment_date"
+                date_item._experiment_id = experiment["experiment_id"]
 
                 medium_item = QtWidgets.QTableWidgetItem()
                 medium_item.setText(experiment["medium"])
@@ -120,6 +122,8 @@ class Interface:
 
                 cells_counted_item.setText("0")
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
+                cells_counted_item._experiment_id = experiment["experiment_id"]
+                cells_counted_item._item_type = "cells_counted"
 
                 table_rows.append({
                     "date": (experiment["date"],
