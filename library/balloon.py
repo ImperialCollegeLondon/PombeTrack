@@ -86,10 +86,10 @@ class Node(object):
         ))
 
     def apply_force(self, skel_coords, image, percentile=5):
-        if (self.x < 11 or
-                self.x > image.shape[0] - 11 or
-                self.y < 11 or
-                self.y > image.shape[1] - 11):
+        if (self.x < 1 or
+                self.x > image.shape[0] - 1 or
+                self.y < 1 or
+                self.y > image.shape[1] - 1):
             self.set_position((self.x, self.y))
             return
         expansion_point = self.get_skeleton_centre(skel_coords)
