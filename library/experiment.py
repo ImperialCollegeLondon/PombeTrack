@@ -29,8 +29,14 @@ class ExperimentView:
         self.window.setGeometry(0, 0, 800, 100)
         self.window.setWindowTitle("Experiment #{0}".format(self._data.experiment_id))
 
-        main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.createLayout()
+        self.window.setLayout(self.main_layout)
+        self.window.show()
+        if not window:
+            self.app.exec_()
 
+    def createLayout(self):
         menubar = QtWidgets.QMenuBar()
         file_menu = menubar.addMenu("&File")
         delete_action = QtWidgets.QAction("&Delete experiment", menubar)
@@ -40,16 +46,12 @@ class ExperimentView:
         quit_action = QtWidgets.QAction("&Close", menubar)
         quit_action.triggered[bool].connect(lambda: self.window.close())
         file_menu.addAction(quit_action)
-        main_layout.setMenuBar(menubar)
+        self.main_layout.setMenuBar(menubar)
 
-        self._addDetails(main_layout)
-        self._addOutline(main_layout)
-        self._addLineageVerification(main_layout)
-        self._addAnalysis(main_layout)
-        self.window.setLayout(main_layout)
-        self.window.show()
-        if not window:
-            self.app.exec_()
+        self._addDetails()
+        self._addOutline()
+        self._addLineageVerification()
+        self._addAnalysis()
 
     def delete_experiment(self):
         # confirm first
@@ -63,7 +65,7 @@ class ExperimentView:
             database.deleteExperimentById(self._data.experiment_id)
             self.window.close()
 
-    def _addDetails(self, main_layout):
+    def _addDetails(self):
         details_box = QtWidgets.QGroupBox("Details")
         layout = QtWidgets.QGridLayout()
 
@@ -89,7 +91,7 @@ class ExperimentView:
                 col_num = 0
 
         details_box.setLayout(layout)
-        main_layout.addWidget(details_box)
+        self.main_layout.addWidget(details_box)
 
     def outline_cells(self):
         outliner = analysis.CellOutliner(self._data)
@@ -101,8 +103,9 @@ class ExperimentView:
         )
         outliner.start_outlining()
         database.updateExperimentById(self._data.experiment_id, outlined=True)
+        self._refreshLayout()
 
-    def _addOutline(self, main_layout):
+    def _addOutline(self):
         outline_box = QtWidgets.QGroupBox("Cell Outlines")
         layout = QtWidgets.QVBoxLayout()
         if self._data.outlined:
@@ -125,9 +128,9 @@ class ExperimentView:
         layout.addWidget(outline_btn)
 
         outline_box.setLayout(layout)
-        main_layout.addWidget(outline_box)
+        self.main_layout.addWidget(outline_box)
 
-    def _addLineageVerification(self, main_layout):
+    def _addLineageVerification(self):
         box = QtWidgets.QGroupBox("Lineage verification")
         layout = QtWidgets.QVBoxLayout()
         if self._data.verified:
@@ -140,9 +143,9 @@ class ExperimentView:
         layout.addWidget(outline_btn)
 
         box.setLayout(layout)
-        main_layout.addWidget(box)
+        self.main_layout.addWidget(box)
 
-    def _addAnalysis(self, main_layout):
+    def _addAnalysis(self):
         box = QtWidgets.QGroupBox("Analysis")
         layout = QtWidgets.QVBoxLayout()
         if self._data.analysed:
@@ -155,7 +158,19 @@ class ExperimentView:
         layout.addWidget(outline_btn)
 
         box.setLayout(layout)
-        main_layout.addWidget(box)
+        self.main_layout.addWidget(box)
+
+    def _clearLayout(self, l):
+        for i in reversed(range(l.count())):
+            w = l.takeAt(i)
+            if type(w) is QtWidgets.QHBoxLayout or type(w) is QtWidgets.QVBoxLayout:
+                self._clear_layout(w)
+            else:
+                w.widget().deleteLater()
+
+    def _refreshLayout(self, *args):
+        self._clearLayout(self.main_layout)
+        self.createLayout()
 
 
 class Experiment:
