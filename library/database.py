@@ -76,7 +76,7 @@ def checkTable(table_name):
     SELECT name
     FROM sqlite_master
     WHERE type='table'
-    AND name=?;
+      AND name=?;
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
@@ -93,11 +93,11 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, im
     SELECT experiment_id
     FROM experiments
     WHERE date_year = ?
-    AND date_month = ?
-    AND date_day = ?
-    AND medium = ?
-    AND strain = ?
-    AND image_path = ?;
+      AND date_month = ?
+      AND date_day = ?
+      AND medium = ?
+      AND strain = ?
+      AND image_path = ?;
     """
     args = (date_year, date_month, date_day, medium, strain, image_path)
     experiments = executeQuery(query, args, fetchone=True)
