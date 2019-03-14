@@ -211,7 +211,8 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, im
     else:
         return False
 
-def insertExperiment(date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red):
+def insertExperiment(date_year, date_month, date_day, medium, strain,
+                     image_path, channel_green, channel_red):
     query = """
     INSERT INTO experiments
     (experiment_hash, date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
