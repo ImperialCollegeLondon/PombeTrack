@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import matplotlib.widgets
+from matplotlib.backend_bases import NavigationToolbar2, Event
 import numpy as np
 import seaborn as sns
 import os
@@ -14,9 +15,21 @@ from . import database
 sns.set_context("talk")
 sns.set_style("white")
 
+old_home = NavigationToolbar2.home
+def home_hook(self, *args, **kwargs):
+    s = "home_event"
+    event = Event(s, self)
+    event.foo = 100
+    self.canvas.callbacks.process(s, event)
+
+NavigationToolbar2.home = home_hook
+
 class Outliner:
     def __init__(self, experiment_data):
         self.PX_UM = 0.1600026
+        self.region_width, self.region_height = 75, 75
+        # self.region_width, self.region_height = 100, 100
+
         self._data = experiment_data
         self.image_percentile = 1
         self.outline_store = os.path.join(
@@ -95,6 +108,7 @@ class Outliner:
         self.figure.canvas.mpl_connect("button_press_event", self._button_press_event)
         self.figure.canvas.mpl_connect("button_release_event", self._button_release_event)
         self.figure.canvas.mpl_connect("motion_notify_event", self._motion_notify_event)
+        self.figure.canvas.mpl_connect("home_event", self._home_event)
         self.main_ax = plt.axes([0.05, 0.15, 0.4, 0.8])
         self.sub_ax = plt.axes([0.55, 0.15, 0.4, 0.8])
         self.text_ax = plt.axes([0.6, 0.05, 0.2, 0.075])
@@ -227,6 +241,8 @@ class Outliner:
         init = balloon.initial_nodes(centre, radius, num_nodes)
         self.balloon_obj = balloon.Balloon(init, roi)
         self.sub_ax.imshow(roi, cmap="gray")
+        self.sub_ax.set_xlim([0, self.region_height * 2])
+        self.sub_ax.set_ylim([self.region_width * 2, 0])
         self._plot_nodes()
         plt.draw()
 
@@ -352,8 +368,6 @@ class Outliner:
         if evt.inaxes == self.main_ax:
             self.previous_id = None
             self.cell_id = str(uuid.uuid4())
-            self.region_width, self.region_height = 75, 75
-            # self.region_width, self.region_height = 100, 100
             centre = [evt.ydata, evt.xdata]
             self.offset_left = int(round(centre[0] - self.region_width))
             self.offset_top = int(round(centre[1] - self.region_height))
@@ -396,4 +410,12 @@ class Outliner:
             return
 
         self.dragging.center = evt.xdata, evt.ydata
+        plt.draw()
+
+    def _home_event(self, evt):
+        print("home_event")
+        self.main_ax.set_xlim([0, 2048])
+        self.main_ax.set_ylim([2048, 0])
+        # self.sub_ax.set_xlim([0, self.region_height * 2])
+        # self.sub_ax.set_ylim([self.region_width * 2, 0])
         plt.draw()
