@@ -2,6 +2,7 @@
 
 import datetime
 import os
+import pandas as pd
 import PyQt5.QtWidgets as QtWidgets 
 import PyQt5.QtGui as QtGui
 import PyQt5.QtCore as QtCore
@@ -99,15 +100,25 @@ class ExperimentView:
             desktop.logicalDpiX(),
         )
         outliner.start_outlining()
+        database.updateExperimentById(self._data.experiment_id, outlined=True)
 
     def _addOutline(self, main_layout):
         outline_box = QtWidgets.QGroupBox("Cell Outlines")
         layout = QtWidgets.QVBoxLayout()
         if self._data.outlined:
-            pass
+            cells = database.getCellsByExperimentId(self._data.experiment_id)
+            num_cells = len(cells)
+            num_lineages = len(pd.DataFrame(cells).lineage_id.unique())
+            label_str = "{0} cells have been outlined, arranged into {1} lineages{2}".format(
+                num_cells,
+                num_lineages,
+                 self._data.verified and "" or " (unverified)"
+            )
+            label = QtWidgets.QLabel(label_str)
         else:
-            no_label = QtWidgets.QLabel("No cells have been outlined yet.")
-            layout.addWidget(no_label)
+            label = QtWidgets.QLabel("No cells have been outlined yet.")
+
+        layout.addWidget(label)
 
         outline_btn = QtWidgets.QPushButton("Outline Cells")
         outline_btn.clicked.connect(lambda: self.outline_cells())

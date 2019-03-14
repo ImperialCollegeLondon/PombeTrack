@@ -133,6 +133,15 @@ def getCellsByFrameIdx(frame_idx, experiment_hash):
     else:
         return [CellRow(x) for x in results]
 
+def getCellsByExperimentId(experiment_id):
+    query = """
+    SELECT * FROM cells
+    WHERE experiment_id = ?
+    """
+    args = (experiment_id,)
+    results = executeQuery(query, args, fetchmany=True)
+    return [CellRow(x) for x in results]
+
 def insertCell(cell_id, lineage_id, experiment_id, experiment_hash, image_path,
                frame_idx, coords_path, offset_left, offset_top, parent_id,
                area_pixels, area):
