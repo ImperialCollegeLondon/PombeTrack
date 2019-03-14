@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import uuid
 
 
 class ExperimentRow(dict):
@@ -13,7 +14,7 @@ class ExperimentRow(dict):
 
     def parseExperimentRow(self, r):
         columns = [
-            "experiment_id",
+            "experiment_id", "experiment_hash",
             "date_year", "date_month", "date_day",
             "medium", "strain", "image_path",
             "channel_green", "channel_red",
@@ -23,6 +24,7 @@ class ExperimentRow(dict):
         row = dict(zip(columns, r))
         return {
             "experiment_id": row["experiment_id"],
+            "experiment_hash": row["experiment_hash"],
             "date": "{date_year}-{date_month:02d}-{date_day:02d}".format(**row),
             "medium": row["medium"],
             "strain": row["strain"],
@@ -73,6 +75,7 @@ def createExperimentsTable():
     query = """
     CREATE TABLE experiments
     (experiment_id   INTEGER PRIMARY KEY,
+     experiment_hash TEXT,
      date_year       INTEGER,
      date_month      INTEGER,
      date_day        INTEGER,
@@ -108,10 +111,12 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, im
 def insertExperiment(date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red):
     query = """
     INSERT INTO experiments
-    (date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    (experiment_hash, date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
+    experiment_hash = str(uuid.uuid4())
     args = (
+        experiment_hash,
         date_year, date_month, date_day,
         medium, strain, image_path,
         channel_green, channel_red,
