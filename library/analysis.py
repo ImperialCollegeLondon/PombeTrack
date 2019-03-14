@@ -14,19 +14,19 @@ from . import database
 sns.set_context("talk")
 sns.set_style("white")
 
-class CellOutliner:
+class Outliner:
     def __init__(self, experiment_data):
         self.PX_UM = 0.1600026
         self._data = experiment_data
         self.image_percentile = 1
-        self.cell_store = os.path.join(
-            "data", "cells", self._data.experiment_hash
+        self.outline_store = os.path.join(
+            "data", "outlines", self._data.experiment_hash
         )
-        if not os.path.exists(self.cell_store):
-            os.makedirs(self.cell_store)
+        if not os.path.exists(self.outline_store):
+            os.makedirs(self.outline_store)
 
-        if not database.checkTable("cells"):
-            database.createCellsTable()
+        if not database.checkTable("outlines"):
+            database.createOutlinesTable()
         
         self.im_preload = {}
         self.cell_outlines = []
@@ -107,7 +107,7 @@ class CellOutliner:
         self.decorate_axis(self.main_ax)
         self.decorate_axis(self.sub_ax)
         self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
-        self.plot_existing_cells()
+        self.plot_existing_outlines()
         plt.show()
 
     def decorate_axis(self, ax):
@@ -123,7 +123,7 @@ class CellOutliner:
             print("Invalid tolerance: {0}".format(text))
             self.text_box.set_val(str(self.image_percentile))
 
-    def plot_existing_cells(self):
+    def plot_existing_outlines(self):
         self.main_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
         while True:
             try:
@@ -148,36 +148,36 @@ class CellOutliner:
         for t in self.cell_outline_text:
             t.remove()
 
-        for i, c in enumerate(self.get_cells()):
-            cell_num = i + 1
+        for i, c in enumerate(self.get_outlines()):
+            outline_num = i + 1
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
             t = self.main_ax.text(
                 centre[1], centre[0],
-                "{0}".format(cell_num),
+                "{0}".format(outline_num),
                 verticalalignment="center",
                 horizontalalignment="center",
                 color="w",
             )
             self.cell_outline_text.append(t)
 
-    def get_cells(self, frame_idx=None):
+    def get_outlines(self, frame_idx=None):
         if not frame_idx:
             frame_idx = self.current_frame_idx
 
-        cell_data = database.getCellsByFrameIdx(frame_idx, self._data.experiment_hash)
-        cells = []
-        for cell in cell_data:
-            if not os.path.exists(cell.coords_path):
-                database.deleteCell(cell.cell_id)
+        outline_data = database.getOutlinesByFrameIdx(frame_idx, self._data.experiment_hash)
+        outlines = []
+        for outline in outline_data:
+            if not os.path.exists(outline.coords_path):
+                database.deleteOutline(outline.outline_id)
                 continue
 
-            cell_coords = np.load(cell.coords_path) + np.array([cell.offset_left, cell.offset_top])
-            cells.append(cell_coords)
+            outline_coords = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
+            outlines.append(outline_coords)
 
-        return cells
+        return outlines
 
     def get_area(self, coords, inmicrons=True):
         area_px = 0.5 * np.abs(
@@ -189,10 +189,10 @@ class CellOutliner:
         else:
             return area_px
 
-    def save_cell(self):
+    def save_outline(self):
         coords_path = os.path.join(
-            "data", "cells", self._data.experiment_hash,
-            "{0}.npy".format(self.cell_id)
+            self.outline_store,
+            "{0}.npy".format(self.outline_id)
         )
         coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes]) 
         np.save(coords_path, coords)
@@ -201,8 +201,8 @@ class CellOutliner:
         area_um = self.get_area(coords)
 
         data = {
+            "outline_id": self.outline_id,
             "cell_id": self.cell_id,
-            "lineage_id": self.lineage_id,
             "experiment_id": self._data.experiment_id,
             "experiment_hash": self._data.experiment_hash,
             "image_path": self._data.image_path,
@@ -211,18 +211,16 @@ class CellOutliner:
             "offset_left": self.offset_left,
             "offset_top": self.offset_top,
             "parent_id": self.previous_id,
-            "area_pixels": area_pixels,
-            "area": area_um,
         }
-        database.insertCell(**data)
+        database.insertOutline(**data)
 
         if self.previous_id:
-            database.addCellChild(self.previous_id, child1=self.cell_id)
+            database.addOutlineChild(self.previous_id, child1=self.outline_id)
 
-        self.previous_id = str(self.cell_id)
+        self.previous_id = str(self.outline_id)
 
-    def fit_cell(self, roi):
-        self.cell_id = str(uuid.uuid4())
+    def fit_outline(self, roi):
+        self.outline_id = str(uuid.uuid4())
         centre = [self.region_height, self.region_width]
         radius = 5
         num_nodes = 10
@@ -274,7 +272,7 @@ class CellOutliner:
             self.current_channel -= 1
             new_im = self.load_frame()
             self.main_frame.set_data(new_im)
-            self.plot_existing_cells()
+            self.plot_existing_outlines()
             self.main_frame.set_clim([new_im.min(), new_im.max()])
             plt.draw()
 
@@ -284,7 +282,7 @@ class CellOutliner:
             self.current_channel += 1
             new_im = self.load_frame()
             self.main_frame.set_data(new_im)
-            self.plot_existing_cells()
+            self.plot_existing_outlines()
             self.main_frame.set_clim([new_im.min(), new_im.max()])
             plt.draw()
 
@@ -294,7 +292,7 @@ class CellOutliner:
             self.current_frame_idx += 1
             new_im = self.load_frame()
             self.main_frame.set_data(new_im)
-            self.plot_existing_cells()
+            self.plot_existing_outlines()
             plt.draw()
 
         elif evt.key == "down":
@@ -303,7 +301,7 @@ class CellOutliner:
             self.current_frame_idx -= 1
             new_im = self.load_frame()
             self.main_frame.set_data(new_im)
-            self.plot_existing_cells()
+            self.plot_existing_outlines()
             plt.draw()
 
         elif evt.key == "r" and self.subfigure_patches:
@@ -317,7 +315,7 @@ class CellOutliner:
 
         elif evt.key == "enter" and self.subfigure_patches:
             # save outline
-            self.save_cell()
+            self.save_outline()
 
             offset_centre = self.balloon_obj.get_centre()
 
@@ -337,12 +335,12 @@ class CellOutliner:
             self.current_frame_idx += 1
             bf_frame = self.load_frame()
             self.main_frame.set_data(bf_frame)
-            self.plot_existing_cells()
+            self.plot_existing_outlines()
             roi = bf_frame[
                 self.offset_left:self.offset_left + (self.region_width * 2),
                 self.offset_top:self.offset_top + (self.region_height * 2)
             ]
-            self.fit_cell(roi)
+            self.fit_outline(roi)
 
         else:
             print("Unknown key:", evt.key)
@@ -353,7 +351,7 @@ class CellOutliner:
 
         if evt.inaxes == self.main_ax:
             self.previous_id = None
-            self.lineage_id = str(uuid.uuid4())
+            self.cell_id = str(uuid.uuid4())
             # start define mode
             # cut image region
             self.region_width, self.region_height = 75, 75
@@ -367,8 +365,8 @@ class CellOutliner:
             ]
 
             # balloon expand
-            print("Fitting cell...")
-            self.fit_cell(roi)
+            print("Fitting outline...")
+            self.fit_outline(roi)
             # confirm with feedback
             # move to next frame in define mode
 

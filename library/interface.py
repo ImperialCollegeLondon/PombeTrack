@@ -95,8 +95,8 @@ class Interface:
                         QtCore.Qt.BackgroundRole,
                         QtGui.QBrush(QtGui.QColor("green"))
                     )
-                    num_cells_outlined = len(database.getCellsByExperimentId(experiment.experiment_id))
-                    outlined_item.setText(str(num_cells_outlined))
+                    num_outlines = len(database.getOutlinesByExperimentId(experiment.experiment_id))
+                    outlined_item.setText(str(num_outlines))
 
                 else:
                     outlined_item.setData(
@@ -195,10 +195,10 @@ class Interface:
         self.base_layout.addLayout(self.btn_row)
 
     def get_cell_count(self, experiment_id):
-        cells = database.getCellsByExperimentId(experiment_id)
-        p_cells = pd.DataFrame(cells)
-        num_lineages = len(p_cells.lineage_id.unique())
-        return str(num_lineages)
+        outlines = database.getOutlinesByExperimentId(experiment_id)
+        p_out = pd.DataFrame(outlines)
+        num_cells = len(p_out.cell_id.unique())
+        return str(num_cells)
 
     def table_change_event(self, item):
         if not hasattr(item, "_item_type"):

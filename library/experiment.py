@@ -94,7 +94,7 @@ class ExperimentView:
         self.main_layout.addWidget(details_box)
 
     def outline_cells(self):
-        outliner = analysis.CellOutliner(self._data)
+        outliner = analysis.Outliner(self._data)
         desktop = QtWidgets.QDesktopWidget()
         outliner.set_screen_res(
             desktop.width(),
@@ -106,20 +106,20 @@ class ExperimentView:
         self._refreshLayout()
 
     def _addOutline(self):
-        outline_box = QtWidgets.QGroupBox("Cell Outlines")
+        outline_box = QtWidgets.QGroupBox("Outlines")
         layout = QtWidgets.QVBoxLayout()
         if self._data.outlined:
-            cells = database.getCellsByExperimentId(self._data.experiment_id)
-            num_cells = len(cells)
-            num_lineages = len(pd.DataFrame(cells).lineage_id.unique())
-            label_str = "{0} cells have been outlined, arranged into {1} lineages{2}".format(
+            outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
+            num_outlines = len(outlines)
+            num_cells = len(pd.DataFrame(outlines).cell_id.unique())
+            label_str = "{0} outlines have been defined arranged as {1} cells{2}".format(
+                num_outlines,
                 num_cells,
-                num_lineages,
                  self._data.verified and "" or " (unverified)"
             )
             label = QtWidgets.QLabel(label_str)
         else:
-            label = QtWidgets.QLabel("No cells have been outlined yet.")
+            label = QtWidgets.QLabel("No outlines have been created.")
 
         layout.addWidget(label)
 

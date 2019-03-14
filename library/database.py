@@ -5,11 +5,11 @@ import sqlite3
 import uuid
 
 
-class CellRow(dict):
+class OutlineRow(dict):
     COLS = [
-        ("cell_num", "INTEGER PRIMARY KEY", int),
+        ("outline_num", "INTEGER PRIMARY KEY", int),
+        ("outline_id", "TEXT", str),
         ("cell_id", "TEXT", str),
-        ("lineage_id", "TEXT", str),
         ("experiment_id", "INTEGER", int),
         ("experiment_hash", "TEXT", str),
         ("image_path", "TEXT", str),
@@ -20,16 +20,14 @@ class CellRow(dict):
         ("parent_id", "TEXT", str),
         ("child_id1", "TEXT DEFAULT ''", str),
         ("child_id2", "TEXT DEFAULT ''", str),
-        ("area_pixels", "REAL", float),
-        ("area", "REAL", float),
     ]
     def __init__(self, table_row=None):
         if table_row is not None:
-            parsed_row = self.parseCellRow(table_row)
+            parsed_row = self.parseOutlineRow(table_row)
             self.update(parsed_row)
             self.__dict__.update(parsed_row)
 
-    def parseCellRow(self, r):
+    def parseOutlineRow(self, r):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
             row[col_name] = caster(r)
@@ -112,16 +110,16 @@ def checkTable(table_name):
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
     
-def createCellsTable():
-    query = "CREATE TABLE cells ({0});".format(",".join([
+def createOutlinesTable():
+    query = "CREATE TABLE outlines ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
-        for x in CellRow.COLS
+        for x in OutlineRow.COLS
     ]))
     executeQuery(query, commit=True)
 
-def getCellsByFrameIdx(frame_idx, experiment_hash):
+def getOutlinesByFrameIdx(frame_idx, experiment_hash):
     query = """
-    SELECT * FROM cells
+    SELECT * FROM outlines
     WHERE experiment_hash = ?
       AND frame_idx = ?
     """
@@ -131,59 +129,56 @@ def getCellsByFrameIdx(frame_idx, experiment_hash):
     except sqlite3.OperationalError:
         return []
     else:
-        return [CellRow(x) for x in results]
+        return [OutlineRow(x) for x in results]
 
-def getCellsByExperimentId(experiment_id):
+def getOutlinesByExperimentId(experiment_id):
     query = """
-    SELECT * FROM cells
+    SELECT * FROM outlines
     WHERE experiment_id = ?
     """
     args = (experiment_id,)
     results = executeQuery(query, args, fetchmany=True)
-    return [CellRow(x) for x in results]
+    return [OutlineRow(x) for x in results]
 
-def insertCell(cell_id, lineage_id, experiment_id, experiment_hash, image_path,
-               frame_idx, coords_path, offset_left, offset_top, parent_id,
-               area_pixels, area):
+def insertOutline(outline_id, cell_id, experiment_id, experiment_hash, image_path,
+               frame_idx, coords_path, offset_left, offset_top, parent_id):
     query = """
-    INSERT INTO cells
-    (cell_id, lineage_id, experiment_id, experiment_hash, image_path,
-     frame_idx, coords_path, offset_left, offset_top, parent_id,
-     area_pixels, area)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    INSERT INTO outlines
+    (outline_id, cell_id, experiment_id, experiment_hash, image_path,
+     frame_idx, coords_path, offset_left, offset_top, parent_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     args = (
-        cell_id, lineage_id, experiment_id, experiment_hash, image_path,
+        outline_id, cell_id, experiment_id, experiment_hash, image_path,
         frame_idx, coords_path, offset_left, offset_top, parent_id,
-        area_pixels, area
     )
     new_id = executeQuery(query, args, commit=True)
     return new_id
 
-def addCellChild(cell_id, child1, child2=None):
+def addOutlineChild(outline_id, child1, child2=None):
     if child2:
         query = """
-        UPDATE cells
+        UPDATE outlines
         SET child_id1 = ?, child_id2 = ?
-        WHERE cell_id = ?;
+        WHERE outline_id = ?;
         """
-        args = (child1, child2, cell_id)
+        args = (child1, child2, outline_id)
     else:
         query = """
-        UPDATE cells
+        UPDATE outlines
         SET child_id1 = ?
-        WHERE cell_id = ?;
+        WHERE outline_id = ?;
         """
-        args = (child1, cell_id)
+        args = (child1, outline_id)
     
     executeQuery(query, args, commit=True)
 
-def deleteCell(cell_id):
+def deleteOutline(outline_id):
     query = """
-    DELETE FROM cells
-    WHERE cell_id = ?;
+    DELETE FROM outlines
+    WHERE outline_id = ?;
     """
-    args = (cell_id,)
+    args = (outline_id,)
     executeQuery(query, args, commit=True)
 
 def createExperimentsTable():
