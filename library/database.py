@@ -4,6 +4,37 @@ import os
 import sqlite3
 
 
+class ExperimentRow(dict):
+    def __init__(self, table_row=None):
+        if table_row is not None:
+            parsed_row = self.parseExperimentRow(table_row)
+            self.update(parsed_row)
+            self.__dict__.update(parsed_row)
+
+    def parseExperimentRow(self, r):
+        columns = [
+            "experiment_id",
+            "date_year", "date_month", "date_day",
+            "medium", "strain", "image_path",
+            "channel_green", "channel_red",
+            "outlined", "verified", "analysed",
+        ]
+
+        row = dict(zip(columns, r))
+        return {
+            "experiment_id": row["experiment_id"],
+            "date": "{date_year}-{date_month:02d}-{date_day:02d}".format(**row),
+            "medium": row["medium"],
+            "strain": row["strain"],
+            "image_path": row["image_path"],
+            "channels": {"green": bool(row["channel_green"]),
+                         "red": bool(row["channel_red"])},
+            "outlined": bool(row["outlined"]),
+            "verified": bool(row["verified"]),
+            "analysed": bool(row["analysed"]),
+        }
+
+
 def executeQuery(query, args=None, commit=False, fetchone=False, fetchmany=False):
     db_path = os.path.join("data", "pombetrack.db")
     if not os.path.exists(os.path.dirname(db_path)):
@@ -123,7 +154,7 @@ def getExperiments():
     except sqlite3.OperationalError:
         return []
     else:
-        experiments = [_parseExperimentRow(x)
+        experiments = [ExperimentRow(x)
                        for x in results]
         return experiments
 
@@ -135,7 +166,7 @@ def getExperimentById(experiment_id):
     """
     args = (experiment_id,)
     result = executeQuery(query, args, fetchone=True)
-    return _parseExperimentRow(result)
+    return ExperimentRow(result)
 
 def deleteExperimentById(experiment_id):
     query = """
@@ -144,21 +175,6 @@ def deleteExperimentById(experiment_id):
     """
     args = (experiment_id,)
     executeQuery(query, args, commit=True)
-
-def _parseExperimentRow(row):
-    return {
-        "experiment_id": row[0],
-        "date": "{0}-{1:02d}-{2:02d}".format(row[1], row[2], row[3]),
-        "medium": row[4],
-        "strain": row[5],
-        "image_path": row[6],
-        "channels": {"green": bool(row[7]),
-                     "red": bool(row[8])},
-        "outlined": bool(row[9]),
-        "verified": bool(row[10]),
-        "analysed": bool(row[11]),
-    }
-
 
 if __name__ == "__main__":
     print("This should be imported")

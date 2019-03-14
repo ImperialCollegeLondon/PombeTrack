@@ -68,29 +68,28 @@ class Interface:
             table_rows = []
             for experiment in existing_experiments:
                 date_item = QtWidgets.QTableWidgetItem()
-                date_item.setText(experiment["date"])
+                date_item.setText(experiment.date)
                 date_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 date_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
                 date_item._item_type = "experiment_date"
-                date_item._experiment_id = experiment["experiment_id"]
+                date_item._experiment_id = experiment.experiment_id
 
                 medium_item = QtWidgets.QTableWidgetItem()
-                medium_item.setText(experiment["medium"])
+                medium_item.setText(experiment.medium)
                 medium_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 medium_item._item_type = "experiment_medium"
-                medium_item._experiment_id = experiment["experiment_id"]
+                medium_item._experiment_id = experiment.experiment_id
 
                 strain_item = QtWidgets.QTableWidgetItem()
-                strain_item.setText(experiment["strain"])
+                strain_item.setText(experiment.strain)
                 strain_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 strain_item._item_type = "experiment_strain"
-                strain_item._experiment_id = experiment["experiment_id"]
+                strain_item._experiment_id = experiment.experiment_id
 
                 outlined_item = QtWidgets.QTableWidgetItem()
                 outlined_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
 
-                experiment_dir = os.path.join("data", str(experiment["experiment_id"]))
-                if experiment["outlined"]:
+                if experiment.outlined:
                     outlined_item.setData(
                         QtCore.Qt.BackgroundRole,
                         QtGui.QBrush(QtGui.QColor("green"))
@@ -105,12 +104,12 @@ class Interface:
                     outlined_item.setText("NO")
                 
                 outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                outlined_item._experiment_id = experiment["experiment_id"]
+                outlined_item._experiment_id = experiment.experiment_id
                 outlined_item._item_type = "experiment_outlined"
 
                 verified_item = QtWidgets.QTableWidgetItem()
                 verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-                if experiment["verified"]:
+                if experiment.verified:
                     verified_item.setData(
                         QtCore.Qt.BackgroundRole,
                         QtGui.QBrush(QtGui.QColor("green"))
@@ -125,14 +124,14 @@ class Interface:
                     verified_item.setText("NO")
 
                 verified_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                verified_item._experiment_id = experiment["experiment_id"]
+                verified_item._experiment_id = experiment.experiment_id
                 verified_item._item_type = "experiment_verified"
 
                 cells_counted_item = QtWidgets.QTableWidgetItem()
                 cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
                 analysed_item = QtWidgets.QTableWidgetItem()
                 analysed_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-                if experiment["analysed"]:
+                if experiment.analysed:
                     analysed_item.setData(
                         QtCore.Qt.BackgroundRole,
                         QtGui.QBrush(QtGui.QColor("green"))
@@ -145,19 +144,18 @@ class Interface:
                     )
                     analysed_item.setText("NO")
                 analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                analysed_item._experiment_id = experiment["experiment_id"]
+                analysed_item._experiment_id = experiment.experiment_id
                 analysed_item._item_type = "experiment_analysed"
 
-                cells_counted_item.setText(self.get_cell_count(experiment["experiment_id"]))
+                cells_counted_item.setText(self.get_cell_count(experiment.experiment_id))
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
-                cells_counted_item._experiment_id = experiment["experiment_id"]
+                cells_counted_item._experiment_id = experiment.experiment_id
                 cells_counted_item._item_type = "experiment_cells_counted"
 
                 table_rows.append({
-                    "date": (experiment["date"],
-                             date_item),
-                    "medium": (experiment["medium"], medium_item),
-                    "strain": (experiment["strain"], strain_item),
+                    "date": (experiment.date, date_item),
+                    "medium": (experiment.medium, medium_item),
+                    "strain": (experiment.strain, strain_item),
                     "outlined": (None, outlined_item),
                     "verified": (None, verified_item),
                     "analysed": (None, analysed_item),

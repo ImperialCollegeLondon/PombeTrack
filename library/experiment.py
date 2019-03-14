@@ -26,7 +26,7 @@ class ExperimentView:
             self.window = window
 
         self.window.setGeometry(0, 0, 800, 100)
-        self.window.setWindowTitle("Experiment #{0}".format(self._data["experiment_id"]))
+        self.window.setWindowTitle("Experiment #{0}".format(self._data.experiment_id))
 
         main_layout = QtWidgets.QVBoxLayout()
 
@@ -59,7 +59,7 @@ class ExperimentView:
             "Are you really sure you want to delete this experiment?"
         )
         if delete_confirm == QtWidgets.QMessageBox.Yes:
-            database.deleteExperimentById(self._data["experiment_id"])
+            database.deleteExperimentById(self._data.experiment_id)
             self.window.close()
 
     def _addDetails(self, main_layout):
@@ -97,7 +97,7 @@ class ExperimentView:
     def _addOutline(self, main_layout):
         outline_box = QtWidgets.QGroupBox("Cell Outlines")
         layout = QtWidgets.QVBoxLayout()
-        if self._data["outlined"]:
+        if self._data.outlined:
             pass
         else:
             no_label = QtWidgets.QLabel("No cells have been outlined yet.")
@@ -113,7 +113,7 @@ class ExperimentView:
     def _addLineageVerification(self, main_layout):
         box = QtWidgets.QGroupBox("Lineage verification")
         layout = QtWidgets.QVBoxLayout()
-        if self._data["verified"]:
+        if self._data.verified:
             pass
         else:
             pass
@@ -128,7 +128,7 @@ class ExperimentView:
     def _addAnalysis(self, main_layout):
         box = QtWidgets.QGroupBox("Analysis")
         layout = QtWidgets.QVBoxLayout()
-        if self._data["analysed"]:
+        if self._data.analysed:
             pass
         else:
             pass
