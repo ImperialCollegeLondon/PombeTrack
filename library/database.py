@@ -6,6 +6,21 @@ import uuid
 
 
 class ExperimentRow(dict):
+    COLS = [
+        ("experiment_id", "INTEGER PRIMARY KEY", int),
+        ("experiment_hash", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("channel_green", "INTEGER", bool),
+        ("channel_red", "INTEGER", bool),
+        ("outlined", "INTEGER", bool),
+        ("verified", "INTEGER", bool),
+        ("analysed", "INTEGER", bool),
+    ]
     def __init__(self, table_row=None):
         if table_row is not None:
             parsed_row = self.parseExperimentRow(table_row)
@@ -13,15 +28,10 @@ class ExperimentRow(dict):
             self.__dict__.update(parsed_row)
 
     def parseExperimentRow(self, r):
-        columns = [
-            "experiment_id", "experiment_hash",
-            "date_year", "date_month", "date_day",
-            "medium", "strain", "image_path",
-            "channel_green", "channel_red",
-            "outlined", "verified", "analysed",
-        ]
+        row = {}
+        for (col_name, _, caster), r in zip(self.COLS, r):
+            row[col_name] = caster(r)
 
-        row = dict(zip(columns, r))
         return {
             "experiment_id": row["experiment_id"],
             "experiment_hash": row["experiment_hash"],
@@ -72,22 +82,10 @@ def checkTable(table_name):
     return executeQuery(query, args, fetchone=True)
     
 def createExperimentsTable():
-    query = """
-    CREATE TABLE experiments
-    (experiment_id   INTEGER PRIMARY KEY,
-     experiment_hash TEXT,
-     date_year       INTEGER,
-     date_month      INTEGER,
-     date_day        INTEGER,
-     medium          TEXT,
-     strain          TEXT,
-     image_path      TEXT,
-     channel_green   INTEGER,
-     channel_red     INTEGER,
-     outlined        INTEGER DEFAULT 0,
-     verified        INTEGER DEFAULT 0,
-     analysed        INTEGER DEFAULT 0);
-    """
+    query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in ExperimentRow.COLS
+    ]))
     executeQuery(query, commit=True)
 
 def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, image_path):
