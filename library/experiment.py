@@ -92,6 +92,12 @@ class ExperimentView:
 
     def outline_cells(self):
         outliner = analysis.CellOutliner(self._data)
+        desktop = QtWidgets.QDesktopWidget()
+        outliner.set_screen_res(
+            desktop.width(),
+            desktop.height(),
+            desktop.logicalDpiX(),
+        )
         outliner.start_outlining()
 
     def _addOutline(self, main_layout):

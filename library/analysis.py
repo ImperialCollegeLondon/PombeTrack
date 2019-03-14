@@ -1,8 +1,407 @@
 #!/usr/bin/env python3
 
+import matplotlib.pyplot as plt
+import matplotlib.widgets
+import numpy as np
+import seaborn as sns
+import os
+import tifffile
+import uuid
+
+from . import balloon
+from . import database
+
+sns.set_context("talk")
+sns.set_style("white")
+
 class CellOutliner:
     def __init__(self, experiment_data):
+        self.PX_UM = 0.1600026
         self._data = experiment_data
+        self.image_percentile = 1
+        self.cell_store = os.path.join(
+            "data", "cells", self._data.experiment_hash
+        )
+        if not os.path.exists(self.cell_store):
+            os.makedirs(self.cell_store)
+
+        if not database.checkTable("cells"):
+            database.createCellsTable()
+        
+        self.im_preload = {}
+        self.cell_outlines = []
+        self.cell_outline_text = []
+        self.subfigure_patches = []
+        self.dragging = False
+        self.previous_id = None
+        self.current_frame_idx = 0
+        self.current_channel = 0
+    
+        self.load_metadata()
+
+    def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
+        self.max_width_px = max_width_px
+        self.max_height_px = max_height_px
+        self.screen_dpi = screen_dpi
+
+    def _px_to_in(self, px):
+        return px / self.screen_dpi
+
+    def load_metadata(self):
+        with tifffile.TiffFile(self._data.image_path) as im_frames:
+            if not im_frames.is_imagej:
+                raise IOError("Not an ImageJ file, ask Miles about this?")
+
+            self.im_metadata = im_frames.imagej_metadata
+            self.num_frames = 1
+            self.num_channels = 1
+            if "frames" in self.im_metadata:
+                self.num_frames = int(self.im_metadata["frames"])
+            
+            if "channels" in self.im_metadata:
+                self.num_channels  = int(self.im_metadata["channels"])
+
+    def load_frame(self, frame_idx=None):
+        if not frame_idx:
+            frame_idx = self.current_frame_idx
+
+        if frame_idx < 0 or frame_idx > (self.num_frames - 1):
+            return
+
+        slice_idx = (frame_idx * self.num_channels) + self.current_channel
+
+        if slice_idx not in self.im_preload:
+            self.load_slice(slice_idx)
+
+        return self.im_preload[slice_idx]
+
+    def load_slice(self, slice_idx):
+        with tifffile.TiffFile(self._data.image_path) as im_frames:
+            page = im_frames.pages[slice_idx]
+            im = page.asarray()
+
+        self.im_preload[slice_idx] = im
 
     def start_outlining(self):
-        pass
+        if not hasattr(self, "max_width_px"):
+            raise ValueError("Screen resolution has not been set")
+
+        dim = (self._px_to_in(self.max_width_px * 0.5),
+               self._px_to_in(self.max_height_px * 0.5))
+
+        self.figure = plt.figure(figsize=dim, dpi=self.screen_dpi)
+        self.figure.canvas.mpl_disconnect(self.figure.canvas.manager.key_press_handler_id) 
+        self.figure.canvas.mpl_connect("key_press_event", self._key_press_event)
+        self.figure.canvas.mpl_connect("button_press_event", self._button_press_event)
+        self.figure.canvas.mpl_connect("button_release_event", self._button_release_event)
+        self.figure.canvas.mpl_connect("motion_notify_event", self._motion_notify_event)
+        self.main_ax = plt.axes([0.05, 0.15, 0.4, 0.8])
+        self.sub_ax = plt.axes([0.55, 0.15, 0.4, 0.8])
+        self.text_ax = plt.axes([0.6, 0.05, 0.2, 0.075])
+        self.text_box = matplotlib.widgets.TextBox(
+            self.text_ax,
+            "Tolerance",
+            "{0}".format(self.image_percentile)
+        )
+        self.text_box.on_submit(self._submit_tolerance)
+        self.decorate_axis(self.main_ax)
+        self.decorate_axis(self.sub_ax)
+        self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
+        self.plot_existing_cells()
+        plt.show()
+
+    def decorate_axis(self, ax):
+        ax.axis("off")
+        ax.set_aspect("equal")
+        ax.autoscale("off")
+
+    def _submit_tolerance(self, text):
+        try:
+            self.image_percentile = float(text)
+            print("Set image tolerance to {0}".format(self.image_percentile))
+        except ValueError:
+            print("Invalid tolerance: {0}".format(text))
+            self.text_box.set_val(str(self.image_percentile))
+
+    def plot_existing_cells(self):
+        self.main_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
+        while True:
+            try:
+                self.main_ax.lines.pop()
+            except IndexError:
+                break
+
+        while True:
+            try:
+                t = self.cell_outlines.pop()
+                t.remove()
+            except IndexError:
+                break
+
+        while True:
+            try:
+                t = self.cell_outline_text.pop()
+                t.remove()
+            except IndexError:
+                break
+
+        for t in self.cell_outline_text:
+            t.remove()
+
+        for i, c in enumerate(self.get_cells()):
+            cell_num = i + 1
+            p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
+            self.main_ax.add_patch(p)
+            self.cell_outlines.append(p)
+            centre = c.mean(axis=0)
+            t = self.main_ax.text(
+                centre[1], centre[0],
+                "{0}".format(cell_num),
+                verticalalignment="center",
+                horizontalalignment="center",
+                color="w",
+            )
+            self.cell_outline_text.append(t)
+
+    def get_cells(self, frame_idx=None):
+        if not frame_idx:
+            frame_idx = self.current_frame_idx
+
+        cell_data = database.getCellsByFrameIdx(frame_idx, self._data.experiment_hash)
+        cells = []
+        for cell in cell_data:
+            if not os.path.exists(cell.coords_path):
+                database.deleteCell(cell.cell_id)
+                continue
+
+            cell_coords = np.load(cell.coords_path) + np.array([cell.offset_left, cell.offset_top])
+            cells.append(cell_coords)
+
+        return cells
+
+    def get_area(self, coords, inmicrons=True):
+        area_px = 0.5 * np.abs(
+            np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) -
+            np.dot(coords[:, 1], np.roll(coords[:, 0], 1))
+        )
+        if inmicrons:
+            return area_px * self.PX_UM * self.PX_UM
+        else:
+            return area_px
+
+    def save_cell(self):
+        coords_path = os.path.join(
+            "data", "cells", self._data.experiment_hash,
+            "{0}.npy".format(self.cell_id)
+        )
+        coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes]) 
+        np.save(coords_path, coords)
+
+        area_pixels = self.get_area(coords, inmicrons=False)
+        area_um = self.get_area(coords)
+
+        data = {
+            "cell_id": self.cell_id,
+            "lineage_id": self.lineage_id,
+            "experiment_id": self._data.experiment_id,
+            "experiment_hash": self._data.experiment_hash,
+            "image_path": self._data.image_path,
+            "frame_idx": self.current_frame_idx,
+            "coords_path": coords_path,
+            "offset_left": self.offset_left,
+            "offset_top": self.offset_top,
+            "parent_id": self.previous_id,
+            "area_pixels": area_pixels,
+            "area": area_um,
+        }
+        database.insertCell(**data)
+
+        if self.previous_id:
+            database.addCellChild(self.previous_id, child1=self.cell_id)
+
+        self.previous_id = str(self.cell_id)
+
+    def fit_cell(self, roi):
+        self.cell_id = str(uuid.uuid4())
+        centre = [self.region_height, self.region_width]
+        radius = 5
+        num_nodes = 10
+        init = balloon.initial_nodes(centre, radius, num_nodes)
+        self.balloon_obj = balloon.Balloon(init, roi)
+        self.sub_ax.imshow(roi, cmap="gray")
+        self._plot_nodes()
+        plt.draw()
+
+    def _plot_nodes(self, line=True, patches=True):
+        nodes = self.balloon_obj.nodes
+        if line:
+            try:
+                self.sub_ax.lines.pop(0)
+            except IndexError:
+                pass
+            coords = np.array([(n.x, n.y) for n in nodes])
+            self.sub_ax.plot(
+                coords[:, 1],
+                coords[:, 0],
+                color="y",
+                lw=1,
+            )
+
+        if patches:
+            for i in range(len(self.subfigure_patches)):
+                p = self.subfigure_patches.pop()
+                p.remove()
+
+            for n in nodes:
+                patch = matplotlib.patches.Circle(
+                    (n.y, n.x),
+                    1,
+                    fc="y",
+                )
+                patch.this_node = n
+                self.subfigure_patches.append(patch)
+                self.sub_ax.add_artist(patch)
+
+        plt.draw()
+    
+    def _key_press_event(self, evt):
+        if evt.inaxes == self.text_ax:
+            return
+
+        if evt.key == "left":
+            if self.current_channel <= 0:
+                return
+            self.current_channel -= 1
+            new_im = self.load_frame()
+            self.main_frame.set_data(new_im)
+            self.plot_existing_cells()
+            self.main_frame.set_clim([new_im.min(), new_im.max()])
+            plt.draw()
+
+        elif evt.key == "right":
+            if self.current_channel >= self.num_channels - 1:
+                return
+            self.current_channel += 1
+            new_im = self.load_frame()
+            self.main_frame.set_data(new_im)
+            self.plot_existing_cells()
+            self.main_frame.set_clim([new_im.min(), new_im.max()])
+            plt.draw()
+
+        elif evt.key == "up":
+            if self.current_frame_idx >= self.num_frames - 1:
+                return
+            self.current_frame_idx += 1
+            new_im = self.load_frame()
+            self.main_frame.set_data(new_im)
+            self.plot_existing_cells()
+            plt.draw()
+
+        elif evt.key == "down":
+            if self.current_frame_idx <= 0:
+                return
+            self.current_frame_idx -= 1
+            new_im = self.load_frame()
+            self.main_frame.set_data(new_im)
+            self.plot_existing_cells()
+            plt.draw()
+
+        elif evt.key == "r" and self.subfigure_patches:
+            for i in range(10):
+                self.balloon_obj.evolve(image_percentile=self.image_percentile)
+            self._plot_nodes()
+
+        elif evt.key == "." and self.subfigure_patches:
+            self.balloon_obj.evolve(image_percentile=self.image_percentile)
+            self._plot_nodes()
+
+        elif evt.key == "enter" and self.subfigure_patches:
+            # save outline
+            self.save_cell()
+
+            offset_centre = self.balloon_obj.get_centre()
+
+            # clear plot
+            self.balloon_obj = None
+            self.dragging = False
+            self.subfigure_patches = []
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            plt.draw()
+
+            # fit next
+            centre = [offset_centre[0] + self.offset_left,
+                      offset_centre[1] + self.offset_top]
+            self.offset_left = int(round(centre[0] - self.region_width))
+            self.offset_top = int(round(centre[1] - self.region_height))
+            self.current_frame_idx += 1
+            bf_frame = self.load_frame()
+            self.main_frame.set_data(bf_frame)
+            self.plot_existing_cells()
+            roi = bf_frame[
+                self.offset_left:self.offset_left + (self.region_width * 2),
+                self.offset_top:self.offset_top + (self.region_height * 2)
+            ]
+            self.fit_cell(roi)
+
+        else:
+            print("Unknown key:", evt.key)
+
+    def _button_press_event(self, evt):
+        if self.figure.canvas.toolbar._active is not None:
+            return
+
+        if evt.inaxes == self.main_ax:
+            self.previous_id = None
+            self.lineage_id = str(uuid.uuid4())
+            # start define mode
+            # cut image region
+            self.region_width, self.region_height = 75, 75
+            # self.region_width, self.region_height = 100, 100
+            centre = [evt.ydata, evt.xdata]
+            self.offset_left = int(round(centre[0] - self.region_width))
+            self.offset_top = int(round(centre[1] - self.region_height))
+            roi = self.load_frame()[
+                self.offset_left:self.offset_left + (self.region_width * 2),
+                self.offset_top:self.offset_top + (self.region_height * 2)
+            ]
+
+            # balloon expand
+            print("Fitting cell...")
+            self.fit_cell(roi)
+            # confirm with feedback
+            # move to next frame in define mode
+
+        elif evt.inaxes == self.sub_ax:
+            if evt.button == 1:
+                for p in self.subfigure_patches:
+                    if p.contains_point((evt.x, evt.y)):
+                        p.set_facecolor("r")
+                        self.dragging = p
+                        plt.draw()
+                        break
+            elif evt.button == 3:
+                for p in self.subfigure_patches:
+                    if p.contains_point((evt.x, evt.y)):
+                        self.balloon_obj.remove_node(p.this_node)
+                        self._plot_nodes()
+                        plt.draw()
+        else:
+            return
+
+    def _button_release_event(self, evt):
+        if not self.dragging:
+            return
+
+        self.dragging.set_facecolor("y")
+        self.dragging.this_node.set_position((evt.ydata, evt.xdata))
+        self.dragging.this_node.apply_changes()
+        self._plot_nodes()
+        self.dragging = False
+
+    def _motion_notify_event(self, evt):
+        if not self.dragging:
+            return
+
+        self.dragging.center = evt.xdata, evt.ydata
+        plt.draw()

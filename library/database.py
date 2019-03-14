@@ -5,6 +5,37 @@ import sqlite3
 import uuid
 
 
+class CellRow(dict):
+    COLS = [
+        ("cell_num", "INTEGER PRIMARY KEY", int),
+        ("cell_id", "TEXT", str),
+        ("lineage_id", "TEXT", str),
+        ("experiment_id", "INTEGER", int),
+        ("experiment_hash", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("frame_idx", "INTEGER", int),
+        ("coords_path", "TEXT", str),
+        ("offset_left", "INTEGER", int),
+        ("offset_top", "INTEGER", int),
+        ("parent_id", "TEXT", str),
+        ("child_id1", "TEXT DEFAULT ''", str),
+        ("child_id2", "TEXT DEFAULT ''", str),
+        ("area_pixels", "REAL", float),
+        ("area", "REAL", float),
+    ]
+    def __init__(self, table_row=None):
+        if table_row is not None:
+            parsed_row = self.parseCellRow(table_row)
+            self.update(parsed_row)
+            self.__dict__.update(parsed_row)
+
+    def parseCellRow(self, r):
+        row = {}
+        for (col_name, _, caster), r in zip(self.COLS, r):
+            row[col_name] = caster(r)
+
+        return row
+
 class ExperimentRow(dict):
     COLS = [
         ("experiment_id", "INTEGER PRIMARY KEY", int),
@@ -81,6 +112,71 @@ def checkTable(table_name):
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
     
+def createCellsTable():
+    query = "CREATE TABLE cells ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in CellRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def getCellsByFrameIdx(frame_idx, experiment_hash):
+    query = """
+    SELECT * FROM cells
+    WHERE experiment_hash = ?
+      AND frame_idx = ?
+    """
+    args = (experiment_hash, frame_idx)
+    try:
+        results = executeQuery(query, args, fetchmany=True)
+    except sqlite3.OperationalError:
+        return []
+    else:
+        return [CellRow(x) for x in results]
+
+def insertCell(cell_id, lineage_id, experiment_id, experiment_hash, image_path,
+               frame_idx, coords_path, offset_left, offset_top, parent_id,
+               area_pixels, area):
+    query = """
+    INSERT INTO cells
+    (cell_id, lineage_id, experiment_id, experiment_hash, image_path,
+     frame_idx, coords_path, offset_left, offset_top, parent_id,
+     area_pixels, area)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """
+    args = (
+        cell_id, lineage_id, experiment_id, experiment_hash, image_path,
+        frame_idx, coords_path, offset_left, offset_top, parent_id,
+        area_pixels, area
+    )
+    new_id = executeQuery(query, args, commit=True)
+    return new_id
+
+def addCellChild(cell_id, child1, child2=None):
+    if child2:
+        query = """
+        UPDATE cells
+        SET child_id1 = ?, child_id2 = ?
+        WHERE cell_id = ?;
+        """
+        args = (child1, child2, cell_id)
+    else:
+        query = """
+        UPDATE cells
+        SET child_id1 = ?
+        WHERE cell_id = ?;
+        """
+        args = (child1, cell_id)
+    
+    executeQuery(query, args, commit=True)
+
+def deleteCell(cell_id):
+    query = """
+    DELETE FROM cells
+    WHERE cell_id = ?;
+    """
+    args = (cell_id,)
+    executeQuery(query, args, commit=True)
+
 def createExperimentsTable():
     query = "CREATE TABLE experiments ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
