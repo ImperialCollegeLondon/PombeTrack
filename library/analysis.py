@@ -352,8 +352,6 @@ class Outliner:
         if evt.inaxes == self.main_ax:
             self.previous_id = None
             self.cell_id = str(uuid.uuid4())
-            # start define mode
-            # cut image region
             self.region_width, self.region_height = 75, 75
             # self.region_width, self.region_height = 100, 100
             centre = [evt.ydata, evt.xdata]
@@ -364,11 +362,7 @@ class Outliner:
                 self.offset_top:self.offset_top + (self.region_height * 2)
             ]
 
-            # balloon expand
-            print("Fitting outline...")
             self.fit_outline(roi)
-            # confirm with feedback
-            # move to next frame in define mode
 
         elif evt.inaxes == self.sub_ax:
             if evt.button == 1:
