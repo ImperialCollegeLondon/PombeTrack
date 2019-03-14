@@ -102,7 +102,12 @@ class ExperimentView:
             desktop.logicalDpiX(),
         )
         outliner.start_outlining()
-        database.updateExperimentById(self._data.experiment_id, outlined=True)
+        outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
+        if len(outlines) > 0:
+            database.updateExperimentById(self._data.experiment_id, outlined=True)
+        else:
+            database.updateExperimentById(self._data.experiment_id, outlined=False)
+
         self._refreshLayout()
 
     def _addOutline(self):
