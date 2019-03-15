@@ -54,7 +54,7 @@ class Plotter(FigureCanvas):
         if not database.checkTable("outlines"):
             database.createOutlinesTable()
 
-        self.loader = image_loader
+        self.image_loader = image_loader
         self.load_metadata()
         self.region_width, self.region_height = 75, 75
         # self.region_width, self.region_height = 100, 100
@@ -76,8 +76,8 @@ class Plotter(FigureCanvas):
         self.plot_existing_outlines()
 
     def load_metadata(self):
-        self.num_frames = self.loader.num_frames
-        self.num_channels = self.loader.num_channels
+        self.num_frames = self.image_loader.num_frames
+        self.num_channels = self.image_loader.num_channels
 
     def load_frame(self, frame_idx=None):
         if not frame_idx:
@@ -86,7 +86,7 @@ class Plotter(FigureCanvas):
         if frame_idx < 0 or frame_idx > (self.num_frames - 1):
             return
 
-        return self.loader.load_frame(frame_idx, self.current_channel)
+        return self.image_loader.load_frame(frame_idx, self.current_channel)
 
     def refresh(self):
         self.draw()

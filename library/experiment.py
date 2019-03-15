@@ -11,6 +11,7 @@ import PyQt5.Qt as Qt
 from . import database
 from . import loader
 from . import outline
+from . import assignment
 
 class ExperimentView:
     def __init__(self, experiment_id):
@@ -114,6 +115,26 @@ class ExperimentView:
 
         self._refreshLayout()
 
+    def assign_cell_lineages(self):
+        assigner = assignment.Assigner(self._data, self.image_loader)
+        desktop = QtWidgets.QDesktopWidget()
+        assigner.set_screen_res(
+            desktop.width(),
+            desktop.height(),
+            desktop.logicalDpiX(),
+        )
+        assigner.start_assigning(self.window)
+        assigner.window.finished[int].connect(self.assignment_finished)
+
+    def assignment_finished(self, *args):
+        outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
+        if len(outlines) > 0:
+            database.updateExperimentById(self._data.experiment_id, verified=True)
+        else:
+            database.updateExperimentById(self._data.experiment_id, verified=False)
+
+        self._refreshLayout()
+
     def _addOutline(self):
         outline_box = QtWidgets.QGroupBox("Outlines")
         layout = QtWidgets.QVBoxLayout()
@@ -148,7 +169,7 @@ class ExperimentView:
             pass
 
         lineage_btn = QtWidgets.QPushButton("Verify Lineages")
-        lineage_btn.clicked[bool].connect(lambda: print("lineage btn"))
+        lineage_btn.clicked[bool].connect(lambda: self.assign_cell_lineages())
         layout.addWidget(lineage_btn)
 
         box.setLayout(layout)

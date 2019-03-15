@@ -17,7 +17,7 @@ class Row(dict):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
             casted = caster(r)
-            if not casted:
+            if not casted and caster is str:
                 casted = None
             row[col_name] = casted
 
@@ -123,15 +123,11 @@ def getOutlinesByFrameIdx(frame_idx, experiment_hash):
     query = """
     SELECT * FROM outlines
     WHERE experiment_hash = ?
-      AND frame_idx = ?
+      AND frame_idx = ?;
     """
-    args = (experiment_hash, frame_idx)
-    try:
-        results = executeQuery(query, args, fetchmany=True)
-    except sqlite3.OperationalError:
-        return []
-    else:
-        return [OutlineRow(x) for x in results]
+    args = (experiment_hash, str(frame_idx))
+    results = executeQuery(query, args, fetchmany=True)
+    return [OutlineRow(x) for x in results]
 
 def getOutlinesByExperimentId(experiment_id):
     query = """
