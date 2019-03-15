@@ -184,6 +184,27 @@ def deleteOutlineById(outline_id):
     args = (outline_id,)
     executeQuery(query, args, commit=True)
 
+    query = """
+    UPDATE outlines
+    SET parent_id = ''
+    WHERE parent_id = ?;
+    """
+    executeQuery(query, args, commit=True)
+
+    query = """
+    UPDATE outlines
+    SET child_id1 = ''
+    WHERE child_id1 = ?;
+    """
+    executeQuery(query, args, commit=True)
+
+    query = """
+    UPDATE outlines
+    SET child_id2 = ''
+    WHERE child_id2 = ?;
+    """
+    executeQuery(query, args, commit=True)
+
 def getOutlineById(outline_id):
     query = """
     SELECT * FROM outlines

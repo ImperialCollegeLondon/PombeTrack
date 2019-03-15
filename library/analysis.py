@@ -146,7 +146,7 @@ class Plotter(FigureCanvas):
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_hash)
         for i, outline in enumerate(outline_data):
             if not os.path.exists(outline.coords_path):
-                database.deleteOutline(outline.outline_id)
+                database.deleteOutlineById(outline.outline_id)
                 continue
 
             c = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
@@ -412,7 +412,7 @@ class Plotter(FigureCanvas):
             "Are you really sure you want to delete this outline permanently?"
         )
         if delete_confirm == QtWidgets.QMessageBox.Yes:
-            database.deleteOutline(self.outline_id)
+            database.deleteOutlineById(self.outline_id)
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
             self.outline_id = None
