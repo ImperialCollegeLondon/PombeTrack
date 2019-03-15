@@ -102,6 +102,9 @@ class ExperimentView:
             desktop.logicalDpiX(),
         )
         outliner.start_outlining(self.window)
+        outliner.window.finished[int].connect(self.outline_finished)
+
+    def outline_finished(self, *args):
         outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
         if len(outlines) > 0:
             database.updateExperimentById(self._data.experiment_id, outlined=True)
