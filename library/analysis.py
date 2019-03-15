@@ -26,7 +26,6 @@ NavigationToolbar2.home = home_hook
 
 class Outliner:
     def __init__(self, experiment_data):
-        self.PX_UM = 0.1600026
         self.region_width, self.region_height = 75, 75
         # self.region_width, self.region_height = 100, 100
 
@@ -193,16 +192,6 @@ class Outliner:
 
         return outlines
 
-    def get_area(self, coords, inmicrons=True):
-        area_px = 0.5 * np.abs(
-            np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) -
-            np.dot(coords[:, 1], np.roll(coords[:, 0], 1))
-        )
-        if inmicrons:
-            return area_px * self.PX_UM * self.PX_UM
-        else:
-            return area_px
-
     def save_outline(self):
         coords_path = os.path.join(
             self.outline_store,
@@ -211,8 +200,6 @@ class Outliner:
         coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes]) 
         np.save(coords_path, coords)
 
-        area_pixels = self.get_area(coords, inmicrons=False)
-        area_um = self.get_area(coords)
 
         data = {
             "outline_id": self.outline_id,
