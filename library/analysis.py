@@ -4,6 +4,7 @@ import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
@@ -322,6 +323,9 @@ class Plotter(FigureCanvas):
             print("Unknown key:", evt.key)
 
     def _button_press_event(self, evt):
+        if self.parent().toolbar.mode:
+            return
+
         if evt.inaxes == self.main_ax:
             # check is not in an existing outline
             hit = False
@@ -389,6 +393,13 @@ class Plotter(FigureCanvas):
         self.dragging.center = evt.xdata, evt.ydata
         self.draw()
 
+    def _home_event(self):
+        f = self.load_frame()
+        self.main_ax.set_xlim([0, f.shape[0]])
+        self.main_ax.set_ylim([f.shape[1], 0])
+        self.sub_ax.set_xlim([0, self.region_width * 2])
+        self.sub_ax.set_ylim([self.region_height * 2, 0])
+        self.draw()
 
 
 class Outliner:
@@ -426,6 +437,16 @@ class Outliner:
         )
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.plot.setFocus()
+        self.window.toolbar = NavigationToolbar(self.plot, self.window)
+        remove_actions = ["Back", "Forward", "Subplots", "Customize"]
+        for act in self.window.toolbar.actions():
+            if act.text() in remove_actions:
+                self.window.toolbar.removeAction(act)
+            elif act.text() == "Home":
+                act.triggered.disconnect()
+                act.triggered[bool].connect(lambda x: self.plot._home_event())
+
+        main_layout.addWidget(self.window.toolbar)
         main_layout.addWidget(self.plot)
 
         # add tolerance box thing
