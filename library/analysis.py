@@ -52,7 +52,7 @@ class Plotter(FigureCanvas):
 
         if not database.checkTable("outlines"):
             database.createOutlinesTable()
-        
+
         self.load_metadata()
         self.region_width, self.region_height = 75, 75
         # self.region_width, self.region_height = 100, 100
