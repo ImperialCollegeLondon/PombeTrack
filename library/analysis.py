@@ -401,6 +401,28 @@ class Plotter(FigureCanvas):
         self.sub_ax.set_ylim([self.region_height * 2, 0])
         self.draw()
 
+    def _delete_event(self):
+        if not hasattr(self, "outline_id") or self.outline_id is None:
+            return
+
+        alert = QtWidgets.QMessageBox()
+        delete_confirm = alert.question(
+            self.parent(),
+            "Delete outline?",
+            "Are you really sure you want to delete this outline permanently?"
+        )
+        if delete_confirm == QtWidgets.QMessageBox.Yes:
+            database.deleteOutline(self.outline_id)
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            self.outline_id = None
+            self.balloon_obj = None
+            self.dragging = False
+            self.subfigure_patches = []
+            self.plot_existing_outlines()
+            self.draw()
+
+
 class Toolbar(NavigationToolbar):
     def __init__(self, figure_canvas, parent=None):
         self.toolitems = [
@@ -410,6 +432,8 @@ class Toolbar(NavigationToolbar):
             ("Zoom", "Zoom", "zoom_to_rect_large", "zoom"),
             (None, None, None, None),
             ("Save", "Save", "filesave_large", "save_figure"),
+            (None, None, None, None),
+            ("Test", "Test", "delete", "delete"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
@@ -426,6 +450,9 @@ class Toolbar(NavigationToolbar):
 
     def home_event(self, *args, **kwargs):
         self.canvas._home_event()
+
+    def delete(self):
+        self.canvas._delete_event()
 
 class Outliner:
     def __init__(self, experiment_data):

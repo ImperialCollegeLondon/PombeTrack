@@ -176,7 +176,7 @@ def addOutlineChild(outline_id, child1, child2=None):
     
     executeQuery(query, args, commit=True)
 
-def deleteOutline(outline_id):
+def deleteOutlineById(outline_id):
     query = """
     DELETE FROM outlines
     WHERE outline_id = ?;
