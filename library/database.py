@@ -30,7 +30,10 @@ class OutlineRow(dict):
     def parseOutlineRow(self, r):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
-            row[col_name] = caster(r)
+            casted = caster(r)
+            if not casted:
+                casted = None
+            row[col_name] = casted
 
         return row
 

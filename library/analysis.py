@@ -200,7 +200,7 @@ class Outliner:
             "coords_path": coords_path,
             "offset_left": self.offset_left,
             "offset_top": self.offset_top,
-            "parent_id": self.previous_id,
+            "parent_id": self.previous_id or "",
         }
         database.insertOutline(**data)
 
