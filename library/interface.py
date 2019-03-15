@@ -32,7 +32,7 @@ class Interface:
         self.window.setLayout(self.base_layout)
 
     def add_menu(self):
-        menubar = QtWidgets.QMenuBar()
+        menubar = QtWidgets.QMenuBar(self.window)
         file_menu = menubar.addMenu("&File")
 
         refresh_action = QtWidgets.QAction("&Refresh", menubar)

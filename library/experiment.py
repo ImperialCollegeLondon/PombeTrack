@@ -312,7 +312,7 @@ class Experiment:
 
         main_layout = QtWidgets.QVBoxLayout()
 
-        menubar = QtWidgets.QMenuBar()
+        menubar = QtWidgets.QMenuBar(self.window)
         file_menu = menubar.addMenu("&File")
         quit_action = QtWidgets.QAction("&Close", menubar)
         quit_action.triggered[bool].connect(lambda: self.window.close())
