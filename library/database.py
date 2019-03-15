@@ -5,7 +5,26 @@ import sqlite3
 import uuid
 
 
-class OutlineRow(dict):
+class Row(dict):
+    COLS = []
+    def __init__(self, table_row=None):
+        if table_row is not None:
+            parsed_row = self.parseRow(table_row)
+            self.update(parsed_row)
+            self.__dict__.update(parsed_row)
+
+    def parseRow(self, r):
+        row = {}
+        for (col_name, _, caster), r in zip(self.COLS, r):
+            casted = caster(r)
+            if not casted:
+                casted = None
+            row[col_name] = casted
+
+        return row
+
+
+class OutlineRow(Row):
     COLS = [
         ("outline_num", "INTEGER PRIMARY KEY", int),
         ("outline_id", "TEXT", str),
@@ -21,23 +40,9 @@ class OutlineRow(dict):
         ("child_id1", "TEXT DEFAULT ''", str),
         ("child_id2", "TEXT DEFAULT ''", str),
     ]
-    def __init__(self, table_row=None):
-        if table_row is not None:
-            parsed_row = self.parseOutlineRow(table_row)
-            self.update(parsed_row)
-            self.__dict__.update(parsed_row)
 
-    def parseOutlineRow(self, r):
-        row = {}
-        for (col_name, _, caster), r in zip(self.COLS, r):
-            casted = caster(r)
-            if not casted:
-                casted = None
-            row[col_name] = casted
 
-        return row
-
-class ExperimentRow(dict):
+class ExperimentRow(Row):
     COLS = [
         ("experiment_id", "INTEGER PRIMARY KEY", int),
         ("experiment_hash", "TEXT", str),
@@ -53,13 +58,7 @@ class ExperimentRow(dict):
         ("verified", "INTEGER", bool),
         ("analysed", "INTEGER", bool),
     ]
-    def __init__(self, table_row=None):
-        if table_row is not None:
-            parsed_row = self.parseExperimentRow(table_row)
-            self.update(parsed_row)
-            self.__dict__.update(parsed_row)
-
-    def parseExperimentRow(self, r):
+    def parseRow(self, r):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
             row[col_name] = caster(r)
