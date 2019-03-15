@@ -9,7 +9,7 @@ import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
 
 from . import database
-from . import analysis
+from . import outline
 
 class ExperimentView:
     def __init__(self, experiment_id):
@@ -94,7 +94,7 @@ class ExperimentView:
         self.main_layout.addWidget(details_box)
 
     def outline_cells(self):
-        outliner = analysis.Outliner(self._data)
+        outliner = outline.Outliner(self._data)
         desktop = QtWidgets.QDesktopWidget()
         outliner.set_screen_res(
             desktop.width(),
@@ -143,9 +143,9 @@ class ExperimentView:
         else:
             pass
 
-        outline_btn = QtWidgets.QPushButton("Verify Lineages")
-        outline_btn.clicked[bool].connect(lambda: print("lineage btn"))
-        layout.addWidget(outline_btn)
+        lineage_btn = QtWidgets.QPushButton("Verify Lineages")
+        lineage_btn.clicked[bool].connect(lambda: print("lineage btn"))
+        layout.addWidget(lineage_btn)
 
         box.setLayout(layout)
         self.main_layout.addWidget(box)
@@ -158,9 +158,9 @@ class ExperimentView:
         else:
             pass
 
-        outline_btn = QtWidgets.QPushButton("Analyse Cells")
-        outline_btn.clicked[bool].connect(lambda: print("analysis btn"))
-        layout.addWidget(outline_btn)
+        analysis_btn = QtWidgets.QPushButton("Analyse Cells")
+        analysis_btn.clicked[bool].connect(lambda: print("analysis btn"))
+        layout.addWidget(analysis_btn)
 
         box.setLayout(layout)
         self.main_layout.addWidget(box)

@@ -8,7 +8,6 @@ import PyQt5.QtGui as QtGui
 
 from . import experiment
 from . import database
-# from . import analysis
 
 
 class Interface:
