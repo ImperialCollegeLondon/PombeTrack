@@ -324,6 +324,7 @@ class Plotter(FigureCanvas):
     def _button_press_event(self, evt):
         if evt.inaxes == self.main_ax:
             # check is not in an existing outline
+            hit = False
             for outline in self.cell_outlines:
                 hit, _ = outline.contains(evt)
                 if hit:
