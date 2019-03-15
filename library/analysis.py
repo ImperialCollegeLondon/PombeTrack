@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Qt5Agg')
 import matplotlib.widgets
-from matplotlib.backend_bases import NavigationToolbar2, Event
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib.figure
+import matplotlib.pyplot as plt
 import numpy as np
+import PyQt5.QtWidgets as QtWidgets 
+import PyQt5.QtGui as QtGui
+import PyQt5.QtCore as QtCore
+import PyQt5.Qt as Qt
 import seaborn as sns
 import os
 import tifffile
@@ -15,20 +22,26 @@ from . import database
 sns.set_context("talk")
 sns.set_style("white")
 
-old_home = NavigationToolbar2.home
-def home_hook(self, *args, **kwargs):
-    s = "home_event"
-    event = Event(s, self)
-    event.foo = 100
-    self.canvas.callbacks.process(s, event)
+class Plotter(FigureCanvas):
+    def __init__(self, parent_window, width, height, dpi, experiment_data):
+        fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
+        self.main_ax = fig.add_subplot(121)
+        self.sub_ax = fig.add_subplot(122)
 
-NavigationToolbar2.home = home_hook
+        self.decorate_axis(self.main_ax)
+        self.decorate_axis(self.sub_ax)
 
-class Outliner:
-    def __init__(self, experiment_data):
-        self.region_width, self.region_height = 75, 75
-        # self.region_width, self.region_height = 100, 100
+        FigureCanvas.__init__(self, fig)
+        self.setParent(parent_window)
 
+        FigureCanvas.setSizePolicy(
+            self,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding,
+        )
+        FigureCanvas.updateGeometry(self)
+
+        self.screen_dpi = dpi
         self._data = experiment_data
         self.image_percentile = 1
         self.outline_store = os.path.join(
@@ -40,6 +53,10 @@ class Outliner:
         if not database.checkTable("outlines"):
             database.createOutlinesTable()
         
+        self.load_metadata()
+        self.region_width, self.region_height = 75, 75
+        # self.region_width, self.region_height = 100, 100
+
         self.im_preload = {}
         self.cell_outlines = []
         self.cell_outline_text = []
@@ -48,16 +65,14 @@ class Outliner:
         self.previous_id = None
         self.current_frame_idx = 0
         self.current_channel = 0
-    
-        self.load_metadata()
 
-    def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
-        self.max_width_px = max_width_px
-        self.max_height_px = max_height_px
-        self.screen_dpi = screen_dpi
+        self.mpl_connect("key_press_event", self._key_press_event)
+        self.mpl_connect("button_press_event", self._button_press_event)
+        self.mpl_connect("button_release_event", self._button_release_event)
+        self.mpl_connect("motion_notify_event", self._motion_notify_event)
 
-    def _px_to_in(self, px):
-        return px / self.screen_dpi
+        self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
+        self.plot_existing_outlines()
 
     def load_metadata(self):
         with tifffile.TiffFile(self._data.image_path) as im_frames:
@@ -94,47 +109,13 @@ class Outliner:
 
         self.im_preload[slice_idx] = im
 
-    def start_outlining(self):
-        if not hasattr(self, "max_width_px"):
-            raise ValueError("Screen resolution has not been set")
-
-        dim = (self._px_to_in(self.max_width_px * 0.5),
-               self._px_to_in(self.max_height_px * 0.5))
-
-        self.figure = plt.figure(figsize=dim, dpi=self.screen_dpi)
-        self.figure.canvas.mpl_disconnect(self.figure.canvas.manager.key_press_handler_id) 
-        self.figure.canvas.mpl_connect("key_press_event", self._key_press_event)
-        self.figure.canvas.mpl_connect("button_press_event", self._button_press_event)
-        self.figure.canvas.mpl_connect("button_release_event", self._button_release_event)
-        self.figure.canvas.mpl_connect("motion_notify_event", self._motion_notify_event)
-        self.figure.canvas.mpl_connect("home_event", self._home_event)
-        self.main_ax = plt.axes([0.05, 0.15, 0.4, 0.8])
-        self.sub_ax = plt.axes([0.55, 0.15, 0.4, 0.8])
-        self.text_ax = plt.axes([0.6, 0.05, 0.2, 0.075])
-        self.text_box = matplotlib.widgets.TextBox(
-            self.text_ax,
-            "Tolerance",
-            "{0}".format(self.image_percentile)
-        )
-        self.text_box.on_submit(self._submit_tolerance)
-        self.decorate_axis(self.main_ax)
-        self.decorate_axis(self.sub_ax)
-        self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
-        self.plot_existing_outlines()
-        plt.show()
+    def refresh(self):
+        self.draw()
 
     def decorate_axis(self, ax):
         ax.axis("off")
         ax.set_aspect("equal")
         ax.autoscale("off")
-
-    def _submit_tolerance(self, text):
-        try:
-            self.image_percentile = float(text)
-            print("Set image tolerance to {0}".format(self.image_percentile))
-        except ValueError:
-            print("Invalid tolerance: {0}".format(text))
-            self.text_box.set_val(str(self.image_percentile))
 
     def plot_existing_outlines(self):
         self.main_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
@@ -226,7 +207,7 @@ class Outliner:
         self.sub_ax.set_xlim([0, self.region_height * 2])
         self.sub_ax.set_ylim([self.region_width * 2, 0])
         self._plot_nodes()
-        plt.draw()
+        self.draw()
 
     def _plot_nodes(self, line=True, patches=True):
         nodes = self.balloon_obj.nodes
@@ -258,12 +239,9 @@ class Outliner:
                 self.subfigure_patches.append(patch)
                 self.sub_ax.add_artist(patch)
 
-        plt.draw()
+        self.draw()
     
     def _key_press_event(self, evt):
-        if evt.inaxes == self.text_ax:
-            return
-
         if evt.key == "left":
             if self.current_channel <= 0:
                 return
@@ -272,7 +250,7 @@ class Outliner:
             self.main_frame.set_data(new_im)
             self.plot_existing_outlines()
             self.main_frame.set_clim([new_im.min(), new_im.max()])
-            plt.draw()
+            self.draw()
 
         elif evt.key == "right":
             if self.current_channel >= self.num_channels - 1:
@@ -282,7 +260,7 @@ class Outliner:
             self.main_frame.set_data(new_im)
             self.plot_existing_outlines()
             self.main_frame.set_clim([new_im.min(), new_im.max()])
-            plt.draw()
+            self.draw()
 
         elif evt.key == "up":
             if self.current_frame_idx >= self.num_frames - 1:
@@ -291,7 +269,7 @@ class Outliner:
             new_im = self.load_frame()
             self.main_frame.set_data(new_im)
             self.plot_existing_outlines()
-            plt.draw()
+            self.draw()
 
         elif evt.key == "down":
             if self.current_frame_idx <= 0:
@@ -300,7 +278,7 @@ class Outliner:
             new_im = self.load_frame()
             self.main_frame.set_data(new_im)
             self.plot_existing_outlines()
-            plt.draw()
+            self.draw()
 
         elif evt.key == "r" and self.subfigure_patches:
             for i in range(10):
@@ -323,7 +301,7 @@ class Outliner:
             self.subfigure_patches = []
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
-            plt.draw()
+            self.draw()
 
             # fit next
             centre = [offset_centre[0] + self.offset_left,
@@ -344,9 +322,6 @@ class Outliner:
             print("Unknown key:", evt.key)
 
     def _button_press_event(self, evt):
-        if self.figure.canvas.toolbar._active is not None:
-            return
-
         if evt.inaxes == self.main_ax:
             # check is not in an existing outline
             for outline in self.cell_outlines:
@@ -387,16 +362,14 @@ class Outliner:
                     if p.contains_point((evt.x, evt.y)):
                         p.set_facecolor("r")
                         self.dragging = p
-                        plt.draw()
+                        self.draw()
                         break
             elif evt.button == 3:
                 for p in self.subfigure_patches:
                     if p.contains_point((evt.x, evt.y)):
                         self.balloon_obj.remove_node(p.this_node)
                         self._plot_nodes()
-                        plt.draw()
-        else:
-            return
+                        self.draw()
 
     def _button_release_event(self, evt):
         if not self.dragging:
@@ -413,12 +386,68 @@ class Outliner:
             return
 
         self.dragging.center = evt.xdata, evt.ydata
-        plt.draw()
+        self.draw()
 
-    def _home_event(self, evt):
-        print("home_event")
-        self.main_ax.set_xlim([0, 2048])
-        self.main_ax.set_ylim([2048, 0])
-        # self.sub_ax.set_xlim([0, self.region_height * 2])
-        # self.sub_ax.set_ylim([self.region_width * 2, 0])
-        plt.draw()
+
+
+class Outliner:
+    def __init__(self, experiment_data):
+        self.experiment_data = experiment_data
+
+    def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
+        self.max_width_px = max_width_px
+        self.max_height_px = max_height_px
+        self.screen_dpi = screen_dpi
+
+    def _px_to_in(self, px):
+        return px / self.screen_dpi
+
+    def start_outlining(self, parent_window):
+        if not hasattr(self, "max_width_px"):
+            raise ValueError("Screen resolution has not been set")
+
+        dim = (self._px_to_in(self.max_width_px * 0.5),
+               self._px_to_in(self.max_height_px * 0.5))
+
+        self.parent_window = parent_window
+        self.window = QtWidgets.QDialog(self.parent_window)
+        self.window.setModal(True)
+        self.window.setGeometry(0, 0, self.max_width_px * 0.7, self.max_height_px * 0.5)
+        self.window.setWindowTitle("Outline cells")
+
+        main_layout = QtWidgets.QVBoxLayout()
+        self.plot = Plotter(
+            self.window,
+            dim[0],
+            dim[1],
+            dpi=self.screen_dpi,
+            experiment_data = self.experiment_data,
+        )
+        self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.plot.setFocus()
+        main_layout.addWidget(self.plot)
+
+        # add tolerance box thing
+        label = QtWidgets.QLabel("Tolerance:")
+        self.tolerance_widget = QtWidgets.QLineEdit()
+        self.tolerance_widget.setText(str(self.plot.image_percentile))
+        self.tolerance_widget.textChanged[str].connect(lambda text: self._submit_tolerance(text))
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(label)
+        layout.addWidget(self.tolerance_widget)
+        main_layout.addLayout(layout)
+
+        self.window.setLayout(main_layout)
+        self.window.show()
+
+    def _submit_tolerance(self, text):
+        try:
+            if text:
+                self.plot.image_percentile = float(text)
+            else:
+                self.plot.image_percentile = 0.0 
+                self.tolerance_widget.setText(str(self.plot.image_percentile))
+            print("Set image tolerance to {0}".format(self.plot.image_percentile))
+        except ValueError:
+            print("Invalid tolerance: {0}".format(text))
+            self.tolerance_widget.setText(str(self.plot.image_percentile))
