@@ -282,9 +282,7 @@ class Plotter(FigureCanvas):
             self.draw()
 
         elif evt.key == "r" and self.subfigure_patches:
-            for i in range(10):
-                self.balloon_obj.evolve(image_percentile=self.image_percentile)
-            self._plot_nodes()
+            self._refine_event()
 
         elif evt.key == "d" and self.subfigure_patches:
             self._delete_event()
@@ -404,8 +402,9 @@ class Plotter(FigureCanvas):
         self.sub_ax.set_ylim([self.region_height * 2, 0])
         self.draw()
 
+
     def _delete_event(self):
-        if not hasattr(self, "outline_id") or self.outline_id is None:
+        if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
         alert = QtWidgets.QMessageBox()
@@ -425,6 +424,14 @@ class Plotter(FigureCanvas):
             self.plot_existing_outlines()
             self.draw()
 
+    def _refine_event(self):
+        if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
+            return
+
+        for i in range(10):
+            self.balloon_obj.evolve(image_percentile=self.image_percentile)
+        self._plot_nodes()
+
 
 class Toolbar(NavigationToolbar):
     def __init__(self, figure_canvas, parent=None):
@@ -437,6 +444,7 @@ class Toolbar(NavigationToolbar):
             ("Save", "Save", "filesave_large", "save_figure"),
             (None, None, None, None),
             ("Test", "Test", "delete", "delete"),
+            ("Refine", "Refine outline", "recycle", "refine"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
@@ -456,6 +464,9 @@ class Toolbar(NavigationToolbar):
 
     def delete(self):
         self.canvas._delete_event()
+
+    def refine(self):
+        self.canvas._refine_event()
 
 class Outliner:
     def __init__(self, experiment_data):
