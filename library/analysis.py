@@ -286,6 +286,9 @@ class Plotter(FigureCanvas):
                 self.balloon_obj.evolve(image_percentile=self.image_percentile)
             self._plot_nodes()
 
+        elif evt.key == "d" and self.subfigure_patches:
+            self._delete_event()
+
         elif evt.key == "." and self.subfigure_patches:
             self.balloon_obj.evolve(image_percentile=self.image_percentile)
             self._plot_nodes()
