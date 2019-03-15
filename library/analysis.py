@@ -464,7 +464,9 @@ class Outliner:
         self.plot.setFocus()
 
         self.window.toolbar = Toolbar(self.plot, self.window)
-        main_layout.addWidget(self.window.toolbar)
+
+        tool_layout = QtWidgets.QVBoxLayout()
+        tool_layout.addWidget(self.window.toolbar)
 
         # add tolerance box thing
         label = QtWidgets.QLabel("Tolerance:")
@@ -474,7 +476,9 @@ class Outliner:
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(label)
         layout.addWidget(self.tolerance_widget)
-        main_layout.addLayout(layout)
+        tool_layout.addLayout(layout)
+
+        main_layout.addLayout(tool_layout)
         main_layout.addWidget(self.plot)
 
         self.window.setLayout(main_layout)
