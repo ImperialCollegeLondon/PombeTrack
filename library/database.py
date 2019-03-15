@@ -181,6 +181,15 @@ def deleteOutline(outline_id):
     args = (outline_id,)
     executeQuery(query, args, commit=True)
 
+def getOutlineById(outline_id):
+    query = """
+    SELECT * FROM outlines
+    WHERE outline_id = ?;
+    """
+    args = (outline_id,)
+    result = executeQuery(query, args, fetchone=True)
+    return OutlineRow(result)
+
 def createExperimentsTable():
     query = "CREATE TABLE experiments ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])

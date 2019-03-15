@@ -161,36 +161,25 @@ class Outliner:
         for t in self.cell_outline_text:
             t.remove()
 
-        for i, c in enumerate(self.get_outlines()):
-            outline_num = i + 1
+        outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_hash)
+        for i, outline in enumerate(outline_data):
+            if not os.path.exists(outline.coords_path):
+                database.deleteOutline(outline.outline_id)
+                continue
+
+            c = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
             t = self.main_ax.text(
                 centre[1], centre[0],
-                "{0}".format(outline_num),
+                "{0}".format(i + 1),
                 verticalalignment="center",
                 horizontalalignment="center",
                 color="w",
             )
             self.cell_outline_text.append(t)
-
-    def get_outlines(self, frame_idx=None):
-        if not frame_idx:
-            frame_idx = self.current_frame_idx
-
-        outline_data = database.getOutlinesByFrameIdx(frame_idx, self._data.experiment_hash)
-        outlines = []
-        for outline in outline_data:
-            if not os.path.exists(outline.coords_path):
-                database.deleteOutline(outline.outline_id)
-                continue
-
-            outline_coords = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
-            outlines.append(outline_coords)
-
-        return outlines
 
     def save_outline(self):
         coords_path = os.path.join(
