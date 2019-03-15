@@ -401,6 +401,31 @@ class Plotter(FigureCanvas):
         self.sub_ax.set_ylim([self.region_height * 2, 0])
         self.draw()
 
+class Toolbar(NavigationToolbar):
+    def __init__(self, figure_canvas, parent=None):
+        self.toolitems = [
+            ("Home", "Home", "home_large", "home_event"),
+            (None, None, None, None),
+            ("Pan", "Pan", "move_large", "pan"),
+            ("Zoom", "Zoom", "zoom_to_rect_large", "zoom"),
+            (None, None, None, None),
+            ("Save", "Save", "filesave_large", "save_figure"),
+        ]
+        NavigationToolbar.__init__(self, figure_canvas, parent=None)
+
+    def _icon(self, name):
+        path = os.path.join("resources", name)
+        if not os.path.exists(path):
+            path = os.path.join(self.basedir, name)
+
+        pm = QtGui.QPixmap(path)
+        if hasattr(pm, "setDevicePixelRatio"):
+            pm.setDevicePixelRatio(self.canvas._dpi_ratio)
+
+        return QtGui.QIcon(pm)
+
+    def home_event(self, *args, **kwargs):
+        self.canvas._home_event()
 
 class Outliner:
     def __init__(self, experiment_data):
@@ -437,17 +462,9 @@ class Outliner:
         )
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.plot.setFocus()
-        self.window.toolbar = NavigationToolbar(self.plot, self.window)
-        remove_actions = ["Back", "Forward", "Subplots", "Customize"]
-        for act in self.window.toolbar.actions():
-            if act.text() in remove_actions:
-                self.window.toolbar.removeAction(act)
-            elif act.text() == "Home":
-                act.triggered.disconnect()
-                act.triggered[bool].connect(lambda x: self.plot._home_event())
 
+        self.window.toolbar = Toolbar(self.plot, self.window)
         main_layout.addWidget(self.window.toolbar)
-        main_layout.addWidget(self.plot)
 
         # add tolerance box thing
         label = QtWidgets.QLabel("Tolerance:")
@@ -458,6 +475,7 @@ class Outliner:
         layout.addWidget(label)
         layout.addWidget(self.tolerance_widget)
         main_layout.addLayout(layout)
+        main_layout.addWidget(self.plot)
 
         self.window.setLayout(main_layout)
         self.window.show()
