@@ -441,9 +441,9 @@ class Toolbar(NavigationToolbar):
             ("Pan", "Pan", "move_large", "pan"),
             ("Zoom", "Zoom", "zoom_to_rect_large", "zoom"),
             (None, None, None, None),
-            ("Save", "Save", "filesave_large", "save_figure"),
+            ("Save", "Save view", "filesave_large", "save_figure"),
             (None, None, None, None),
-            ("Test", "Test", "delete", "delete"),
+            ("Delete", "Delete outline", "delete", "delete"),
             ("Refine", "Refine outline", "recycle", "refine"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
