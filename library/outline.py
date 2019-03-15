@@ -24,7 +24,7 @@ sns.set_context("talk")
 sns.set_style("white")
 
 class Plotter(FigureCanvas):
-    def __init__(self, parent_window, width, height, dpi, experiment_data):
+    def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader):
         fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
         self.main_ax = fig.add_subplot(121)
         self.sub_ax = fig.add_subplot(122)
@@ -44,7 +44,7 @@ class Plotter(FigureCanvas):
 
         self.screen_dpi = dpi
         self._data = experiment_data
-        self.image_percentile = 1
+        self.image_percentile = 1.0
         self.outline_store = os.path.join(
             "data", "outlines", self._data.experiment_hash
         )
@@ -54,11 +54,11 @@ class Plotter(FigureCanvas):
         if not database.checkTable("outlines"):
             database.createOutlinesTable()
 
+        self.loader = image_loader
         self.load_metadata()
         self.region_width, self.region_height = 75, 75
         # self.region_width, self.region_height = 100, 100
 
-        self.im_preload = {}
         self.cell_outlines = []
         self.cell_outline_text = []
         self.subfigure_patches = []
@@ -76,18 +76,8 @@ class Plotter(FigureCanvas):
         self.plot_existing_outlines()
 
     def load_metadata(self):
-        with tifffile.TiffFile(self._data.image_path) as im_frames:
-            if not im_frames.is_imagej:
-                raise IOError("Not an ImageJ file, ask Miles about this?")
-
-            self.im_metadata = im_frames.imagej_metadata
-            self.num_frames = 1
-            self.num_channels = 1
-            if "frames" in self.im_metadata:
-                self.num_frames = int(self.im_metadata["frames"])
-            
-            if "channels" in self.im_metadata:
-                self.num_channels  = int(self.im_metadata["channels"])
+        self.num_frames = self.loader.num_frames
+        self.num_channels = self.loader.num_channels
 
     def load_frame(self, frame_idx=None):
         if not frame_idx:
@@ -96,19 +86,7 @@ class Plotter(FigureCanvas):
         if frame_idx < 0 or frame_idx > (self.num_frames - 1):
             return
 
-        slice_idx = (frame_idx * self.num_channels) + self.current_channel
-
-        if slice_idx not in self.im_preload:
-            self.load_slice(slice_idx)
-
-        return self.im_preload[slice_idx]
-
-    def load_slice(self, slice_idx):
-        with tifffile.TiffFile(self._data.image_path) as im_frames:
-            page = im_frames.pages[slice_idx]
-            im = page.asarray()
-
-        self.im_preload[slice_idx] = im
+        return self.loader.load_frame(frame_idx, self.current_channel)
 
     def refresh(self):
         self.draw()
@@ -469,8 +447,9 @@ class Toolbar(NavigationToolbar):
         self.canvas._refine_event()
 
 class Outliner:
-    def __init__(self, experiment_data):
+    def __init__(self, experiment_data, image_loader):
         self.experiment_data = experiment_data
+        self.image_loader = image_loader
 
     def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
         self.max_width_px = max_width_px
@@ -507,7 +486,8 @@ class Outliner:
             dim[0],
             dim[1],
             dpi=self.screen_dpi,
-            experiment_data = self.experiment_data,
+            experiment_data=self.experiment_data,
+            image_loader=self.image_loader,
         )
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.plot.setFocus()

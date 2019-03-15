@@ -9,12 +9,12 @@ import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
 
 from . import database
+from . import loader
 from . import outline
 
 class ExperimentView:
     def __init__(self, experiment_id):
         self._data = database.getExperimentById(experiment_id)
-        self.data_changed = False
 
     def show_experiment(self, window=None):
         if not window:
@@ -26,6 +26,7 @@ class ExperimentView:
         else:
             self.window = window
 
+        self.image_loader = loader.ImageLoader(self._data.image_path)
         self.window.setGeometry(0, 0, 800, 100)
         self.window.setWindowTitle("Experiment #{0}".format(self._data.experiment_id))
 
@@ -94,7 +95,7 @@ class ExperimentView:
         self.main_layout.addWidget(details_box)
 
     def outline_cells(self):
-        outliner = outline.Outliner(self._data)
+        outliner = outline.Outliner(self._data, self.image_loader)
         desktop = QtWidgets.QDesktopWidget()
         outliner.set_screen_res(
             desktop.width(),
