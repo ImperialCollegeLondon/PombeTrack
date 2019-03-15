@@ -169,6 +169,7 @@ class Outliner:
 
             c = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
+            p._outline_id = outline.outline_id
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
@@ -186,9 +187,6 @@ class Outliner:
             self.outline_store,
             "{0}.npy".format(self.outline_id)
         )
-        coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes]) 
-        np.save(coords_path, coords)
-
 
         data = {
             "outline_id": self.outline_id,
@@ -202,20 +200,28 @@ class Outliner:
             "offset_top": self.offset_top,
             "parent_id": self.previous_id or "",
         }
-        database.insertOutline(**data)
+        if os.path.exists(coords_path):
+            os.remove(coords_path)
+        else:
+            database.insertOutline(**data)
+
+        coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes]) 
+        np.save(coords_path, coords)
 
         if self.previous_id:
             database.addOutlineChild(self.previous_id, child1=self.outline_id)
 
         self.previous_id = str(self.outline_id)
 
-    def fit_outline(self, roi):
-        self.outline_id = str(uuid.uuid4())
+    def fit_outline(self, roi, init_nodes=None):
         centre = [self.region_height, self.region_width]
-        radius = 5
-        num_nodes = 10
-        init = balloon.initial_nodes(centre, radius, num_nodes)
-        self.balloon_obj = balloon.Balloon(init, roi)
+        if init_nodes is None:
+            self.outline_id = str(uuid.uuid4())
+            radius = 5
+            num_nodes = 10
+            init_nodes = balloon.initial_nodes(centre, radius, num_nodes)
+
+        self.balloon_obj = balloon.Balloon(init_nodes, roi)
         self.sub_ax.imshow(roi, cmap="gray")
         self.sub_ax.set_xlim([0, self.region_height * 2])
         self.sub_ax.set_ylim([self.region_width * 2, 0])
@@ -342,17 +348,38 @@ class Outliner:
             return
 
         if evt.inaxes == self.main_ax:
-            self.previous_id = None
-            self.cell_id = str(uuid.uuid4())
-            centre = [evt.ydata, evt.xdata]
-            self.offset_left = int(round(centre[0] - self.region_width))
-            self.offset_top = int(round(centre[1] - self.region_height))
-            roi = self.load_frame()[
-                self.offset_left:self.offset_left + (self.region_width * 2),
-                self.offset_top:self.offset_top + (self.region_height * 2)
-            ]
+            # check is not in an existing outline
+            for outline in self.cell_outlines:
+                hit, _ = outline.contains(evt)
+                if hit:
+                    break
 
-            self.fit_outline(roi)
+            if hit:
+                outline_info = database.getOutlineById(outline._outline_id)
+                self.previous_id = outline_info.parent_id
+                self.cell_id = outline_info.cell_id
+                self.offset_left = outline_info.offset_left
+                self.offset_top = outline_info.offset_top
+                roi = self.load_frame()[
+                    self.offset_left:self.offset_left + (self.region_width * 2),
+                    self.offset_top:self.offset_top + (self.region_height * 2)
+                ]
+                self.outline_id = outline_info.outline_id
+                current_nodes = np.load(outline_info.coords_path)
+                self.fit_outline(roi, init_nodes=current_nodes)
+
+            else:
+                self.previous_id = None
+                self.cell_id = str(uuid.uuid4())
+                centre = [evt.ydata, evt.xdata]
+                self.offset_left = int(round(centre[0] - self.region_width))
+                self.offset_top = int(round(centre[1] - self.region_height))
+                roi = self.load_frame()[
+                    self.offset_left:self.offset_left + (self.region_width * 2),
+                    self.offset_top:self.offset_top + (self.region_height * 2)
+                ]
+
+                self.fit_outline(roi)
 
         elif evt.inaxes == self.sub_ax:
             if evt.button == 1:
