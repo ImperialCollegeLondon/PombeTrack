@@ -101,8 +101,8 @@ class Assigner:
             experiment_data=self.experiment_data,
             image_loader=self.image_loader,
         )
-        self.plot.mpl_connect("key_press_event", lambda evt: self.key_press_event(evt))
-        self.plot.mpl_connect("pick_event", lambda evt: self.pick_event(evt))
+        self.plot.mpl_connect("key_press_event", self.key_press_event)
+        self.plot.mpl_connect("pick_event", self.pick_event)
 
         # tool_layout = QtWidgets.QVBoxLayout()
         # self.main_layout.addLayout(tool_layout)
