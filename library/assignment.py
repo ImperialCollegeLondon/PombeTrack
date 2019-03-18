@@ -209,6 +209,10 @@ class Assigner:
         self._clear_assignment_plot()
         first_outline = self.lineage[-1]
 
+        self.plot.axes[0].set_title("Frame {0}".format(first_outline.frame_idx))
+        self.plot.axes[1].set_title("Frame {0}".format(first_outline.frame_idx + 1))
+        self.plot.axes[2].set_title("Frame {0}".format(first_outline.frame_idx + 2))
+
         im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
         self.plot.axes[1].imshow(im1, cmap="gray")
         self.plot.axes[1].set_xlim([
