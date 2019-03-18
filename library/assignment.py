@@ -354,6 +354,9 @@ class Assigner:
 
     def key_press_event(self, evt):
         if evt.key == "enter":
+            if (hasattr(self, "lineage") and len(self.lineage) == 0) or not hasattr(self, "selected_outlines"):
+                return
+
             if len(self.selected_outlines) == 1:
                 # next frame
                 self.lineage.append(self.selected_outlines[0])
@@ -373,6 +376,8 @@ class Assigner:
                     self.assign_lineage(outline_id=self.assignment_queue.pop(0))
                 else:
                     self._clear_assignment_plot()
+                    self.lineage = []
+                    self.selected_outlines = []
                     self.plot.draw()
 
     def pick_event(self, evt):
