@@ -8,7 +8,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
-import PyQt5.QtWidgets as QtWidgets 
+import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtGui as QtGui
 import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
@@ -165,7 +165,7 @@ class Plotter(FigureCanvas):
         else:
             database.insertOutline(**data)
 
-        coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes]) 
+        coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
         np.save(coords_path, coords)
 
         if self.previous_id:
@@ -219,7 +219,7 @@ class Plotter(FigureCanvas):
                 self.sub_ax.add_artist(patch)
 
         self.draw()
-    
+
     def _key_press_event(self, evt):
         if evt.key == "left":
             if self.current_channel <= 0:
@@ -518,7 +518,7 @@ class Outliner:
             if text:
                 self.plot.image_percentile = float(text)
             else:
-                self.plot.image_percentile = 0.0 
+                self.plot.image_percentile = 0.0
                 self.tolerance_widget.setText(str(self.plot.image_percentile))
             print("Set image tolerance to {0}".format(self.plot.image_percentile))
         except ValueError:

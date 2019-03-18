@@ -103,7 +103,7 @@ class Interface:
                         QtGui.QBrush(QtGui.QColor("red"))
                     )
                     outlined_item.setText("NO")
-                
+
                 outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 outlined_item._experiment_id = experiment.experiment_id
                 outlined_item._item_type = "experiment_outlined"
@@ -233,7 +233,7 @@ class Interface:
     def view_experiment(self, item=None):
         forbidden_types = ["experiment_medium", "experiment_strain"]
         if item and item._item_type in forbidden_types:
-            return 
+            return
 
         if len(self.experiment_table.selectedItems()) == 0:
             return

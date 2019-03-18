@@ -3,7 +3,7 @@
 import datetime
 import os
 import pandas as pd
-import PyQt5.QtWidgets as QtWidgets 
+import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtGui as QtGui
 import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
@@ -235,7 +235,7 @@ class Experiment:
         self.settings["channels"]["red"] = state
 
     def confirm_settings(self):
-        alert_flag = False 
+        alert_flag = False
         for k, v in self.settings.items():
             if v is None:
                 alert_flag = True
@@ -314,7 +314,7 @@ class Experiment:
 
     def create_new_experiment(self, window=None):
         """ This function will ask the user to define various parameters, and store them in a config file
-        
+
         Needs to define:
             medium
             strain
@@ -410,7 +410,7 @@ class Experiment:
         self.channels_form = label, (green, red)
         self.current_row += 1
 
-        confirm_btn = QtWidgets.QPushButton("OK") 
+        confirm_btn = QtWidgets.QPushButton("OK")
         confirm_btn.clicked.connect(self.confirm_settings)
         layout.addWidget(confirm_btn, self.current_row, 2)
 
@@ -421,10 +421,10 @@ class Experiment:
             self.app.exec_()
 
     def _addFormEdit(
-        self, layout, 
+        self, layout,
         label_text, label_args=[], label_kwargs={},
-        widget_args=[], widget_kwargs={}, 
-        options=None, options_callback=None, 
+        widget_args=[], widget_kwargs={},
+        options=None, options_callback=None,
         row_idx=None,
         change_callback=None,
     ):

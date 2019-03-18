@@ -21,7 +21,7 @@ class ImageLoader:
             self.num_channels = 1
             if "frames" in self.im_metadata:
                 self.num_frames = int(self.im_metadata["frames"])
-            
+
             if "channels" in self.im_metadata:
                 self.num_channels  = int(self.im_metadata["channels"])
 

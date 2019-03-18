@@ -190,7 +190,7 @@ class Balloon(object):
                 n0.neighbour2 = n2
                 n2.neighbour1 = n0
                 n1.pruned = True
-        
+
         new_nodes = []
         for n in self.nodes:
             if not hasattr(n, "pruned"):
@@ -457,7 +457,7 @@ class Balloon(object):
             for i in range(len(self.figure_patches)):
                 p = self.figure_patches.pop()
                 p.remove()
-               
+
             for n in self.nodes:
                 patch = matplotlib.patches.Circle(
                     (n.y, n.x),
