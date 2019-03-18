@@ -122,14 +122,14 @@ class Assigner:
             cell_plot.setMinimumWidth(width)
             cell_plot.setMaximumWidth(width)
             cell_plot.setMinimumHeight(self.max_width_px * 0.1)
-            # i = 0 
-            # for _, outline in cell_outlines.iterrows():
-            #     roi = self.image_loader.load_frame(outline.frame_idx, 0)[
-            #         outline.offset_left:outline.offset_left + (self.region_width * 2),
-            #         outline.offset_top:outline.offset_top + (self.region_height * 2),
-            #     ]
-            #     cell_plot.axes[i].imshow(roi, cmap="gray")
-            #     i += 1
+            i = 0
+            for _, outline in cell_outlines.iterrows():
+                roi = self.image_loader.load_frame(outline.frame_idx, 0)[
+                    outline.offset_left:outline.offset_left + (self.region_width * 2),
+                    outline.offset_top:outline.offset_top + (self.region_height * 2),
+                ]
+                cell_plot.axes[i].imshow(roi, cmap="gray")
+                i += 1
 
             cell_scroll_area = QtWidgets.QScrollArea()
             cell_scroll_area.verticalScrollBar().setEnabled(False)
