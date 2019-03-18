@@ -17,7 +17,7 @@ class Row(dict):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
             casted = caster(r)
-            if not casted and caster is str:
+            if caster is str and (not casted or casted == "None"):
                 casted = None
             row[col_name] = casted
 
