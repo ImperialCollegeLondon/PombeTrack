@@ -437,6 +437,14 @@ class Assigner:
             self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
             return False
 
+        self.temp_window = QtWidgets.QDialog(self.window)
+        self.temp_window.setGeometry(0, 0, self.max_width_px * 0.5, self.max_height_px * 0.9)
+        self.temp_window.setWindowTitle("Please wait patiently")
+        temp_layout = QtWidgets.QVBoxLayout()
+        temp_layout.addWidget(QtWidgets.QLabel("Writing lineage, please wait..."))
+        self.temp_window.setLayout(temp_layout)
+        self.temp_window.show()
+
         self.status_bar.showMessage("Removing cell_id from extra outlines")
         cell_id = self.lineage[0].cell_id
         for outline in self.lineage:
@@ -491,4 +499,7 @@ class Assigner:
                 child_id2=child_id2,
             )
         self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
+        self.temp_window.close()
+        self.temp_window.deleteLater()
+        self.temp_window = None
         return True
