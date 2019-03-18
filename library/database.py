@@ -92,7 +92,7 @@ def executeQuery(query, args=None, commit=False, fetchone=False, fetchmany=False
 
         if commit:
             conn.commit()
-       
+
         if fetchone:
             result = cursor.fetchone()
         elif fetchmany:
@@ -111,7 +111,7 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
-    
+
 def createOutlinesTable():
     query = "CREATE TABLE outlines ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
@@ -153,6 +153,29 @@ def insertOutline(outline_id, cell_id, experiment_id, experiment_hash, image_pat
     new_id = executeQuery(query, args, commit=True)
     return new_id
 
+def updateOutlineById(outline_id, **kwargs):
+    args = []
+    set_statement = []
+
+    permitted_columns = [
+        "cell_id", "parent_id", "child_id1", "child_id2",
+    ]
+    for kw, val in kwargs.items():
+        if kw not in permitted_columns:
+            raise ValueError("Column name {0} is illegal".format(kw))
+        set_statement.append("{0} = ?".format(kw))
+        args.append(val)
+
+    set_string = ", ".join(set_statement)
+    args.append(outline_id)
+
+    query = """
+    UPDATE outlines
+    SET {0}
+    WHERE outline_id = ?;
+    """.format(set_string)
+    executeQuery(query, args, commit=True)
+
 def addOutlineChild(outline_id, child1, child2=None):
     if child2:
         query = """
@@ -168,7 +191,7 @@ def addOutlineChild(outline_id, child1, child2=None):
         WHERE outline_id = ?;
         """
         args = (child1, outline_id)
-    
+
     executeQuery(query, args, commit=True)
 
 def deleteOutlineById(outline_id):
@@ -208,6 +231,15 @@ def getOutlineById(outline_id):
     args = (outline_id,)
     result = executeQuery(query, args, fetchone=True)
     return OutlineRow(result)
+
+def getOutlinesByCellId(cell_id):
+    query = """
+    SELECT * FROM outlines
+    WHERE cell_id = ?;
+    """
+    args = (cell_id,)
+    results = executeQuery(query, args, fetchmany=True)
+    return [OutlineRow(x) for x in results]
 
 def createExperimentsTable():
     query = "CREATE TABLE experiments ({0});".format(",".join([

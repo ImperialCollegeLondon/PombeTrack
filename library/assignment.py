@@ -67,6 +67,10 @@ class Assigner:
     def _px_to_in(self, px):
         return px / self.screen_dpi
 
+    def get_outlines(self):
+        outlines = database.getOutlinesByExperimentId(self.experiment_data.experiment_id)
+        self.outlines = pd.DataFrame(outlines)
+
     def start_assigning(self, parent_window):
         if not hasattr(self, "max_width_px"):
             raise ValueError("Screen resolution has not been set")
@@ -76,6 +80,7 @@ class Assigner:
         self.window.setModal(True)
         self.window.setGeometry(0, 0, self.max_width_px * 0.9, self.max_height_px * 0.9)
         self.window.setWindowTitle("Assign/Verify cell lineages")
+        self.assignment_queue = []
 
         main_layout = QtWidgets.QVBoxLayout()
 
@@ -86,8 +91,7 @@ class Assigner:
         file_menu.addAction(quit_action)
         main_layout.setMenuBar(menubar)
 
-        outlines = database.getOutlinesByExperimentId(self.experiment_data.experiment_id)
-        self.outlines = pd.DataFrame(outlines)
+        self.get_outlines()
         unique_cells = self.outlines.cell_id.unique()
 
         lineage_layout = QtWidgets.QVBoxLayout()
@@ -154,8 +158,8 @@ class Assigner:
             experiment_data=self.experiment_data,
             image_loader=self.image_loader,
         )
-        self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
-        self.plot.setFocus()
+        self.plot.mpl_connect("key_press_event", lambda evt: self.key_press_event(evt))
+        self.plot.mpl_connect("pick_event", lambda evt: self.pick_event(evt))
 
         # tool_layout = QtWidgets.QVBoxLayout()
         # main_layout.addLayout(tool_layout)
@@ -163,6 +167,9 @@ class Assigner:
 
         self.window.setLayout(main_layout)
         self.window.show()
+
+        self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.plot.setFocus()
 
     def _clear_assignment_plot(self):
         for ax in self.plot.axes:
@@ -172,42 +179,73 @@ class Assigner:
             ax.set_aspect("equal")
             ax.autoscale("off")
 
-    def assign_lineage(self, *args):
+    def assign_lineage(self, click=False, outline_id=None):
+        if not outline_id:
+            potential_outlines = self.outlines[self.outlines.cell_id == self.window.sender()._cell_id]
+        else:
+            potential_outlines = self.outlines[self.outlines.outline_id == outline_id]
+
+        self.lineage = [potential_outlines[
+            potential_outlines.frame_idx == potential_outlines.frame_idx.min()
+        ].iloc[0]]
+        self.offset = 0
+        self.selected_outlines = []
+        self.display_frame()
+        self.plot.setFocus()
+
+    def display_frame(self):
+        self.selected_outlines = []
         self._clear_assignment_plot()
-        data = self.outlines[self.outlines.cell_id == self.window.sender()._cell_id]
-        first_cell = data.iloc[0]
-        im1 = self.image_loader.load_frame(first_cell.frame_idx, 0)
+        first_outline = self.lineage[self.offset]
+        im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
         self.plot.axes[1].imshow(im1, cmap="gray")
         self.plot.axes[1].set_xlim([
-            first_cell.offset_top,
-            first_cell.offset_top + (self.region_height * 2),
+            first_outline.offset_top,
+            first_outline.offset_top + (self.region_height * 2),
         ])
         self.plot.axes[1].set_ylim([
-            first_cell.offset_left + (self.region_width * 2),
-            first_cell.offset_left,
+            first_outline.offset_left + (self.region_width * 2),
+            first_outline.offset_left,
         ])
-        c = np.load(first_cell.coords_path) + np.array([
-            first_cell.offset_left, first_cell.offset_top
+        c = np.load(first_outline.coords_path) + np.array([
+            first_outline.offset_left, first_outline.offset_top
         ])
-        p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
+        p = matplotlib.patches.Polygon(
+            np.array([c[:, 1], c[:, 0]]).T,
+            edgecolor="r",
+            fill=False,
+            lw=1
+        )
         self.plot.axes[1].add_patch(p)
 
+        if first_outline.child_id1 is not None:
+            selected_outline = self.outlines[
+                self.outlines.outline_id == first_outline.child_id1
+            ].iloc[0]
+            self.selected_outlines.append(selected_outline)
+            fidx = selected_outline.frame_idx
+            offt = selected_outline.offset_top
+            offl = selected_outline.offset_left
 
-        if len(data) > 1:
-            cell_selected = data.iloc[1]
-            fidx = data.iloc[1].frame_idx
-            offt = data.iloc[1].offset_top
-            offl = data.iloc[1].offset_left
+            if first_outline.child_id2 is not None:
+                selected_outline = self.outlines[
+                    self.outlines.outline_id == first_outline.child_id2
+                ].iloc[0]
+                self.selected_outlines.append(selected_outline)
+                offt2 = selected_outline.offset_top
+                offl2 = selected_outline.offset_left
+                offt = (offt + offt2) / 2
+                offl = (offl + offl2) / 2
+
             im2 = self.image_loader.load_frame(fidx, 0)
-        elif first_cell.frame_idx + 1 < self.image_loader.num_frames:
-            cell_selected = None
-            fidx = first_cell.frame_idx + 1
-            offt = first_cell.offset_top
-            offl = first_cell.offset_left
+
+        elif first_outline.frame_idx + 1 < self.image_loader.num_frames:
+            fidx = first_outline.frame_idx + 1
+            offt = first_outline.offset_top
+            offl = first_outline.offset_left
             im2 = self.image_loader.load_frame(fidx, 0)
         else:
-            cell_selected = None
-            fidx = first_cell.frame_idx + 1
+            fidx = first_outline.frame_idx + 1
             im2 = np.zeros((self.region_width * 2, self.region_height * 2))
             offt = 0
             offl = 0
@@ -224,47 +262,173 @@ class Assigner:
             c = np.load(outline.coords_path) + np.array([
                 outline.offset_left, outline.offset_top
             ])
-            if cell_selected is not None and outline.outline_id == cell_selected.outline_id:
-                p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="k", lw=1, facecolor="g", alpha=0.9)
+            kws = dict(
+                edgecolor="k",
+                lw=1,
+                alpha=0.9,
+                picker=True,
+            )
+            if (len(self.selected_outlines) > 0 and
+                outline.outline_id in [x.outline_id
+                                       for x in self.selected_outlines]):
+                p = matplotlib.patches.Polygon(
+                    np.array([c[:, 1], c[:, 0]]).T,
+                    facecolor="g",
+                    **kws
+                )
+                p.selected = True
             else:
-                p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="k", lw=1, facecolor="y", alpha=0.9)
+                p = matplotlib.patches.Polygon(
+                    np.array([c[:, 1], c[:, 0]]).T,
+                    facecolor="y",
+                    **kws
+                )
+                p.selected = False
+
+            p.outline_id = outline.outline_id
             self.plot.axes[2].add_patch(p)
 
-        if first_cell.parent_id:
-            prev_cell = database.getOutlineById(first_cell.parent_id)
-            im3 = self.image_loader.load_frame(prev_cell.frame_idx, 0)
+        if first_outline.parent_id:
+            prev_outline = database.getOutlineById(first_outline.parent_id)
+            im3 = self.image_loader.load_frame(prev_outline.frame_idx, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
             self.plot.axes[0].set_xlim([
-                prev_cell.offset_top,
-                prev_cell.offset_top + (self.region_height * 2),
+                prev_outline.offset_top,
+                prev_outline.offset_top + (self.region_height * 2),
             ])
             self.plot.axes[0].set_ylim([
-                prev_cell.offset_left + (self.region_width * 2),
-                prev_cell.offset_left,
+                prev_outline.offset_left + (self.region_width * 2),
+                prev_outline.offset_left,
             ])
-            c = np.load(prev_cell.coords_path) + np.array([
-                prev_cell.offset_left, prev_cell.offset_top
+            c = np.load(prev_outline.coords_path) + np.array([
+                prev_outline.offset_left, prev_outline.offset_top
             ])
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="y", linestyle="--", fill=False, lw=1)
             self.plot.axes[0].add_patch(p)
 
-        elif first_cell.frame_idx - 1 >= 0:
-            im3 = self.image_loader.load_frame(first_cell.frame_idx - 1, 0)
+        elif first_outline.frame_idx - 1 >= 0:
+            im3 = self.image_loader.load_frame(first_outline.frame_idx - 1, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
             self.plot.axes[0].set_xlim([
-                first_cell.offset_top,
-                first_cell.offset_top + (self.region_height * 2),
+                first_outline.offset_top,
+                first_outline.offset_top + (self.region_height * 2),
             ])
             self.plot.axes[0].set_ylim([
-                first_cell.offset_left + (self.region_width * 2),
-                first_cell.offset_left,
+                first_outline.offset_left + (self.region_width * 2),
+                first_outline.offset_left,
             ])
 
         else:
-            prev_cell = None
+            prev_outline = None
             im3 = np.zeros((self.region_width * 2, self.region_height * 2))
             self.plot.axes[0].imshow(im3, cmap="gray")
 
         self.plot.draw()
 
+    def key_press_event(self, evt):
+        if evt.key == "enter":
+            if len(self.selected_outlines) == 1:
+                # next frame
+                self.lineage.append(self.selected_outlines[0])
+                self.offset += 1
+                self.display_frame()
+            elif len(self.selected_outlines) > 2:
+                print("> 2")
+            else:
+                self.write_lineage()
+                self.get_outlines()
+                for outline in self.selected_outlines:
+                    self.assignment_queue.append(outline.outline_id)
 
+                if self.assignment_queue:
+                    self.assign_lineage(outline_id=self.assignment_queue.pop(0))
+                else:
+                    self._clear_assignment_plot()
+                    self.plot.draw()
+
+    def pick_event(self, evt):
+        if not evt.artist.selected:
+            evt.artist.selected = True
+            evt.artist.set_facecolor("g")
+            selected_outline = self.outlines[
+                self.outlines.outline_id == evt.artist.outline_id
+            ].iloc[0]
+            self.selected_outlines.append(selected_outline)
+        else:
+            for i, x in enumerate(self.selected_outlines):
+                if x.outline_id == evt.artist.outline_id:
+                    self.selected_outlines.pop(i)
+                    break
+
+            evt.artist.selected = False
+            evt.artist.set_facecolor("y")
+        self.plot.draw()
+
+    def write_lineage(self):
+        if len(self.selected_outlines) == 0:
+            death_confirm = QtWidgets.QMessageBox().question(
+                self.window,
+                "Confirm end of cell lineage",
+                "Are you sure this lineage ends here?"
+            )
+            if death_confirm == QtWidgets.QMessageBox.No:
+                return
+
+        elif len(self.selected_outlines) != 2:
+            print("Trying to write with {0} selected outlines".format(
+                len(self.selected_outlines)
+            ))
+            return
+
+
+        cell_id = self.lineage[0].cell_id
+        for outline in self.lineage:
+            database.updateOutlineById(
+                outline.outline_id,
+                cell_id=None,
+            )
+
+        existing_outlines = database.getOutlinesByCellId(cell_id)
+        if len(existing_outlines) > 0:
+            new_cell_id = str(uuid.uuid4())
+
+        for outline in existing_outlines:
+            database.updateOutlineById(
+                outline.outline_id,
+                cell_id=new_cell_id,
+            )
+
+        parent_replacements = []
+        child_replacements = []
+        for i, outline in enumerate(self.lineage):
+            if i == 0:
+                parent_id = self.lineage[0].parent_id
+            else:
+                parent_id = self.lineage[i - 1].outline_id
+
+            if i < len(self.lineage) - 1:
+                child_id1 = self.lineage[i + 1].outline_id
+                child_id2 = ""
+            else:
+                if len(self.selected_outlines) == 0:
+                    child_id1 = ""
+                    child_id2 = ""
+                else:
+                    child_id1 = self.selected_outlines[0].outline_id
+                    child_id2 = self.selected_outlines[1].outline_id
+                    database.updateOutlineById(
+                        child_id1,
+                        parent_id=outline.outline_id,
+                    )
+                    database.updateOutlineById(
+                        child_id2,
+                        parent_id=outline.outline_id,
+                    )
+
+            database.updateOutlineById(
+                outline.outline_id,
+                cell_id=cell_id,
+                parent_id=parent_id,
+                child_id1=child_id1,
+                child_id2=child_id2,
+            )
