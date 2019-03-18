@@ -383,6 +383,8 @@ class Assigner:
                     self.selected_outlines = []
                     self.plot.draw()
 
+                self.plot.setFocus()
+
     def pick_event(self, evt):
         if not evt.artist.selected:
             evt.artist.selected = True
@@ -502,4 +504,5 @@ class Assigner:
         self.temp_window.close()
         self.temp_window.deleteLater()
         self.temp_window = None
+        self.plot.setFocus()
         return True
