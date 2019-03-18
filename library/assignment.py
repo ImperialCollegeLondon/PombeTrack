@@ -108,6 +108,9 @@ class Assigner:
         # self.main_layout.addLayout(tool_layout)
         self.main_layout.addWidget(self.plot)
 
+        self.status_bar = QtWidgets.QStatusBar()
+        self.main_layout.addWidget(self.status_bar)
+
         self.window.setLayout(self.main_layout)
         self.window.show()
 
@@ -332,6 +335,17 @@ class Assigner:
             im3 = np.zeros((self.region_width * 2, self.region_height * 2))
             self.plot.axes[0].imshow(im3, cmap="gray")
 
+
+        status_message = "Defining cell lineage {0}: frame {1} ".format(
+            self.lineage[0].cell_id,
+            first_outline.frame_idx + 1,
+        )
+        if len(self.selected_outlines) == 1:
+            status_message += "[Press ENTER to move to the next frame]"
+        elif len(self.selected_outlines) == 2:
+            status_message += "[Press ENTER to denote division]"
+
+        self.status_bar.showMessage(status_message)
         self.plot.draw()
 
     def key_press_event(self, evt):
@@ -343,6 +357,9 @@ class Assigner:
                 self.display_frame()
             elif len(self.selected_outlines) > 2:
                 print("> 2")
+                self.status_bar.showMessage(
+                    "!!! Too many outlines selected !!!"
+                )
             else:
                 self.write_lineage()
                 self.create_layout()
@@ -371,9 +388,23 @@ class Assigner:
 
             evt.artist.selected = False
             evt.artist.set_facecolor("y")
+
+        status_message = "Defining cell lineage {0}: frame {1} ".format(
+            self.lineage[0].cell_id,
+            self.lineage[-1].frame_idx + 1,
+        )
+        if len(self.selected_outlines) == 1:
+            status_message += "[Press ENTER to move to the next frame]"
+        elif len(self.selected_outlines) == 2:
+            status_message += "[Press ENTER to denote division]"
+        elif len(self.selected_outlines) > 2:
+            status_message += "[!!! Too many outlines selected !!!]"
+
+        self.status_bar.showMessage(status_message)
         self.plot.draw()
 
     def write_lineage(self):
+        self.status_bar.showMessage("Writing lineage, please wait...")
         if len(self.selected_outlines) == 0:
             death_confirm = QtWidgets.QMessageBox().question(
                 self.window,
@@ -381,15 +412,21 @@ class Assigner:
                 "Are you sure this lineage ends here?"
             )
             if death_confirm == QtWidgets.QMessageBox.No:
-                return
+                status_message = "Defining cell lineage {0}: frame {1} ".format(
+                    self.lineage[0].cell_id,
+                    self.lineage[-1].frame_idx + 1,
+                )
+                self.status_bar.showMessage(status_message)
+                return False
 
         elif len(self.selected_outlines) != 2:
             print("Trying to write with {0} selected outlines".format(
                 len(self.selected_outlines)
             ))
-            return
+            self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
+            return 
 
-
+        self.status_bar.showMessage("Removing cell_id from extra outlines")
         cell_id = self.lineage[0].cell_id
         for outline in self.lineage:
             database.updateOutlineById(
@@ -407,6 +444,7 @@ class Assigner:
                 cell_id=new_cell_id,
             )
 
+        self.status_bar.showMessage("Assigning parents and children")
         parent_replacements = []
         child_replacements = []
         for i, outline in enumerate(self.lineage):
@@ -441,3 +479,4 @@ class Assigner:
                 child_id1=child_id1,
                 child_id2=child_id2,
             )
+        self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
