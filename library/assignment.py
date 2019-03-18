@@ -200,7 +200,6 @@ class Assigner:
         self.lineage = [potential_outlines[
             potential_outlines.frame_idx == potential_outlines.frame_idx.min()
         ].iloc[0]]
-        self.offset = 0
         self.selected_outlines = []
         self.display_frame()
         self.plot.setFocus()
@@ -208,7 +207,8 @@ class Assigner:
     def display_frame(self):
         self.selected_outlines = []
         self._clear_assignment_plot()
-        first_outline = self.lineage[self.offset]
+        first_outline = self.lineage[-1]
+
         im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
         self.plot.axes[1].imshow(im1, cmap="gray")
         self.plot.axes[1].set_xlim([
@@ -353,7 +353,6 @@ class Assigner:
             if len(self.selected_outlines) == 1:
                 # next frame
                 self.lineage.append(self.selected_outlines[0])
-                self.offset += 1
                 self.display_frame()
             elif len(self.selected_outlines) > 2:
                 print("> 2")
