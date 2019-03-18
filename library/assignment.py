@@ -367,7 +367,10 @@ class Assigner:
                     "!!! Too many outlines selected !!!"
                 )
             else:
-                self.write_lineage()
+                write_success = self.write_lineage()
+                if not write_success:
+                    return
+
                 self.create_layout()
                 for outline in self.selected_outlines:
                     self.assignment_queue.append(outline.outline_id)
@@ -432,7 +435,7 @@ class Assigner:
                 len(self.selected_outlines)
             ))
             self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
-            return 
+            return False
 
         self.status_bar.showMessage("Removing cell_id from extra outlines")
         cell_id = self.lineage[0].cell_id
@@ -488,3 +491,4 @@ class Assigner:
                 child_id2=child_id2,
             )
         self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
+        return True
