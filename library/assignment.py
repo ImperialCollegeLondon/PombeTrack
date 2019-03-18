@@ -78,7 +78,7 @@ class Assigner:
         self.parent_window = parent_window
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
-        self.window.setGeometry(0, 0, self.max_width_px * 0.9, self.max_height_px * 0.9)
+        self.window.setGeometry(0, 0, self.max_width_px * 0.5, self.max_height_px * 0.9)
         self.window.setWindowTitle("Assign/Verify cell lineages")
         self.assignment_queue = []
 
@@ -142,7 +142,7 @@ class Assigner:
             lineage_layout.addWidget(cell_box)
 
         lineage_widget = QtWidgets.QWidget()
-        lineage_widget.setMinimumWidth(self.max_width_px * 0.9 - 50)
+        lineage_widget.setMinimumWidth(self.max_width_px * 0.5 - 50)
         lineage_scroll_area = QtWidgets.QScrollArea()
         lineage_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         lineage_widget.setLayout(lineage_layout)
@@ -152,8 +152,8 @@ class Assigner:
 
         self.plot = Plotter(
             self.window,
-            width=self._px_to_in(self.max_width_px * 0.9),
-            height=self._px_to_in(self.max_height_px * 0.2),
+            width=self._px_to_in(self.max_width_px * 0.5),
+            height=self._px_to_in((self.max_width_px * 0.5) / 3),
             dpi=self.screen_dpi,
             experiment_data=self.experiment_data,
             image_loader=self.image_loader,
