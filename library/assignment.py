@@ -131,7 +131,10 @@ class Assigner:
             cell_title_layout.addWidget(verify_btn)
             cell_layout.addLayout(cell_title_layout)
 
-            cell_outlines = self.outlines[self.outlines.cell_id == cell_id]
+            # create proper lineage
+            cell_outlines = self.outlines[
+                self.outlines.cell_id == cell_id
+            ].sort_values("frame_idx")
             width = len(cell_outlines) * self.max_width_px * 0.1
             cell_plot = Plotter(
                 self.window,
