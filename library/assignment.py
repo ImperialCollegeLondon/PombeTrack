@@ -82,18 +82,41 @@ class Assigner:
         self.window.setWindowTitle("Assign/Verify cell lineages")
         self.assignment_queue = []
 
-        main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout = QtWidgets.QVBoxLayout()
 
         menubar = QtWidgets.QMenuBar(self.window)
         file_menu = menubar.addMenu("&File")
         quit_action = QtWidgets.QAction("&Close", menubar)
         quit_action.triggered[bool].connect(lambda: self.window.close())
         file_menu.addAction(quit_action)
-        main_layout.setMenuBar(menubar)
+        self.main_layout.setMenuBar(menubar)
 
+        self.create_layout()
+
+        self.plot = Plotter(
+            self.window,
+            width=self._px_to_in(self.max_width_px * 0.5),
+            height=self._px_to_in((self.max_width_px * 0.5) / 3),
+            dpi=self.screen_dpi,
+            experiment_data=self.experiment_data,
+            image_loader=self.image_loader,
+        )
+        self.plot.mpl_connect("key_press_event", lambda evt: self.key_press_event(evt))
+        self.plot.mpl_connect("pick_event", lambda evt: self.pick_event(evt))
+
+        # tool_layout = QtWidgets.QVBoxLayout()
+        # self.main_layout.addLayout(tool_layout)
+        self.main_layout.addWidget(self.plot)
+
+        self.window.setLayout(self.main_layout)
+        self.window.show()
+
+        self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.plot.setFocus()
+
+    def create_layout(self):
         self.get_outlines()
         unique_cells = self.outlines.cell_id.unique()
-
         lineage_layout = QtWidgets.QVBoxLayout()
         for cell_num, cell_id in enumerate(unique_cells):
             # cell_box = QtWidgets.QGroupBox("Cell #{0} ({1})".format(cell_num + 1, cell_id))
@@ -143,33 +166,16 @@ class Assigner:
 
         lineage_widget = QtWidgets.QWidget()
         lineage_widget.setMinimumWidth(self.max_width_px * 0.5 - 50)
-        lineage_scroll_area = QtWidgets.QScrollArea()
-        lineage_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         lineage_widget.setLayout(lineage_layout)
-        lineage_scroll_area.setWidget(lineage_widget)
+        replace = hasattr(self, "lineage_scroll_area")
+        if not replace:
+            self.lineage_scroll_area = QtWidgets.QScrollArea()
+            self.lineage_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
-        main_layout.addWidget(lineage_scroll_area)
+        self.lineage_scroll_area.setWidget(lineage_widget)
 
-        self.plot = Plotter(
-            self.window,
-            width=self._px_to_in(self.max_width_px * 0.5),
-            height=self._px_to_in((self.max_width_px * 0.5) / 3),
-            dpi=self.screen_dpi,
-            experiment_data=self.experiment_data,
-            image_loader=self.image_loader,
-        )
-        self.plot.mpl_connect("key_press_event", lambda evt: self.key_press_event(evt))
-        self.plot.mpl_connect("pick_event", lambda evt: self.pick_event(evt))
-
-        # tool_layout = QtWidgets.QVBoxLayout()
-        # main_layout.addLayout(tool_layout)
-        main_layout.addWidget(self.plot)
-
-        self.window.setLayout(main_layout)
-        self.window.show()
-
-        self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
-        self.plot.setFocus()
+        if not replace:
+            self.main_layout.addWidget(self.lineage_scroll_area)
 
     def _clear_assignment_plot(self):
         for ax in self.plot.axes:
@@ -336,7 +342,7 @@ class Assigner:
                 print("> 2")
             else:
                 self.write_lineage()
-                self.get_outlines()
+                self.create_layout()
                 for outline in self.selected_outlines:
                     self.assignment_queue.append(outline.outline_id)
 
