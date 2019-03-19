@@ -124,7 +124,7 @@ class Plotter(FigureCanvas):
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_hash)
         for i, outline in enumerate(outline_data):
             if not os.path.exists(outline.coords_path):
-                database.deleteOutlineById(outline.outline_id)
+                # database.deleteOutlineById(outline.outline_id)
                 continue
 
             c = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
