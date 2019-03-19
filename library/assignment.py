@@ -158,6 +158,15 @@ class Assigner:
                     outline.offset_top:outline.offset_top + (self.region_height * 2),
                 ]
                 cell_plot.axes[i].imshow(roi, cmap="gray")
+                cell_plot.axes[i].text(
+                    0, 0,
+                    "F{0}".format(outline.frame_idx + 1),
+                    horizontalalignment="left",
+                    verticalalignment="top",
+                    color="y",
+                    fontweight="bold",
+                    fontsize=10,
+                )
                 i += 1
 
             cell_scroll_area = QtWidgets.QScrollArea()
