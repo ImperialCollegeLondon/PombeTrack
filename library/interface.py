@@ -235,7 +235,8 @@ class Interface:
         if item and item._item_type in forbidden_types:
             return
 
-        if len(self.experiment_table.selectedItems()) == 0:
+        if (not hasattr(self.experiment_table, "selectedItems") or
+                len(self.experiment_table.selectedItems()) == 0):
             return
 
         e = experiment.ExperimentView(self.edit_btn._experiment_id)
