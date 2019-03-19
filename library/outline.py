@@ -520,7 +520,5 @@ class Outliner:
             else:
                 self.plot.image_percentile = 0.0
                 self.tolerance_widget.setText(str(self.plot.image_percentile))
-            print("Set image tolerance to {0}".format(self.plot.image_percentile))
         except ValueError:
-            print("Invalid tolerance: {0}".format(text))
             self.tolerance_widget.setText(str(self.plot.image_percentile))
