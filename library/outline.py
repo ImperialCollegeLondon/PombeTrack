@@ -211,7 +211,7 @@ class Plotter(FigureCanvas):
             for n in nodes:
                 patch = matplotlib.patches.Circle(
                     (n.y, n.x),
-                    1,
+                    1.5,
                     fc="y",
                 )
                 patch.this_node = n
