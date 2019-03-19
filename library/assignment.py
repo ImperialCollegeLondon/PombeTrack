@@ -283,7 +283,7 @@ class Assigner:
             offl + (self.region_width * 2), offl
         ])
 
-        for outline in database.getOutlinesByFrameIdx(fidx, self.experiment_data.experiment_hash):
+        for outline in database.getOutlinesByFrameIdx(fidx, self.experiment_data.experiment_id):
             c = np.load(outline.coords_path) + np.array([
                 outline.offset_left, outline.offset_top
             ])

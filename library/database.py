@@ -29,8 +29,8 @@ class OutlineRow(Row):
         ("outline_num", "INTEGER PRIMARY KEY", int),
         ("outline_id", "TEXT", str),
         ("cell_id", "TEXT", str),
-        ("experiment_id", "INTEGER", int),
-        ("experiment_hash", "TEXT", str),
+        ("experiment_num", "INTEGER", int),
+        ("experiment_id", "TEXT", str),
         ("image_path", "TEXT", str),
         ("frame_idx", "INTEGER", int),
         ("coords_path", "TEXT", str),
@@ -44,8 +44,8 @@ class OutlineRow(Row):
 
 class ExperimentRow(Row):
     COLS = [
-        ("experiment_id", "INTEGER PRIMARY KEY", int),
-        ("experiment_hash", "TEXT", str),
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
         ("date_year", "INTEGER", int),
         ("date_month", "INTEGER", int),
         ("date_day", "INTEGER", int),
@@ -54,9 +54,9 @@ class ExperimentRow(Row):
         ("image_path", "TEXT", str),
         ("channel_green", "INTEGER", bool),
         ("channel_red", "INTEGER", bool),
-        ("outlined", "INTEGER", bool),
-        ("verified", "INTEGER", bool),
-        ("analysed", "INTEGER", bool),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
     ]
     def parseRow(self, r):
         row = {}
@@ -64,8 +64,8 @@ class ExperimentRow(Row):
             row[col_name] = caster(r)
 
         return {
+            "experiment_num": row["experiment_num"],
             "experiment_id": row["experiment_id"],
-            "experiment_hash": row["experiment_hash"],
             "date": "{date_year}-{date_month:02d}-{date_day:02d}".format(**row),
             "medium": row["medium"],
             "strain": row["strain"],
@@ -119,13 +119,13 @@ def createOutlinesTable():
     ]))
     executeQuery(query, commit=True)
 
-def getOutlinesByFrameIdx(frame_idx, experiment_hash):
+def getOutlinesByFrameIdx(frame_idx, experiment_id):
     query = """
     SELECT * FROM outlines
-    WHERE experiment_hash = ?
+    WHERE experiment_id = ?
       AND frame_idx = ?;
     """
-    args = (experiment_hash, str(frame_idx))
+    args = (experiment_id, str(frame_idx))
     results = executeQuery(query, args, fetchmany=True)
     return [OutlineRow(x) for x in results]
 
@@ -138,16 +138,16 @@ def getOutlinesByExperimentId(experiment_id):
     results = executeQuery(query, args, fetchmany=True)
     return [OutlineRow(x) for x in results]
 
-def insertOutline(outline_id, cell_id, experiment_id, experiment_hash, image_path,
+def insertOutline(outline_id, cell_id, experiment_num, experiment_id, image_path,
                frame_idx, coords_path, offset_left, offset_top, parent_id):
     query = """
     INSERT INTO outlines
-    (outline_id, cell_id, experiment_id, experiment_hash, image_path,
+    (outline_id, cell_id, experiment_num, experiment_id, image_path,
      frame_idx, coords_path, offset_left, offset_top, parent_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     args = (
-        outline_id, cell_id, experiment_id, experiment_hash, image_path,
+        outline_id, cell_id, experiment_num, experiment_id, image_path,
         frame_idx, coords_path, offset_left, offset_top, parent_id,
     )
     new_id = executeQuery(query, args, commit=True)
@@ -270,12 +270,12 @@ def insertExperiment(date_year, date_month, date_day, medium, strain,
                      image_path, channel_green, channel_red):
     query = """
     INSERT INTO experiments
-    (experiment_hash, date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
+    (experiment_id, date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
-    experiment_hash = str(uuid.uuid4())
+    experiment_id = str(uuid.uuid4())
     args = (
-        experiment_hash,
+        experiment_id,
         date_year, date_month, date_day,
         medium, strain, image_path,
         channel_green, channel_red,
@@ -311,7 +311,7 @@ def getExperiments():
     query = """
     SELECT *
     FROM experiments
-    ORDER BY experiment_id;
+    ORDER BY experiment_num;
     """
     try:
         results = executeQuery(query, fetchmany=True)

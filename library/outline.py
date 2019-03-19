@@ -46,7 +46,7 @@ class Plotter(FigureCanvas):
         self._data = experiment_data
         self.image_percentile = 1.0
         self.outline_store = os.path.join(
-            "data", "outlines", self._data.experiment_hash
+            "data", "outlines", self._data.experiment_id
         )
         if not os.path.exists(self.outline_store):
             os.makedirs(self.outline_store)
@@ -121,7 +121,7 @@ class Plotter(FigureCanvas):
         for t in self.cell_outline_text:
             t.remove()
 
-        outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_hash)
+        outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
         for i, outline in enumerate(outline_data):
             if not os.path.exists(outline.coords_path):
                 # database.deleteOutlineById(outline.outline_id)
@@ -151,8 +151,8 @@ class Plotter(FigureCanvas):
         data = {
             "outline_id": self.outline_id,
             "cell_id": self.cell_id,
+            "experiment_num": self._data.experiment_num,
             "experiment_id": self._data.experiment_id,
-            "experiment_hash": self._data.experiment_hash,
             "image_path": self._data.image_path,
             "frame_idx": self.current_frame_idx,
             "coords_path": coords_path,
