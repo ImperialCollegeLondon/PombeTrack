@@ -27,9 +27,36 @@ class ExperimentView:
         else:
             self.window = window
 
-        self.image_loader = loader.ImageLoader(self._data.image_path)
         self.window.setGeometry(0, 0, 800, 100)
         self.window.setWindowTitle("Experiment #{0}".format(self._data.experiment_id))
+
+        if os.path.exists(self._data.image_path):
+            self.image_loader = loader.ImageLoader(self._data.image_path)
+        else:
+            # get new image
+            path = QtWidgets.QFileDialog.getOpenFileName(
+                self.window,
+                "Replace image for {0}".format(self._data.image_path),
+                os.getcwd(),
+            )[0]
+            try:
+                self.image_loader = loader.ImageLoader(path)
+            except:
+                alert = QtWidgets.QMessageBox()
+                alert.warning(
+                    self.window,
+                    "Error",
+                    "Uh oh... image file ({0}) cannot be loaded".format(
+                        repr(path),
+                    ),
+                )
+                return
+            else:
+                database.updateExperimentById(
+                    self._data.experiment_id,
+                    image_path=path,
+                )
+
 
         self.main_layout = QtWidgets.QVBoxLayout()
         self.createLayout()
