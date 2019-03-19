@@ -195,6 +195,15 @@ class Interface:
 
     def get_cell_count(self, experiment_id):
         outlines = database.getOutlinesByExperimentId(experiment_id)
+        if len(outlines) == 0:
+            database.updateExperimentById(
+                experiment_id,
+                outlined=False,
+                verified=False,
+                analysed=False,
+            )
+            return "0"
+
         p_out = pd.DataFrame(outlines)
         num_cells = len(p_out.cell_id.unique())
         return str(num_cells)
