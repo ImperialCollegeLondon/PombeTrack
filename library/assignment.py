@@ -576,6 +576,9 @@ class Assigner:
                 self.lineage[-1].child_id2
             ).cell_id
 
+        existing = database.getCellById(cell_id)
+        if existing:
+            database.deleteCellById(cell_id)
         kwargs = {
             "cell_id": cell_id,
             "experiment_id": self.lineage[0].experiment_id,

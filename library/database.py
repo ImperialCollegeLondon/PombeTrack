@@ -165,6 +165,15 @@ def getCellById(cell_id):
     r = executeQuery(query, args, fetchone=True)
     return CellRow(r)
 
+def deleteCellById(cell_id):
+    query = """
+    DELETE
+    FROM cells
+    WHERE cell_id = ?;
+    """
+    args = (cell_id,)
+    executeQuery(query, args, commit=True)
+
 def createOutlinesTable():
     query = "CREATE TABLE outlines ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
