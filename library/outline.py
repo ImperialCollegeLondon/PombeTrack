@@ -173,8 +173,9 @@ class Plotter(FigureCanvas):
 
         self.previous_id = str(self.outline_id)
 
-    def fit_outline(self, roi, init_nodes=None):
-        centre = [self.region_height, self.region_width]
+    def fit_outline(self, roi, init_nodes=None, centre_offset_left=0, centre_offset_top=0):
+        centre = [self.region_width - centre_offset_left,
+                  self.region_height - centre_offset_top]
         if init_nodes is None:
             self.outline_id = str(uuid.uuid4())
             radius = 5
@@ -286,8 +287,9 @@ class Plotter(FigureCanvas):
             # fit next
             centre = [offset_centre[0] + self.offset_left,
                       offset_centre[1] + self.offset_top]
-            self.offset_left = int(round(centre[0] - self.region_width))
-            self.offset_top = int(round(centre[1] - self.region_height))
+            (self.offset_left, self.offset_top,
+             centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
             self.current_frame_idx += 1
             bf_frame = self.load_frame()
             self.main_frame.set_data(bf_frame)
@@ -296,10 +298,36 @@ class Plotter(FigureCanvas):
                 self.offset_left:self.offset_left + (self.region_width * 2),
                 self.offset_top:self.offset_top + (self.region_height * 2)
             ]
-            self.fit_outline(roi)
+            self.fit_outline(
+                roi,
+                centre_offset_left=centre_offset_left,
+                centre_offset_top=centre_offset_top,
+            )
 
         else:
             print("Unknown key:", evt.key)
+
+    def get_offsets(self, centre):
+        offset_left = int(round(centre[0] - self.region_width))
+        offset_top = int(round(centre[1] - self.region_height))
+        centre_offset_left, centre_offset_top = 0, 0
+        im = self.load_frame()
+        if offset_left < 0:
+            centre_offset_left = -offset_left
+            offset_left = 0
+        elif offset_left >= im.shape[0] - (self.region_width * 2):
+            centre_offset_left = im.shape[0] - (self.region_width * 2) - offset_left
+            offset_left = im.shape[0] - (self.region_width * 2)
+
+        if offset_top < 0:
+            centre_offset_top = -offset_top
+            offset_top = 0
+        elif offset_top >= im.shape[1] - (self.region_height * 2):
+            centre_offset_top = im.shape[1] - (self.region_height * 2) - offset_top
+            offset_top = im.shape[1] - (self.region_height * 2)
+        del im
+
+        return offset_left, offset_top, centre_offset_left, centre_offset_top
 
     def _button_press_event(self, evt):
         if self.parent().toolbar.mode:
@@ -319,26 +347,39 @@ class Plotter(FigureCanvas):
                 self.cell_id = outline_info.cell_id
                 self.offset_left = outline_info.offset_left
                 self.offset_top = outline_info.offset_top
+                centre = [self.offset_left + self.region_width,
+                          self.offset_top + self.region_height]
+                _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
                 roi = self.load_frame()[
                     self.offset_left:self.offset_left + (self.region_width * 2),
                     self.offset_top:self.offset_top + (self.region_height * 2)
                 ]
                 self.outline_id = outline_info.outline_id
                 current_nodes = np.load(outline_info.coords_path)
-                self.fit_outline(roi, init_nodes=current_nodes)
+                self.fit_outline(
+                    roi,
+                    init_nodes=current_nodes,
+                    centre_offset_left=centre_offset_left,
+                    centre_offset_top=centre_offset_top,
+                )
 
             else:
                 self.previous_id = None
                 self.cell_id = str(uuid.uuid4())
                 centre = [evt.ydata, evt.xdata]
-                self.offset_left = int(round(centre[0] - self.region_width))
-                self.offset_top = int(round(centre[1] - self.region_height))
+                (self.offset_left, self.offset_top,
+                 centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
                 roi = self.load_frame()[
                     self.offset_left:self.offset_left + (self.region_width * 2),
                     self.offset_top:self.offset_top + (self.region_height * 2)
                 ]
 
-                self.fit_outline(roi)
+                self.fit_outline(
+                    roi,
+                    centre_offset_left=centre_offset_left,
+                    centre_offset_top=centre_offset_top,
+                )
 
         elif evt.inaxes == self.sub_ax:
             if evt.button == 1:
