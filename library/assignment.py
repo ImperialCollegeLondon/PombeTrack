@@ -433,7 +433,8 @@ class Assigner:
                     self.assignment_queue.append(outline.outline_id)
 
                 if self.assignment_queue:
-                    self.assign_lineage(outline_id=self.assignment_queue.pop(0))
+                    next_id = self.assignment_queue.pop()
+                    self.assign_lineage(outline_id=next_id)
                 else:
                     self._clear_assignment_plot()
                     self.lineage = []
