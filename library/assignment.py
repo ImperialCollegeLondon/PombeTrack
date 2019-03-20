@@ -59,6 +59,9 @@ class Assigner:
         self.region_width = 75
         self.region_height = 75
 
+        if not database.checkTable("cells"):
+            database.createCellsTable()
+
     def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
         self.max_width_px = max_width_px
         self.max_height_px = max_height_px
@@ -121,13 +124,53 @@ class Assigner:
         self.get_outlines()
         unique_cells = self.outlines.cell_id.unique()
         lineage_layout = QtWidgets.QVBoxLayout()
-        for cell_num, cell_id in enumerate(unique_cells):
+        verification = (
+            database.getCellById(cell_id)
+            for cell_id in unique_cells
+        )
+        unique_cells = sorted(
+            zip(unique_cells, verification),
+            key=lambda x: bool(x[1]),
+        )
+        for cell_num, (cell_id, verified_cell) in enumerate(unique_cells):
             # cell_box = QtWidgets.QGroupBox("Cell #{0} ({1})".format(cell_num + 1, cell_id))
             cell_box = QtWidgets.QWidget()
             cell_layout = QtWidgets.QVBoxLayout()
-
             cell_title_layout = QtWidgets.QHBoxLayout()
-            cell_title_layout.addWidget(QtWidgets.QLabel("Cell #{0} ({1})".format(cell_num + 1, cell_id)))
+
+            if verified_cell and verified_cell.is_wildtype:
+                wildtype = True
+                wildtype_btn = QtWidgets.QPushButton("Unset wildtype")
+                # desc_str = "Wildtype cell #{0} ({1})".format(
+                #     cell_num + 1, cell_id
+                # )
+                desc_str = "Wildtype cell #{0}".format(
+                    cell_num + 1
+                )
+            else:
+                wildtype = False
+                wildtype_btn = QtWidgets.QPushButton("Set wildtype")
+                # desc_str = "Cell #{0} ({1})".format(
+                #     cell_num + 1, cell_id
+                # )
+                desc_str = "Cell #{0}".format(
+                    cell_num + 1
+                )
+
+            if verified_cell:
+                pixmap = QtGui.QPixmap("resources/tick.png")
+            else:
+                pixmap = QtGui.QPixmap("resources/cross.png")
+
+            verification_sign = pixmap.scaledToWidth(20)
+            verification_label = QtWidgets.QLabel()
+            verification_label.setPixmap(verification_sign)
+            cell_title_layout.addWidget(verification_label)
+
+            desc_label = QtWidgets.QLabel(desc_str)
+            desc_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            cell_title_layout.addWidget(desc_label)
+
             verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
             verify_btn._cell_id = cell_id
             verify_btn.clicked.connect(self.assign_lineage)
@@ -515,6 +558,20 @@ class Assigner:
                 child_id1=child_id1,
                 child_id2=child_id2,
             )
+
+        # add cell to cells table
+        wildtype = False
+        database.insertCell(
+            cell_id,
+            self.lineage[0].experiment_id,
+            int(self.lineage[0].frame_idx),
+            int(self.lineage[-1].frame_idx),
+            self.lineage[0].parent_id is not None,
+            self.lineage[-1].child_id2 is not None,
+            wildtype,
+            self.lineage[0].outline_id,
+            self.lineage[-1].outline_id,
+        )
         self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
         self.temp_window.close()
         self.temp_window.deleteLater()

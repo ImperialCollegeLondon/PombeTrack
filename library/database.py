@@ -24,6 +24,21 @@ class Row(dict):
         return row
 
 
+class CellRow(Row):
+    COLS = [
+        ("cell_num", "INTEGER PRIMARY KEY", int),
+        ("cell_id", "TEXT", str),
+        ("experiment_id", "TEXT", str),
+        ("start_frame_idx", "INTEGER", int),
+        ("end_frame_idx", "INTEGER", int),
+        ("birth_observed", "INTEGER DEFAULT 0", bool),
+        ("division_observed", "INTEGER DEFAULT 0", bool),
+        ("is_wildtype", "INTEGER", bool),
+        ("first_outline_id", "TEXT", str),
+        ("last_outline_id", "TEXT", str),
+    ]
+
+
 class OutlineRow(Row):
     COLS = [
         ("outline_num", "INTEGER PRIMARY KEY", int),
@@ -111,6 +126,38 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createCellsTable():
+    query = "CREATE TABLE cells ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in CellRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertCell(cell_id, experiment_id, start_frame_idx, end_frame_idx,
+               birth_observed, division_observed, is_wildtype,
+               first_outline_id, last_outline_id):
+    query = """
+    INSERT INTO cells
+    (cell_id, experiment_id, start_frame_idx, end_frame_idx, birth_observed,
+     division_observed, is_wildtype, first_outline_id, last_outline_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """
+    args = (
+        cell_id, experiment_id, start_frame_idx, end_frame_idx, birth_observed,
+        division_observed, is_wildtype, first_outline_id, last_outline_id,
+    )
+    executeQuery(query, args, commit=True)
+
+def getCellById(cell_id):
+    query = """
+    SELECT *
+    FROM cells
+    WHERE cell_id = ?;
+    """
+    args = (cell_id,)
+    r = executeQuery(query, args, fetchone=True)
+    return CellRow(r)
 
 def createOutlinesTable():
     query = "CREATE TABLE outlines ({0});".format(",".join([
