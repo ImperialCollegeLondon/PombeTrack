@@ -328,7 +328,13 @@ class Assigner:
             c = np.load(prev_outline.coords_path) + np.array([
                 prev_outline.offset_left, prev_outline.offset_top
             ])
-            p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="y", linestyle="--", fill=False, lw=1)
+            p = matplotlib.patches.Polygon(
+                np.array([c[:, 1], c[:, 0]]).T,
+                edgecolor="y",
+                linestyle="--",
+                fill=False,
+                lw=1
+            )
             self.plot.axes[0].add_patch(p)
 
         elif first_outline.frame_idx - 1 >= 0:
