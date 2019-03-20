@@ -295,7 +295,7 @@ class Assigner:
             offt = selected_outline.offset_top
             offl = selected_outline.offset_left
 
-            if first_outline.child_id2 is not None:
+            if first_outline.child_id2 is not None and first_outline.child_id1 != first_outline.child_id2:
                 selected_outline = self.outlines[
                     self.outlines.outline_id == first_outline.child_id2
                 ].iloc[0]
