@@ -144,18 +144,17 @@ class Assigner:
                 # desc_str = "Wildtype cell #{0} ({1})".format(
                 #     cell_num + 1, cell_id
                 # )
-                desc_str = "Wildtype cell #{0}".format(
-                    cell_num + 1
-                )
+                desc_str = "Wildtype cell {0}".format(cell_id)
             else:
                 wildtype = False
                 wildtype_btn = QtWidgets.QPushButton("Set wildtype")
                 # desc_str = "Cell #{0} ({1})".format(
                 #     cell_num + 1, cell_id
                 # )
-                desc_str = "Cell #{0}".format(
-                    cell_num + 1
-                )
+                if verified_cell:
+                    desc_str = "Cell {0}".format(cell_id)
+                else:
+                    desc_str = "(Cell {0})".format(cell_id)
 
             if verified_cell:
                 pixmap = QtGui.QPixmap("resources/tick.png")
