@@ -36,6 +36,9 @@ class CellRow(Row):
         ("is_wildtype", "INTEGER", bool),
         ("first_outline_id", "TEXT", str),
         ("last_outline_id", "TEXT", str),
+        ("parent_cell_id", "TEXT", str),
+        ("child_cell_id1", "TEXT", str),
+        ("child_cell_id2", "TEXT", str),
     ]
 
 
@@ -136,16 +139,19 @@ def createCellsTable():
 
 def insertCell(cell_id, experiment_id, start_frame_idx, end_frame_idx,
                birth_observed, division_observed, is_wildtype,
-               first_outline_id, last_outline_id):
+               first_outline_id, last_outline_id, parent_cell_id,
+               child_cell_id1, child_cell_id2):
     query = """
     INSERT INTO cells
     (cell_id, experiment_id, start_frame_idx, end_frame_idx, birth_observed,
-     division_observed, is_wildtype, first_outline_id, last_outline_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    division_observed, is_wildtype, first_outline_id, last_outline_id,
+    parent_cell_id, child_cell_id1, child_cell_id2)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     args = (
         cell_id, experiment_id, start_frame_idx, end_frame_idx, birth_observed,
         division_observed, is_wildtype, first_outline_id, last_outline_id,
+        parent_cell_id, child_cell_id1, child_cell_id2
     )
     executeQuery(query, args, commit=True)
 

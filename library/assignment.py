@@ -561,17 +561,36 @@ class Assigner:
 
         # add cell to cells table
         wildtype = False
-        database.insertCell(
-            cell_id,
-            self.lineage[0].experiment_id,
-            int(self.lineage[0].frame_idx),
-            int(self.lineage[-1].frame_idx),
-            self.lineage[0].parent_id is not None,
-            self.lineage[-1].child_id2 is not None,
-            wildtype,
-            self.lineage[0].outline_id,
-            self.lineage[-1].outline_id,
-        )
+        parent_cell_id = None
+        child_cell_id1 = None
+        child_cell_id2 = None
+        if self.lineage[0].parent_id:
+            parent_cell_id = database.getOutlineById(
+                self.lineage[0].parent_id
+            ).cell_id
+        if self.lineage[-1].child_id2:
+            child_cell_id1 = database.getOutlineById(
+                self.lineage[-1].child_id1
+            ).cell_id
+            child_cell_id2 = database.getOutlineById(
+                self.lineage[-1].child_id2
+            ).cell_id
+
+        kwargs = {
+            "cell_id": cell_id,
+            "experiment_id": self.lineage[0].experiment_id,
+            "start_frame_idx": int(self.lineage[0].frame_idx),
+            "end_frame_idx": int(self.lineage[-1].frame_idx),
+            "birth_observed": self.lineage[0].parent_id is not None,
+            "division_observed": self.lineage[-1].child_id2 is not None,
+            "is_wildtype": wildtype,
+            "first_outline_id": self.lineage[0].outline_id,
+            "last_outline_id": self.lineage[-1].outline_id,
+            "parent_cell_id": parent_cell_id,
+            "child_cell_id1": child_cell_id1,
+            "child_cell_id2": child_cell_id2,
+        }
+        database.insertCell(**kwargs)
         self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
         self.temp_window.close()
         self.temp_window.deleteLater()
