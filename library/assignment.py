@@ -147,13 +147,14 @@ class Assigner:
                 desc_str = "Wildtype cell {0}".format(cell_id)
             else:
                 wildtype = False
-                wildtype_btn = QtWidgets.QPushButton("Set wildtype")
                 # desc_str = "Cell #{0} ({1})".format(
                 #     cell_num + 1, cell_id
                 # )
                 if verified_cell:
+                    wildtype_btn = QtWidgets.QPushButton("Set wildtype")
                     desc_str = "Cell {0}".format(cell_id)
                 else:
+                    wildtype_btn = None
                     desc_str = "(Cell {0})".format(cell_id)
 
             if verified_cell:
@@ -174,6 +175,12 @@ class Assigner:
             verify_btn._cell_id = cell_id
             verify_btn.clicked.connect(self.assign_lineage)
             cell_title_layout.addWidget(verify_btn)
+
+            if wildtype_btn:
+                wildtype_btn._cell_id = cell_id
+                wildtype_btn.clicked.connect(self.toggle_wildtype)
+                cell_title_layout.addWidget(wildtype_btn)
+
             cell_layout.addLayout(cell_title_layout)
 
             # create proper lineage
@@ -241,6 +248,30 @@ class Assigner:
             ax.set_yticks([], [])
             ax.set_aspect("equal")
             ax.autoscale("off")
+
+    def get_child_ids(self, cell_id):
+        this_cell = database.getCellById(cell_id)
+        cell_ids = []
+        if this_cell.child_cell_id1:
+            cell_ids.append(this_cell.child_cell_id1)
+            cell_ids.extend(self.get_child_ids(this_cell.child_cell_id1))
+            cell_ids.append(this_cell.child_cell_id2)
+            cell_ids.extend(self.get_child_ids(this_cell.child_cell_id2))
+        return cell_ids
+
+    def toggle_wildtype(self, click=False):
+        cell_id = self.window.sender()._cell_id
+        this_cell = database.getCellById(cell_id)
+        if this_cell:
+            setting = not this_cell.is_wildtype
+            database.updateCellById(cell_id, is_wildtype=setting)
+            while this_cell.parent_cell_id:
+                this_cell = database.getCellById(this_cell.parent_cell_id)
+                database.updateCellById(this_cell.cell_id, is_wildtype=setting)
+
+            for child_id in self.get_child_ids(cell_id):
+                database.updateCellById(child_id, is_wildtype=setting)
+            self.create_layout()
 
     def assign_lineage(self, click=False, outline_id=None):
         if not outline_id:
@@ -559,15 +590,17 @@ class Assigner:
                 child_id2=child_id2,
             )
 
-        # add cell to cells table
         wildtype = False
         parent_cell_id = None
         child_cell_id1 = None
         child_cell_id2 = None
+
         if self.lineage[0].parent_id:
             parent_cell_id = database.getOutlineById(
                 self.lineage[0].parent_id
             ).cell_id
+            wildtype = database.getCellById(parent_cell_id).is_wildtype
+
         if self.lineage[-1].child_id2:
             child_cell_id1 = database.getOutlineById(
                 self.lineage[-1].child_id1

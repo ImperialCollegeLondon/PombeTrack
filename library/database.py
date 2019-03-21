@@ -174,6 +174,25 @@ def deleteCellById(cell_id):
     args = (cell_id,)
     executeQuery(query, args, commit=True)
 
+def updateCellById(cell_id, **kwargs):
+    args = []
+    set_statement = []
+    for kw, val in kwargs.items():
+        if kw not in [x[0] for x in CellRow.COLS]:
+            raise ValueError("Column name {0} is illegal".format(kw))
+        set_statement.append("{0} = ?".format(kw))
+        args.append(val)
+
+    set_string = ", ".join(set_statement)
+    args.append(cell_id)
+
+    query = """
+    UPDATE cells
+    SET {0}
+    WHERE cell_id = ?;
+    """.format(set_string)
+    executeQuery(query, args, commit=True)
+
 def createOutlinesTable():
     query = "CREATE TABLE outlines ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
