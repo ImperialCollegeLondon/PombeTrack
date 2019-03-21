@@ -274,6 +274,7 @@ class Assigner:
             self.create_layout()
 
     def assign_lineage(self, click=False, outline_id=None):
+        self.lineage_scroll_area.hide()
         self.get_outlines()
         if not outline_id:
             potential_outlines = self.outlines[self.outlines.cell_id == self.window.sender()._cell_id]
@@ -460,7 +461,6 @@ class Assigner:
                 if not write_success:
                     return
 
-                self.create_layout()
                 for outline in self.selected_outlines:
                     self.assignment_queue.append(outline.outline_id)
 
@@ -468,6 +468,8 @@ class Assigner:
                     next_id = self.assignment_queue.pop()
                     self.assign_lineage(outline_id=next_id)
                 else:
+                    self.create_layout()
+                    self.lineage_scroll_area.show()
                     self._clear_assignment_plot()
                     self.lineage = []
                     self.selected_outlines = []
