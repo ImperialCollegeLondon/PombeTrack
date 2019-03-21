@@ -274,6 +274,7 @@ class Assigner:
             self.create_layout()
 
     def assign_lineage(self, click=False, outline_id=None):
+        self.get_outlines()
         if not outline_id:
             potential_outlines = self.outlines[self.outlines.cell_id == self.window.sender()._cell_id]
         else:
@@ -612,6 +613,7 @@ class Assigner:
         existing = database.getCellById(cell_id)
         if existing:
             database.deleteCellById(cell_id)
+
         kwargs = {
             "cell_id": cell_id,
             "experiment_id": self.lineage[0].experiment_id,
