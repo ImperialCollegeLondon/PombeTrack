@@ -602,7 +602,8 @@ class Assigner:
             parent_cell_id = database.getOutlineById(
                 self.lineage[0].parent_id
             ).cell_id
-            wildtype = database.getCellById(parent_cell_id).is_wildtype
+            parent_cell = database.getCellById(parent_cell_id)
+            wildtype = parent_cell and parent_cell.is_wildtype or False
 
         if self.lineage[-1].child_id2:
             child_cell_id1 = database.getOutlineById(
