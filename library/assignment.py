@@ -244,6 +244,7 @@ class Assigner:
             cell_outlines = self.outlines[
                 self.outlines.cell_id == cell_id
             ].sort_values("frame_idx")
+            cell_outlines = pd.DataFrame([cell_outlines.iloc[0], cell_outlines.iloc[-1]])
             width = len(cell_outlines) * self.max_width_px * 0.1
             cell_plot = Plotter(
                 self.window,
