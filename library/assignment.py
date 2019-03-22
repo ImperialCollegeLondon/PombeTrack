@@ -174,7 +174,8 @@ class Assigner:
         self.window.show()
 
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
-        self.plot.setFocus()
+        self.window.toolbar.hide()
+        self.plot.hide()
 
     def create_layout(self):
         self.get_outlines()
@@ -309,6 +310,8 @@ class Assigner:
         self.create_layout()
         self.lineage_scroll_area.show()
         self._clear_assignment_plot()
+        self.window.toolbar.hide()
+        self.plot.hide()
         self.lineage = []
         self.selected_outlines = []
 
@@ -349,6 +352,8 @@ class Assigner:
         ].iloc[0]]
         self.selected_outlines = []
         self.display_frame()
+        self.window.toolbar.show()
+        self.plot.show()
         self.plot.setFocus()
 
     def display_frame(self):
