@@ -57,16 +57,16 @@ class Toolbar(NavigationToolbar):
         self.canvas.draw()
 
     def previous_frame(self, *args, **kwargs):
-	 print("Previous frame")
+        self.parent.trigger_previous_frame()
 
     def next_frame(self, *args, **kwargs):
-	 print("Next frame")
+        self.parent.trigger_next_frame()
 
     def accept(self, *args, **kwargs):
-	 print("Accept all")
+        self.parent.trigger_accept_all()
 
     def cancel(self, *args, **kwargs):
-	 print("Cancel assignment")
+        self.parent.trigger_cancel()
 
 
 class Plotter(FigureCanvas):
@@ -154,6 +154,11 @@ class Assigner:
         )
         self.plot.mpl_connect("key_press_event", self.key_press_event)
         self.plot.mpl_connect("pick_event", self.pick_event)
+
+        self.window.trigger_previous_frame = self.previous_frame
+        self.window.trigger_next_frame = self.next_frame
+        self.window.trigger_accept_all = self.accept_all
+        self.window.trigger_cancel = self.cancel_assignment
 
         self.window.toolbar = Toolbar(self.plot, self.window)
         tool_layout = QtWidgets.QVBoxLayout()
@@ -510,39 +515,92 @@ class Assigner:
         self.plot.draw()
 
     def key_press_event(self, evt):
-        if evt.key == "enter":
-            if (hasattr(self, "lineage") and len(self.lineage) == 0) or not hasattr(self, "selected_outlines"):
+        if evt.key == "enter" or evt.key == "right":
+            self.next_frame()
+        elif evt.key == "left":
+            self.previous_frame()
+
+    def accept_all(self):
+        confirm_accept = QtWidgets.QMessageBox().question(
+            self.window,
+            "Confirm automatic assignment",
+            "Please confirm that you wish to accept this cell lineage"
+        )
+        if confirm_accept == QtWidgets.QMessageBox.No:
+            return
+
+        outline = self.lineage[-1]
+        while outline.child_id1 and not outline.child_id2:
+            outline = database.getOutlineById(outline.child_id1)
+            self.lineage.append(outline)
+
+        if outline.child_id1:
+            selection = [
+                database.getOutlineById(outline.child_id1),
+                database.getOutlineById(outline.child_id2),
+            ]
+            self.assignment_queue.append(outline.child_id1)
+            self.assignment_queue.append(outline.child_id2)
+        else:
+            selection = []
+
+        self.write_lineage(selected_outlines=selection)
+
+        if self.assignment_queue:
+            next_id = self.assignment_queue.pop()
+            self.assign_lineage(outline_id=next_id)
+        else:
+            self.exit_assignment()
+
+        self.plot.setFocus()
+
+    def cancel_assignment(self):
+        confirm_cancel = QtWidgets.QMessageBox().question(
+            self.window,
+            "Confirm cancellation",
+            "Please confirm that you wish to cancel assigning this cell lineage"
+        )
+        if confirm_cancel == QtWidgets.QMessageBox.No:
+            return
+
+        self.exit_assignment()
+
+    def previous_frame(self):
+        if (hasattr(self, "lineage") and len(self.lineage) <= 1):
+            return
+
+        self.lineage.pop()
+        self.display_frame()
+        self.plot.setFocus()
+
+    def next_frame(self):
+        if (hasattr(self, "lineage") and len(self.lineage) == 0) or not hasattr(self, "selected_outlines"):
+            return
+
+        if len(self.selected_outlines) == 1:
+            # next frame
+            self.lineage.append(self.selected_outlines[0])
+            self.display_frame()
+        elif len(self.selected_outlines) > 2:
+            print("> 2")
+            self.status_bar.showMessage(
+                "!!! Too many outlines selected !!!"
+            )
+        else:
+            write_success = self.write_lineage()
+            if not write_success:
                 return
 
-            if len(self.selected_outlines) == 1:
-                # next frame
-                self.lineage.append(self.selected_outlines[0])
-                self.display_frame()
-            elif len(self.selected_outlines) > 2:
-                print("> 2")
-                self.status_bar.showMessage(
-                    "!!! Too many outlines selected !!!"
-                )
+            for outline in self.selected_outlines:
+                self.assignment_queue.append(outline.outline_id)
+
+            if self.assignment_queue:
+                next_id = self.assignment_queue.pop()
+                self.assign_lineage(outline_id=next_id)
             else:
-                write_success = self.write_lineage()
-                if not write_success:
-                    return
+                self.exit_assignment()
 
-                for outline in self.selected_outlines:
-                    self.assignment_queue.append(outline.outline_id)
-
-                if self.assignment_queue:
-                    next_id = self.assignment_queue.pop()
-                    self.assign_lineage(outline_id=next_id)
-                else:
-                    self.create_layout()
-                    self.lineage_scroll_area.show()
-                    self._clear_assignment_plot()
-                    self.lineage = []
-                    self.selected_outlines = []
-                    self.plot.draw()
-
-                self.plot.setFocus()
+            self.plot.setFocus()
 
     def pick_event(self, evt):
         if not evt.artist.selected:
@@ -575,28 +633,31 @@ class Assigner:
         self.status_bar.showMessage(status_message)
         self.plot.draw()
 
-    def write_lineage(self):
+    def write_lineage(self, selected_outlines=None):
         self.status_bar.showMessage("Writing lineage, please wait...")
-        if len(self.selected_outlines) == 0:
-            death_confirm = QtWidgets.QMessageBox().question(
-                self.window,
-                "Confirm end of cell lineage",
-                "Are you sure this lineage ends here?"
-            )
-            if death_confirm == QtWidgets.QMessageBox.No:
-                status_message = "Defining cell lineage {0}: frame {1} ".format(
-                    self.lineage[0].cell_id,
-                    self.lineage[-1].frame_idx + 1,
+        if selected_outlines is None:
+            if len(self.selected_outlines) == 0:
+                death_confirm = QtWidgets.QMessageBox().question(
+                    self.window,
+                    "Confirm end of cell lineage",
+                    "Are you sure this lineage ends here?"
                 )
-                self.status_bar.showMessage(status_message)
-                return False
+                if death_confirm == QtWidgets.QMessageBox.No:
+                    status_message = "Defining cell lineage {0}: frame {1} ".format(
+                        self.lineage[0].cell_id,
+                        self.lineage[-1].frame_idx + 1,
+                    )
+                    self.status_bar.showMessage(status_message)
+                    return False
 
-        elif len(self.selected_outlines) != 2:
-            print("Trying to write with {0} selected outlines".format(
-                len(self.selected_outlines)
-            ))
-            self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
-            return False
+            elif len(self.selected_outlines) != 2:
+                print("Trying to write with {0} selected outlines".format(
+                    len(self.selected_outlines)
+                ))
+                self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
+                return False
+        else:
+            self.selected_outlines = selected_outlines
 
         self.temp_window = QtWidgets.QDialog(self.window)
         self.temp_window.setGeometry(0, 0, self.max_width_px * 0.5, self.max_height_px * 0.9)
