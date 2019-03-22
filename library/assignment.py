@@ -23,10 +23,57 @@ from . import database
 sns.set_context("talk")
 sns.set_style("white")
 
+class Toolbar(NavigationToolbar):
+    def __init__(self, figure_canvas, parent=None):
+        self.toolitems = [
+            ("Home", "Home", "home_large", "home_event"),
+            # (None, None, None, None),
+            ("Pan", "Pan", "move_large", "pan"),
+            ("Zoom", "Zoom", "zoom_to_rect_large", "zoom"),
+            (None, None, None, None),
+            ("Previous", "Previous frame", "previous", "previous_frame"),
+            ("Next", "Next frame", "next", "next_frame"),
+            (None, None, None, None),
+            ("Accept", "Accept assignment", "accept", "accept"),
+            ("Cancel", "Cancel assignment", "cancel", "cancel"),
+        ]
+        NavigationToolbar.__init__(self, figure_canvas, parent=parent)
+
+    def _icon(self, name):
+        path = os.path.join("resources", name)
+        if not os.path.exists(path):
+            path = os.path.join(self.basedir, name)
+
+        pm = QtGui.QPixmap(path)
+        if hasattr(pm, "setDevicePixelRatio"):
+            pm.setDevicePixelRatio(self.canvas._dpi_ratio)
+
+        return QtGui.QIcon(pm)
+
+    def home_event(self, *args, **kwargs):
+        for ax, lims in zip(self.canvas.axes, self.canvas.offsets):
+            ax.set_xlim(lims[3], lims[1])
+            ax.set_ylim(lims[0], lims[2])
+        self.canvas.draw()
+
+    def previous_frame(self, *args, **kwargs):
+	 print("Previous frame")
+
+    def next_frame(self, *args, **kwargs):
+	 print("Next frame")
+
+    def accept(self, *args, **kwargs):
+	 print("Accept all")
+
+    def cancel(self, *args, **kwargs):
+	 print("Cancel assignment")
+
+
 class Plotter(FigureCanvas):
     def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader, subplots=3):
         fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
         self.axes = []
+        self.offsets = []
         for sp in range(subplots):
             ax = fig.add_subplot(1, subplots, sp + 1)
             # ax.axis("off")
@@ -35,6 +82,7 @@ class Plotter(FigureCanvas):
             ax.set_aspect("equal")
             ax.autoscale("off")
             self.axes.append(ax)
+            self.offsets.append((0, 0, 0, 0))  # top, right, bottom, left (like CSS)
 
         FigureCanvas.__init__(self, fig)
         self.setParent(parent_window)
@@ -107,8 +155,11 @@ class Assigner:
         self.plot.mpl_connect("key_press_event", self.key_press_event)
         self.plot.mpl_connect("pick_event", self.pick_event)
 
-        # tool_layout = QtWidgets.QVBoxLayout()
-        # self.main_layout.addLayout(tool_layout)
+        self.window.toolbar = Toolbar(self.plot, self.window)
+        tool_layout = QtWidgets.QVBoxLayout()
+        tool_layout.addWidget(self.window.toolbar)
+
+        self.main_layout.addLayout(tool_layout)
         self.main_layout.addWidget(self.plot)
 
         self.status_bar = QtWidgets.QStatusBar()
@@ -249,6 +300,13 @@ class Assigner:
             ax.set_aspect("equal")
             ax.autoscale("off")
 
+    def exit_assignment(self):
+        self.create_layout()
+        self.lineage_scroll_area.show()
+        self._clear_assignment_plot()
+        self.lineage = []
+        self.selected_outlines = []
+
     def get_child_ids(self, cell_id):
         this_cell = database.getCellById(cell_id)
         cell_ids = []
@@ -298,15 +356,14 @@ class Assigner:
         self.plot.axes[2].set_title("Frame {0}".format(first_outline.frame_idx + 2))
 
         im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
+        offset_left, offset_right = (first_outline.offset_top,
+                                     first_outline.offset_top + (self.region_height * 2))
+        offset_top, offset_bottom = (first_outline.offset_left + (self.region_width * 2),
+                                     first_outline.offset_left)
+        self.plot.offsets[1] = (offset_top, offset_right, offset_bottom, offset_left)
         self.plot.axes[1].imshow(im1, cmap="gray")
-        self.plot.axes[1].set_xlim([
-            first_outline.offset_top,
-            first_outline.offset_top + (self.region_height * 2),
-        ])
-        self.plot.axes[1].set_ylim([
-            first_outline.offset_left + (self.region_width * 2),
-            first_outline.offset_left,
-        ])
+        self.plot.axes[1].set_xlim([offset_left, offset_right])
+        self.plot.axes[1].set_ylim([offset_top, offset_bottom])
         c = np.load(first_outline.coords_path) + np.array([
             first_outline.offset_left, first_outline.offset_top
         ])
@@ -351,6 +408,12 @@ class Assigner:
             offl = 0
 
         self.plot.axes[2].imshow(im2, cmap="gray")
+        self.plot.offsets[2] = (
+            offl + (self.region_width * 2),
+            offt + (self.region_height * 2),
+            offl,
+            offt
+        )
         self.plot.axes[2].set_xlim([
             offt, offt + (self.region_height * 2)
         ])
@@ -392,14 +455,12 @@ class Assigner:
             prev_outline = database.getOutlineById(first_outline.parent_id)
             im3 = self.image_loader.load_frame(prev_outline.frame_idx, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
-            self.plot.axes[0].set_xlim([
-                prev_outline.offset_top,
-                prev_outline.offset_top + (self.region_height * 2),
-            ])
-            self.plot.axes[0].set_ylim([
+            self.plot.offsets[0] = (
                 prev_outline.offset_left + (self.region_width * 2),
+                prev_outline.offset_top + (self.region_height * 2),
                 prev_outline.offset_left,
-            ])
+                prev_outline.offset_top,
+            )
             c = np.load(prev_outline.coords_path) + np.array([
                 prev_outline.offset_left, prev_outline.offset_top
             ])
@@ -415,19 +476,25 @@ class Assigner:
         elif first_outline.frame_idx - 1 >= 0:
             im3 = self.image_loader.load_frame(first_outline.frame_idx - 1, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
-            self.plot.axes[0].set_xlim([
-                first_outline.offset_top,
-                first_outline.offset_top + (self.region_height * 2),
-            ])
-            self.plot.axes[0].set_ylim([
+            self.plot.offsets[0] = (
                 first_outline.offset_left + (self.region_width * 2),
+                first_outline.offset_top + (self.region_height * 2),
                 first_outline.offset_left,
-            ])
-
+                first_outline.offset_top,
+            )
         else:
             prev_outline = None
             im3 = np.zeros((self.region_width * 2, self.region_height * 2))
             self.plot.axes[0].imshow(im3, cmap="gray")
+
+        self.plot.axes[0].set_xlim([
+            self.plot.offsets[0][3],
+            self.plot.offsets[0][1]
+        ])
+        self.plot.axes[0].set_ylim([
+            self.plot.offsets[0][0],
+            self.plot.offsets[0][2]
+        ])
 
 
         status_message = "Defining cell lineage {0}: frame {1} ".format(
