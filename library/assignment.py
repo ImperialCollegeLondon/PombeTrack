@@ -650,12 +650,27 @@ class Assigner:
                     self.status_bar.showMessage(status_message)
                     return False
 
+            elif len(self.selected_outlines) == 2:
+                div_confirm = QtWidgets.QMessageBox().question(
+                    self.window,
+                    "Confirm cell division",
+                    "Are you sure this cell divides?\nThere is no going back if you say yes..."
+                )
+                if div_confirm == QtWidgets.QMessageBox.No:
+                    status_message = "Defining cell lineage {0}: frame {1} ".format(
+                        self.lineage[0].cell_id,
+                        self.lineage[-1].frame_idx + 1,
+                    )
+                    self.status_bar.showMessage(status_message)
+                    return False
+
             elif len(self.selected_outlines) != 2:
                 print("Trying to write with {0} selected outlines".format(
                     len(self.selected_outlines)
                 ))
                 self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
                 return False
+
         else:
             self.selected_outlines = selected_outlines
 
