@@ -586,7 +586,9 @@ class Assigner:
         confirm_accept = QtWidgets.QMessageBox().question(
             self.window,
             "Confirm automatic assignment",
-            "Please confirm that you wish to accept this cell lineage"
+            "Please confirm that you wish to accept this cell lineage",
+            QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+            QtWidgets.QMessageBox.No,
         )
         if confirm_accept == QtWidgets.QMessageBox.No:
             return
@@ -620,7 +622,9 @@ class Assigner:
         confirm_cancel = QtWidgets.QMessageBox().question(
             self.window,
             "Confirm cancellation",
-            "Please confirm that you wish to cancel assigning this cell lineage"
+            "Please confirm that you wish to cancel assigning this cell lineage",
+            QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+            QtWidgets.QMessageBox.No,
         )
         if confirm_cancel == QtWidgets.QMessageBox.No:
             return
@@ -702,7 +706,9 @@ class Assigner:
                 death_confirm = QtWidgets.QMessageBox().question(
                     self.window,
                     "Confirm end of cell lineage",
-                    "Are you sure this lineage ends here?"
+                    "Are you sure this lineage ends here?",
+                    QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+                    QtWidgets.QMessageBox.No,
                 )
                 if death_confirm == QtWidgets.QMessageBox.No:
                     status_message = "Defining cell lineage {0}: frame {1} ".format(
@@ -716,7 +722,9 @@ class Assigner:
                 div_confirm = QtWidgets.QMessageBox().question(
                     self.window,
                     "Confirm cell division",
-                    "Are you sure this cell divides?\nThere is no going back if you say yes..."
+                    "Are you sure this cell divides?\nThere is no going back if you say yes...",
+                    QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+                    QtWidgets.QMessageBox.No,
                 )
                 if div_confirm == QtWidgets.QMessageBox.No:
                     status_message = "Defining cell lineage {0}: frame {1} ".format(
