@@ -209,6 +209,7 @@ class Assigner:
             plot_layout.addLayout(spacer_l)
 
             # only take the first and last frames
+            cell_plots = []
             for outline_num in [0, -1]:
                 outline = cell_outlines.iloc[outline_num]
                 width = self.max_width_px * 0.1
@@ -230,6 +231,8 @@ class Assigner:
                 ]
                 cell_plot.axes[0].imshow(roi, cmap="gray")
                 cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
+                cell_plot.current_channel = 0
+                cell_plots.append(cell_plot)
                 plot_layout.addWidget(cell_plot)
 
             control_layout = QtWidgets.QVBoxLayout()
@@ -272,9 +275,16 @@ class Assigner:
             control_layout.addLayout(row1)
 
             if wildtype_btn:
+                row2 = QtWidgets.QHBoxLayout()
+                switch_channel = QtWidgets.QPushButton("Change channel")
+                switch_channel._cell_id = cell_id
+                switch_channel._cell_plots = cell_plots
+                switch_channel.clicked.connect(self.switch_channel)
+                row2.addWidget(switch_channel)
                 wildtype_btn._cell_id = cell_id
                 wildtype_btn.clicked.connect(self.toggle_wildtype)
-                control_layout.addWidget(wildtype_btn)
+                row2.addWidget(wildtype_btn)
+                control_layout.addLayout(row2)
 
             details_label = QtWidgets.QLabel(
                 "{0} cell with {1} frames (F{2} - F{3}), ending in {4}".format(
@@ -344,6 +354,38 @@ class Assigner:
             for child_id in self.get_child_ids(cell_id):
                 database.updateCellById(child_id, is_wildtype=setting)
             self.create_layout()
+
+    def switch_channel(self, click=False):
+        cell_outlines = self.outlines[
+            self.outlines.cell_id == self.window.sender()._cell_id
+        ].sort_values("frame_idx")
+        cell_plots = self.window.sender()._cell_plots
+        for plot, outline in zip(
+            cell_plots,
+            [cell_outlines.iloc[0], cell_outlines.iloc[-1]]
+        ):
+            plot.current_channel += 1
+            if plot.current_channel == self.image_loader.num_channels:
+                plot.current_channel = 0
+
+            roi = self.image_loader.load_frame(outline.frame_idx, plot.current_channel)[
+                outline.offset_left:outline.offset_left + (self.region_width * 2),
+                outline.offset_top:outline.offset_top + (self.region_height * 2),
+            ]
+
+            if plot.current_channel != 0:
+                plot.axes[0].imshow(roi, cmap="binary")
+                plot.axes[0].set_title("F{0} (C{1})".format(
+                    outline.frame_idx + 1,
+                    plot.current_channel + 1,
+                ))
+            else:
+                plot.axes[0].imshow(roi, cmap="gray")
+                plot.axes[0].set_title("F{0}".format(
+                    outline.frame_idx + 1,
+                ))
+
+            plot.draw()
 
     def export_movie(self, click=False):
         warning = QtWidgets.QMessageBox(self.window)
