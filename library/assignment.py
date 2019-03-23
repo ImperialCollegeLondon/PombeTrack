@@ -260,20 +260,21 @@ class Assigner:
             info_layout.addWidget(desc_label)
             control_layout.addLayout(info_layout)
 
+            row1 = QtWidgets.QHBoxLayout()
             verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
             verify_btn._cell_id = cell_id
             verify_btn.clicked.connect(self.assign_lineage)
-            control_layout.addWidget(verify_btn)
+            row1.addWidget(verify_btn)
+            export_btn = QtWidgets.QPushButton("Export movie")
+            export_btn._cell_id = cell_id
+            export_btn.clicked.connect(self.export_movie)
+            row1.addWidget(export_btn)
+            control_layout.addLayout(row1)
 
             if wildtype_btn:
                 wildtype_btn._cell_id = cell_id
                 wildtype_btn.clicked.connect(self.toggle_wildtype)
                 control_layout.addWidget(wildtype_btn)
-
-            # export_btn = QtWidgets.QPushButton("Export movie")
-            # export_btn._cell_id = cell_id
-            # export_btn.clicked.connect(lambda: print("Export"))
-            # control_layout.addWidget(export_btn)
 
             details_label = QtWidgets.QLabel(
                 "{0} cell with {1} frames (F{2} - F{3}), ending in {4}".format(
@@ -343,6 +344,16 @@ class Assigner:
             for child_id in self.get_child_ids(cell_id):
                 database.updateCellById(child_id, is_wildtype=setting)
             self.create_layout()
+
+    def export_movie(self, click=False):
+        warning = QtWidgets.QMessageBox(self.window)
+        warning.setTextFormat(QtCore.Qt.RichText)
+        warning.setWindowTitle("Not implemented")
+        warning.setText(
+            "Exporting movies is not yet implemented.\n"
+            "Please comment on <a href='https://github.com/ImperialCollegeLondon/PombeTrack/issues/1'>GitHub</a> to register your interest."
+        )
+        warning.exec_()
 
     def assign_lineage(self, click=False, outline_id=None):
         self.lineage_scroll_area.hide()
