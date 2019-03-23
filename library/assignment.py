@@ -6,7 +6,6 @@ import matplotlib.widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.figure
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import PyQt5.QtWidgets as QtWidgets
