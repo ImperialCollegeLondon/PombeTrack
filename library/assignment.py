@@ -190,100 +190,104 @@ class Assigner:
             key=lambda x: bool(x[1]),
         )
         for cell_num, (cell_id, verified_cell) in enumerate(unique_cells):
-            # cell_box = QtWidgets.QGroupBox("Cell #{0} ({1})".format(cell_num + 1, cell_id))
             cell_box = QtWidgets.QWidget()
-            cell_layout = QtWidgets.QVBoxLayout()
-            cell_title_layout = QtWidgets.QHBoxLayout()
-
-            if verified_cell and verified_cell.is_wildtype:
-                wildtype = True
-                wildtype_btn = QtWidgets.QPushButton("Unset wildtype")
-                # desc_str = "Wildtype cell #{0} ({1})".format(
-                #     cell_num + 1, cell_id
-                # )
-                desc_str = "Wildtype cell {0}".format(cell_id)
-            else:
-                wildtype = False
-                # desc_str = "Cell #{0} ({1})".format(
-                #     cell_num + 1, cell_id
-                # )
-                if verified_cell:
-                    wildtype_btn = QtWidgets.QPushButton("Set wildtype")
-                    desc_str = "Cell {0}".format(cell_id)
-                else:
-                    wildtype_btn = None
-                    desc_str = "(Cell {0})".format(cell_id)
-
-            if verified_cell:
-                pixmap = QtGui.QPixmap("resources/tick.png")
-            else:
-                pixmap = QtGui.QPixmap("resources/cross.png")
-
-            verification_sign = pixmap.scaledToWidth(20)
-            verification_label = QtWidgets.QLabel()
-            verification_label.setPixmap(verification_sign)
-            cell_title_layout.addWidget(verification_label)
-
-            desc_label = QtWidgets.QLabel(desc_str)
-            desc_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-            cell_title_layout.addWidget(desc_label)
-
-            verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
-            verify_btn._cell_id = cell_id
-            verify_btn.clicked.connect(self.assign_lineage)
-            cell_title_layout.addWidget(verify_btn)
-
-            if wildtype_btn:
-                wildtype_btn._cell_id = cell_id
-                wildtype_btn.clicked.connect(self.toggle_wildtype)
-                cell_title_layout.addWidget(wildtype_btn)
-
-            cell_layout.addLayout(cell_title_layout)
-
             # create proper lineage
             cell_outlines = self.outlines[
                 self.outlines.cell_id == cell_id
             ].sort_values("frame_idx")
-            cell_outlines = pd.DataFrame([cell_outlines.iloc[0], cell_outlines.iloc[-1]])
-            width = len(cell_outlines) * self.max_width_px * 0.1
-            cell_plot = Plotter(
-                self.window,
-                width=self._px_to_in(width),
-                height=self._px_to_in(self.max_width_px * 0.1),
-                dpi=self.screen_dpi,
-                experiment_data=self.experiment_data,
-                image_loader=self.image_loader,
-                subplots=len(cell_outlines)
-            )
-            cell_plot.setMinimumWidth(width)
-            cell_plot.setMaximumWidth(width)
-            cell_plot.setMinimumHeight(self.max_width_px * 0.1)
-            i = 0
-            for _, outline in cell_outlines.iterrows():
+
+            plot_layout = QtWidgets.QHBoxLayout()
+
+            spacer_l = QtWidgets.QHBoxLayout()
+            spacer = QtWidgets.QWidget()
+            if verified_cell:
+                spacer.setStyleSheet("background-color:green")
+            else:
+                spacer.setStyleSheet("background-color:red")
+            spacer.setMaximumWidth(5)
+            spacer_l.addWidget(spacer)
+            plot_layout.addLayout(spacer_l)
+
+            # only take the first and last frames
+            for outline_num in [0, -1]:
+                outline = cell_outlines.iloc[outline_num]
+                width = self.max_width_px * 0.1
+                cell_plot = Plotter(
+                    self.window,
+                    width=self._px_to_in(width),
+                    height=self._px_to_in(width),
+                    dpi=self.screen_dpi,
+                    experiment_data=self.experiment_data,
+                    image_loader=self.image_loader,
+                    subplots=1
+                )
+                cell_plot.setMinimumWidth(width)
+                cell_plot.setMaximumWidth(width)
+                cell_plot.setMinimumHeight(width)
                 roi = self.image_loader.load_frame(outline.frame_idx, 0)[
                     outline.offset_left:outline.offset_left + (self.region_width * 2),
                     outline.offset_top:outline.offset_top + (self.region_height * 2),
                 ]
-                cell_plot.axes[i].imshow(roi, cmap="gray")
-                cell_plot.axes[i].text(
-                    0, 0,
-                    "F{0}".format(outline.frame_idx + 1),
-                    horizontalalignment="left",
-                    verticalalignment="top",
-                    color="y",
-                    fontweight="bold",
-                    fontsize=10,
+                cell_plot.axes[0].imshow(roi, cmap="gray")
+                cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
+                plot_layout.addWidget(cell_plot)
+
+            control_layout = QtWidgets.QVBoxLayout()
+            control_layout.setAlignment(QtCore.Qt.AlignTop)
+            info_layout = QtWidgets.QHBoxLayout()
+            if verified_cell:
+                pixmap = QtGui.QPixmap("resources/tick.png")
+                if verified_cell.is_wildtype:
+                    wildtype = True
+                    wildtype_btn = QtWidgets.QPushButton("Unset wildtype")
+                    desc_str = "Wildtype cell {0}".format(cell_id)
+                else:
+                    wildtype = False
+                    wildtype_btn = QtWidgets.QPushButton("Set wildtype")
+                    desc_str = "Cell {0}".format(cell_id)
+            else:
+                pixmap = QtGui.QPixmap("resources/cross.png")
+                wildtype = False
+                wildtype_btn = None
+                desc_str = "Cell {0}".format(cell_id)
+
+            verification_sign = pixmap.scaledToWidth(20)
+            verification_label = QtWidgets.QLabel()
+            verification_label.setPixmap(verification_sign)
+            info_layout.addWidget(verification_label)
+
+            desc_label = QtWidgets.QLabel(desc_str)
+            info_layout.addWidget(desc_label)
+            control_layout.addLayout(info_layout)
+
+            verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
+            verify_btn._cell_id = cell_id
+            verify_btn.clicked.connect(self.assign_lineage)
+            control_layout.addWidget(verify_btn)
+
+            if wildtype_btn:
+                wildtype_btn._cell_id = cell_id
+                wildtype_btn.clicked.connect(self.toggle_wildtype)
+                control_layout.addWidget(wildtype_btn)
+
+            # export_btn = QtWidgets.QPushButton("Export movie")
+            # export_btn._cell_id = cell_id
+            # export_btn.clicked.connect(lambda: print("Export"))
+            # control_layout.addWidget(export_btn)
+
+            details_label = QtWidgets.QLabel(
+                "{0} cell with {1} frames (F{2} - F{3}), ending in {4}".format(
+                    verified_cell and "Verified" or "Unverified",
+                    cell_outlines.iloc[-1].frame_idx + 1 - cell_outlines.iloc[0].frame_idx,
+                    cell_outlines.iloc[0].frame_idx + 1,
+                    cell_outlines.iloc[-1].frame_idx + 1,
+                    cell_outlines.iloc[-1].child_id1 and "division" or "loss",
                 )
-                i += 1
+            )
+            control_layout.addWidget(details_label)
 
-            cell_scroll_area = QtWidgets.QScrollArea()
-            cell_scroll_area.verticalScrollBar().setEnabled(False)
-            cell_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-            cell_scroll_area.setAlignment(QtCore.Qt.AlignLeft)
-            cell_scroll_area.setWidget(cell_plot)
-
-            cell_layout.addWidget(cell_scroll_area)
-            cell_box.setLayout(cell_layout)
+            plot_layout.addLayout(control_layout)
+            cell_box.setLayout(plot_layout)
             lineage_layout.addWidget(cell_box)
 
         lineage_widget = QtWidgets.QWidget()
