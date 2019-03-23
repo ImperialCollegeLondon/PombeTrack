@@ -122,46 +122,6 @@ class ExperimentView:
         details_box.setLayout(layout)
         self.main_layout.addWidget(details_box)
 
-    def outline_cells(self):
-        outliner = outline.Outliner(self._data, self.image_loader)
-        desktop = QtWidgets.QDesktopWidget()
-        outliner.set_screen_res(
-            desktop.width(),
-            desktop.height(),
-            desktop.logicalDpiX(),
-        )
-        outliner.start_outlining(self.window)
-        outliner.window.finished[int].connect(self.outline_finished)
-
-    def outline_finished(self, *args):
-        outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
-        if len(outlines) > 0:
-            database.updateExperimentById(self._data.experiment_id, outlined=True)
-        else:
-            database.updateExperimentById(self._data.experiment_id, outlined=False)
-
-        self._refreshLayout()
-
-    def assign_cell_lineages(self):
-        assigner = assignment.Assigner(self._data, self.image_loader)
-        desktop = QtWidgets.QDesktopWidget()
-        assigner.set_screen_res(
-            desktop.width(),
-            desktop.height(),
-            desktop.logicalDpiX(),
-        )
-        assigner.start_assigning(self.window)
-        assigner.window.finished[int].connect(self.assignment_finished)
-
-    def assignment_finished(self, *args):
-        outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
-        if len(outlines) > 0:
-            database.updateExperimentById(self._data.experiment_id, verified=True)
-        else:
-            database.updateExperimentById(self._data.experiment_id, verified=False)
-
-        self._refreshLayout()
-
     def _addOutline(self):
         outline_box = QtWidgets.QGroupBox("Outlines")
         layout = QtWidgets.QVBoxLayout()
@@ -187,6 +147,26 @@ class ExperimentView:
         outline_box.setLayout(layout)
         self.main_layout.addWidget(outline_box)
 
+    def outline_cells(self):
+        outliner = outline.Outliner(self._data, self.image_loader)
+        desktop = QtWidgets.QDesktopWidget()
+        outliner.set_screen_res(
+            desktop.width(),
+            desktop.height(),
+            desktop.logicalDpiX(),
+        )
+        outliner.start_outlining(self.window)
+        outliner.window.finished[int].connect(self.outline_finished)
+
+    def outline_finished(self, *args):
+        outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
+        if len(outlines) > 0:
+            database.updateExperimentById(self._data.experiment_id, outlined=True)
+        else:
+            database.updateExperimentById(self._data.experiment_id, outlined=False)
+
+        self._refreshLayout()
+
     def _addLineageVerification(self):
         box = QtWidgets.QGroupBox("Lineage verification")
         layout = QtWidgets.QVBoxLayout()
@@ -201,6 +181,26 @@ class ExperimentView:
 
         box.setLayout(layout)
         self.main_layout.addWidget(box)
+
+    def assign_cell_lineages(self):
+        assigner = assignment.Assigner(self._data, self.image_loader)
+        desktop = QtWidgets.QDesktopWidget()
+        assigner.set_screen_res(
+            desktop.width(),
+            desktop.height(),
+            desktop.logicalDpiX(),
+        )
+        assigner.start_assigning(self.window)
+        assigner.window.finished[int].connect(self.assignment_finished)
+
+    def assignment_finished(self, *args):
+        outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
+        if len(outlines) > 0:
+            database.updateExperimentById(self._data.experiment_id, verified=True)
+        else:
+            database.updateExperimentById(self._data.experiment_id, verified=False)
+
+        self._refreshLayout()
 
     def _addAnalysis(self):
         box = QtWidgets.QGroupBox("Analysis")
