@@ -171,6 +171,12 @@ class Plotter(FigureCanvas):
         if self.previous_id:
             database.addOutlineChild(self.previous_id, child1=self.outline_id)
 
+        database.updateExperimentById(
+            self._data.experiment_id,
+            verified=False,
+        )
+        database.deleteCellById(self.cell_id)
+
         self.previous_id = str(self.outline_id)
 
     def fit_outline(self, roi, init_nodes=None, centre_offset_left=0, centre_offset_top=0):
@@ -434,6 +440,12 @@ class Plotter(FigureCanvas):
         )
         if delete_confirm == QtWidgets.QMessageBox.Yes:
             database.deleteOutlineById(self.outline_id)
+            database.updateExperimentById(
+                self._data.experiment_id,
+                verified=False,
+            )
+            database.deleteCellById(self.cell_id)
+
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
             self.outline_id = None
