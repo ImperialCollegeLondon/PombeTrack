@@ -387,14 +387,68 @@ class Assigner:
             plot.draw()
 
     def export_movie(self, click=False):
-        warning = QtWidgets.QMessageBox(self.window)
-        warning.setTextFormat(QtCore.Qt.RichText)
-        warning.setWindowTitle("Not implemented")
-        warning.setText(
-            "Exporting movies is not yet implemented.\n"
-            "Please comment on <a href='https://github.com/ImperialCollegeLondon/PombeTrack/issues/1'>GitHub</a> to register your interest."
-        )
-        warning.exec_()
+        cell_id = self.window.sender()._cell_id
+        print("cell_id:", cell_id)
+        settings = QtWidgets.QDialog(self.window)
+        settings.setModal(True)
+        settings.setWindowTitle("Cell lineage exporter")
+        layout = QtWidgets.QVBoxLayout()
+
+        checkbox_layout = QtWidgets.QGridLayout()
+        descendants = QtWidgets.QCheckBox()
+        descendants.setCheckState(QtCore.Qt.CheckState.Checked)
+        checkbox_layout.addWidget(descendants, 0, 0)
+        checkbox_layout.addWidget(QtWidgets.QLabel("Include descendants"), 0, 1)
+
+        outlines = QtWidgets.QCheckBox()
+        outlines.setCheckState(QtCore.Qt.CheckState.Checked)
+        checkbox_layout.addWidget(outlines, 1, 0)
+        checkbox_layout.addWidget(QtWidgets.QLabel("Include outlines"), 1, 1)
+
+        frames = QtWidgets.QCheckBox()
+        frames.setCheckState(QtCore.Qt.CheckState.Checked)
+        checkbox_layout.addWidget(frames, 2, 0)
+        checkbox_layout.addWidget(QtWidgets.QLabel("Include frame numbers"), 2, 1)
+
+        scalebar = QtWidgets.QCheckBox()
+        scalebar.setCheckState(QtCore.Qt.CheckState.Checked)
+        checkbox_layout.addWidget(scalebar, 3, 0)
+        checkbox_layout.addWidget(QtWidgets.QLabel("Include scale bar"), 3, 1)
+
+        channels = QtWidgets.QCheckBox()
+        checkbox_layout.addWidget(channels, 4, 0)
+        checkbox_layout.addWidget(QtWidgets.QLabel("Include all channels"), 4, 1)
+
+        def imagej_change(state):
+            if state == 2:
+                frames.setCheckState(QtCore.Qt.CheckState.Unchecked)
+                scalebar.setCheckState(QtCore.Qt.CheckState.Unchecked)
+
+        imagej = QtWidgets.QCheckBox()
+        imagej.stateChanged[int].connect(imagej_change)
+        checkbox_layout.addWidget(imagej, 5, 0)
+        checkbox_layout.addWidget(QtWidgets.QLabel("Cropped TIFFs only"), 5, 1)
+
+        def generate_movie():
+            settings = {
+                "descendants": descendants.checkState() == 2,
+                "outlines": outlines.checkState() == 2,
+                "frames": frames.checkState() == 2,
+                "scale": scalebar.checkState() == 2,
+                "channels": channels.checkState() == 2,
+                "imagej": imagej.checkState() == 2,
+            }
+            print(settings)
+
+        button_layout = QtWidgets.QHBoxLayout()
+        submit = QtWidgets.QPushButton("Generate")
+        submit.clicked.connect(generate_movie)
+        button_layout.addWidget(submit)
+
+        layout.addLayout(checkbox_layout)
+        layout.addLayout(button_layout)
+        settings.setLayout(layout)
+        settings.show()
 
     def assign_lineage(self, click=False, outline_id=None):
         self.lineage_scroll_area.hide()
