@@ -396,22 +396,22 @@ class Assigner:
 
         checkbox_layout = QtWidgets.QGridLayout()
         descendants = QtWidgets.QCheckBox()
-        descendants.setCheckState(QtCore.Qt.CheckState.Checked)
+        descendants.setCheckState(QtCore.Qt.Checked)
         checkbox_layout.addWidget(descendants, 0, 0)
         checkbox_layout.addWidget(QtWidgets.QLabel("Include descendants"), 0, 1)
 
         outlines = QtWidgets.QCheckBox()
-        outlines.setCheckState(QtCore.Qt.CheckState.Checked)
+        outlines.setCheckState(QtCore.Qt.Checked)
         checkbox_layout.addWidget(outlines, 1, 0)
         checkbox_layout.addWidget(QtWidgets.QLabel("Include outlines"), 1, 1)
 
         frames = QtWidgets.QCheckBox()
-        frames.setCheckState(QtCore.Qt.CheckState.Checked)
+        frames.setCheckState(QtCore.Qt.Checked)
         checkbox_layout.addWidget(frames, 2, 0)
         checkbox_layout.addWidget(QtWidgets.QLabel("Include frame numbers"), 2, 1)
 
         scalebar = QtWidgets.QCheckBox()
-        scalebar.setCheckState(QtCore.Qt.CheckState.Checked)
+        scalebar.setCheckState(QtCore.Qt.Checked)
         checkbox_layout.addWidget(scalebar, 3, 0)
         checkbox_layout.addWidget(QtWidgets.QLabel("Include scale bar"), 3, 1)
 
