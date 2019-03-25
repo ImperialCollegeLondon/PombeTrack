@@ -18,6 +18,7 @@ import tifffile
 import uuid
 
 from . import database
+from . import movie_generator
 
 sns.set_context("talk")
 sns.set_style("white")
@@ -438,7 +439,7 @@ class Assigner:
                 "channels": channels.checkState() == 2,
                 "imagej": imagej.checkState() == 2,
             }
-            print(settings)
+            m = movie_generator.MovieMaker(self.experiment_data.experiment_id, cell_id, **settings)
 
         button_layout = QtWidgets.QHBoxLayout()
         submit = QtWidgets.QPushButton("Generate")
