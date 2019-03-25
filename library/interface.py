@@ -20,7 +20,7 @@ class Interface:
 
         screen = self.app.primaryScreen()
         screen_size = screen.availableGeometry()
-        self.window.setGeometry(0, 0, screen_size.width() / 2, screen_size.height() - 60)
+        self.window.setGeometry(0, 60, screen_size.width() / 2, screen_size.height() - 60)
         self.window.setWindowTitle("Static image analyser")
         self.window.setWindowIcon(QtGui.QIcon(os.path.abspath("resources/icon.png")))
         self.base_layout = QtWidgets.QVBoxLayout()

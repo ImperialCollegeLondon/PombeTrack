@@ -525,7 +525,12 @@ class Outliner:
         self.parent_window = parent_window
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
-        self.window.setGeometry(self.max_width_px // 10, self.max_height_px // 10, self.max_width_px * 0.5, self.max_height_px * 0.5)
+        self.window.setGeometry(
+            self.max_width_px // 10,
+            self.max_height_px // 10,
+            self.max_width_px * 0.5,
+            self.max_height_px * 0.9
+        )
         self.window.setWindowTitle("Outline cells")
 
         main_layout = QtWidgets.QVBoxLayout()
