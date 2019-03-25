@@ -54,6 +54,9 @@ class Plotter(FigureCanvas):
         if not database.checkTable("outlines"):
             database.createOutlinesTable()
 
+        if not database.checkTable("cells"):
+            database.createCellsTable()
+
         self.image_loader = image_loader
         self.load_metadata()
         self.region_width, self.region_height = 75, 75
