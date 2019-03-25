@@ -388,6 +388,14 @@ class Assigner:
             plot.draw()
 
     def export_movie(self, click=False):
+        warning = QtWidgets.QMessageBox(self.window)
+        warning.setTextFormat(QtCore.Qt.RichText)
+        warning.setWindowTitle("Not implemented")
+        warning.setText(
+            "Generating movies is in progress and not yet completed"
+        )
+        warning.exec_()
+        return
         cell_id = self.window.sender()._cell_id
         print("cell_id:", cell_id)
         settings = QtWidgets.QDialog(self.window)
