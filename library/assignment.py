@@ -388,16 +388,7 @@ class Assigner:
             plot.draw()
 
     def export_movie(self, click=False):
-        warning = QtWidgets.QMessageBox(self.window)
-        warning.setTextFormat(QtCore.Qt.RichText)
-        warning.setWindowTitle("Not implemented")
-        warning.setText(
-            "Generating movies is in progress and not yet completed"
-        )
-        warning.exec_()
-        return
         cell_id = self.window.sender()._cell_id
-        print("cell_id:", cell_id)
         settings = QtWidgets.QDialog(self.window)
         settings.setModal(True)
         settings.setWindowTitle("Cell lineage exporter")
@@ -428,26 +419,19 @@ class Assigner:
         checkbox_layout.addWidget(channels, 4, 0)
         checkbox_layout.addWidget(QtWidgets.QLabel("Include all channels"), 4, 1)
 
-        def imagej_change(state):
-            if state == 2:
-                frames.setCheckState(QtCore.Qt.CheckState.Unchecked)
-                scalebar.setCheckState(QtCore.Qt.CheckState.Unchecked)
-
-        imagej = QtWidgets.QCheckBox()
-        imagej.stateChanged[int].connect(imagej_change)
-        checkbox_layout.addWidget(imagej, 5, 0)
-        checkbox_layout.addWidget(QtWidgets.QLabel("Cropped TIFFs only"), 5, 1)
-
         def generate_movie():
             settings = {
+                "experiment_id": self.experiment_data.experiment_id,
+                "cell_id": cell_id,
                 "descendants": descendants.checkState() == 2,
                 "outlines": outlines.checkState() == 2,
                 "frames": frames.checkState() == 2,
                 "scale": scalebar.checkState() == 2,
                 "channels": channels.checkState() == 2,
-                "imagej": imagej.checkState() == 2,
+                "image_loader": self.image_loader,
+                "screen_dpi": self.screen_dpi,
             }
-            m = movie_generator.MovieMaker(self.experiment_data.experiment_id, cell_id, **settings)
+            m = movie_generator.MovieMaker(**settings)
 
         button_layout = QtWidgets.QHBoxLayout()
         submit = QtWidgets.QPushButton("Generate")
