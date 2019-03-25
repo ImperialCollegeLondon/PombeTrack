@@ -12,6 +12,7 @@ from . import database
 from . import loader
 from . import outline
 from . import assignment
+from . import analysis
 
 class ExperimentView:
     def __init__(self, experiment_id):
@@ -211,11 +212,27 @@ class ExperimentView:
             pass
 
         analysis_btn = QtWidgets.QPushButton("Analyse Cells")
-        analysis_btn.clicked[bool].connect(lambda: print("analysis btn"))
+        analysis_btn.clicked[bool].connect(lambda: self.analyse_cells())
         layout.addWidget(analysis_btn)
 
         box.setLayout(layout)
         self.main_layout.addWidget(box)
+
+    def analyse_cells(self):
+        analyser = analysis.Analyser(self._data, self.image_loader)
+        desktop = QtWidgets.QDesktopWidget()
+        analyser.set_screen_res(
+            desktop.width(),
+            desktop.height(),
+            desktop.logicalDpiX(),
+        )
+        analyser.start_assigning(self.window)
+        analyser.window.finished[int].connect(self.analysis_finished)
+
+    def analysis_finished(self, *args):
+        # check for analysis success
+        database.updateExperimentById(self._data.experiment_id, analysed=True)
+        database.updateExperimentById(self._data.experiment_id, analysed=False)
 
     def _clearLayout(self, l):
         for i in reversed(range(l.count())):
