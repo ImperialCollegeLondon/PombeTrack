@@ -226,13 +226,14 @@ class ExperimentView:
             desktop.height(),
             desktop.logicalDpiX(),
         )
-        analyser.start_assigning(self.window)
-        analyser.window.finished[int].connect(self.analysis_finished)
+        analyser.start_analysing(self.window)
+        # analyser.window.finished[int].connect(self.analysis_finished)
 
     def analysis_finished(self, *args):
         # check for analysis success
-        database.updateExperimentById(self._data.experiment_id, analysed=True)
-        database.updateExperimentById(self._data.experiment_id, analysed=False)
+        # database.updateExperimentById(self._data.experiment_id, analysed=True)
+        # database.updateExperimentById(self._data.experiment_id, analysed=False)
+        print("Analysis window finished")
 
     def _clearLayout(self, l):
         for i in reversed(range(l.count())):
