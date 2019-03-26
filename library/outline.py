@@ -231,26 +231,27 @@ class Plotter(FigureCanvas):
 
         self.draw()
 
+    def _channel_change(self, delta):
+        if delta < 0 and self.current_channel <= 0:
+            return
+
+        if delta > 0 and self.current_channel >= self.num_channels - 1:
+            return
+
+        self.current_channel += delta
+        new_im = self.load_frame()
+        self.main_frame.set_data(new_im)
+        self.plot_existing_outlines()
+        self.main_frame.set_clim([new_im.min(), new_im.max()])
+        self.draw()
+
+
     def _key_press_event(self, evt):
         if evt.key == "left":
-            if self.current_channel <= 0:
-                return
-            self.current_channel -= 1
-            new_im = self.load_frame()
-            self.main_frame.set_data(new_im)
-            self.plot_existing_outlines()
-            self.main_frame.set_clim([new_im.min(), new_im.max()])
-            self.draw()
+            self._channel_change(-1)
 
         elif evt.key == "right":
-            if self.current_channel >= self.num_channels - 1:
-                return
-            self.current_channel += 1
-            new_im = self.load_frame()
-            self.main_frame.set_data(new_im)
-            self.plot_existing_outlines()
-            self.main_frame.set_clim([new_im.min(), new_im.max()])
-            self.draw()
+            self._channel_change(1)
 
         elif evt.key == "up":
             if self.current_frame_idx >= self.num_frames - 1:
@@ -505,6 +506,9 @@ class Toolbar(NavigationToolbar):
             ("Delete", "Delete outline", "delete", "delete"),
             ("Refine", "Refine outline", "recycle", "refine"),
             ("Refine1", "Refine one step", "recycle_single", "refine_single"),
+            (None, None, None, None),
+            ("ChannelLeft", "Previous channel", "channel_prev", "channel_prev"),
+            ("ChannelRight", "Next channel", "channel_next", "channel_next"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
@@ -533,6 +537,12 @@ class Toolbar(NavigationToolbar):
 
     def accept(self):
         self.canvas._accept_event()
+
+    def channel_prev(self):
+        self.canvas._channel_change(-1)
+
+    def channel_next(self):
+        self.canvas._channel_change(1)
 
 
 class Outliner:
