@@ -231,6 +231,14 @@ class Assigner:
                 ]
                 cell_plot.axes[0].imshow(roi, cmap="gray")
                 cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
+                c = np.load(outline.coords_path)
+                outline_poly = matplotlib.patches.Polygon(
+                    np.array([c[:, 1], c[:, 0]]).T,
+                    edgecolor="r",
+                    fill=False,
+                    lw=1
+                )
+                cell_plot.axes[0].add_patch(outline_poly)
                 cell_plot.current_channel = 0
                 cell_plots.append(cell_plot)
                 plot_layout.addWidget(cell_plot)
