@@ -276,8 +276,7 @@ class Plotter(FigureCanvas):
             self._delete_event()
 
         elif evt.key == "." and self.subfigure_patches:
-            self.balloon_obj.evolve(image_percentile=self.image_percentile)
-            self._plot_nodes()
+            self._refine_event(1)
 
         elif evt.key == "enter" and self.subfigure_patches:
             # save outline
@@ -458,12 +457,20 @@ class Plotter(FigureCanvas):
             self.plot_existing_outlines()
             self.draw()
 
-    def _refine_event(self):
+    def _refine_event(self, num_ref=10):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
-        for i in range(10):
-            self.balloon_obj.evolve(image_percentile=self.image_percentile)
+        for i in range(num_ref):
+            try:
+                self.balloon_obj.evolve(image_percentile=self.image_percentile)
+            except ValueError:
+                QtWidgets.QMessageBox().warning(
+                    self.parent(),
+                    "I'm sorry, I'm afraid I can't do that",
+                    "The outline has shrunk too much, try reducing the tolerance",
+                )
+                break
         self._plot_nodes()
 
 

@@ -63,12 +63,6 @@ class Node(object):
         )
         return skel_coords[np.argmin(distances)]
 
-        distances = []
-        for x, y in skel_coords:
-            distance = np.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
-            distances.append(distance)
-        return skel_coords[np.argmin(distances)]
-
     def centroid_force(self, expansion_point):
         angle = self._get_angle(expansion_point, (self.x, self.y))
         force_x = np.cos(angle)
@@ -254,26 +248,13 @@ class Balloon(object):
             n.apply_changes()
 
         original_area = self.get_area(original_positions)
-        # original_area = 0.5 * np.abs(
-        #     np.dot(
-        #         original_positions[:, 0],
-        #         np.roll(original_positions[:, 1], 1)
-        #     ) - np.dot(
-        #         original_positions[:, 1],
-        #         np.roll(original_positions[:, 0], 1)
-        #     )
-        # )
         new_area = self.get_area(new_positions)
-        # new_area = 0.5 * np.abs(
-        #     np.dot(
-        #         new_positions[:, 0],
-        #         np.roll(new_positions[:, 1], 1)
-        #     ) - np.dot(
-        #         new_positions[:, 1],
-        #         np.roll(new_positions[:, 0], 1)
-        #     )
-        # )
         delta_area = np.abs(new_area - original_area)
+        if new_area < 50:
+            for i, n in enumerate(self.nodes):
+                n.x = original_positions[i, 0]
+                n.y = original_positions[i, 1]
+            raise ValueError("Area too small")
 
         if display:
             f = plt.figure()
