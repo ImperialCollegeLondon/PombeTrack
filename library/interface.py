@@ -152,6 +152,7 @@ class Interface:
                     cells_counted_item.setText(self.get_cell_count(experiment.experiment_id))
                 else:
                     cells_counted_item.setText("0")
+
                 cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
                 cells_counted_item._experiment_id = experiment.experiment_id
                 cells_counted_item._item_type = "experiment_cells_counted"
@@ -194,19 +195,9 @@ class Interface:
         self.base_layout.addLayout(self.btn_row)
 
     def get_cell_count(self, experiment_id):
-        outlines = database.getOutlinesByExperimentId(experiment_id)
-        if len(outlines) == 0:
-            database.updateExperimentById(
-                experiment_id,
-                outlined=False,
-                verified=False,
-                analysed=False,
-            )
-            return "0"
-
-        p_out = pd.DataFrame(outlines)
-        num_cells = len(p_out.cell_id.unique())
-        return str(num_cells)
+        cells = database.getCellsByExperimentId(experiment_id)
+        cells_wanted = database.getCellsByExperimentId(experiment_id, True, True)
+        return "{0} ({1})".format(len(cells_wanted), len(cells))
 
     def table_change_event(self, item):
         if not hasattr(item, "_item_type"):

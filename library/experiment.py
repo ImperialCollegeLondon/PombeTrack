@@ -133,7 +133,7 @@ class ExperimentView:
             label_str = "{0} outlines have been defined arranged as {1} cells{2}".format(
                 num_outlines,
                 num_cells,
-                 self._data.verified and " " or " (unverified)"
+                self._data.verified and " " or " (unverified)"
             )
             label = QtWidgets.QLabel(label_str)
         else:

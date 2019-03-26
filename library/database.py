@@ -202,6 +202,29 @@ def updateCellById(cell_id, **kwargs):
     """.format(set_string)
     executeQuery(query, args, commit=True)
 
+def getCellsByExperimentId(experiment_id, birth_observed=None, division_observed=None, is_wildtype=None):
+    added_str = ""
+    args = [experiment_id,]
+    if birth_observed is not None:
+        added_str += " AND birth_observed = ?"
+        args.append(birth_observed)
+
+    if division_observed is not None:
+        added_str += " AND division_observed = ?"
+        args.append(division_observed)
+
+    if is_wildtype is not None:
+        added_str += " AND is_wildtype = ?"
+        args.append(is_wildtype)
+
+    query = """
+    SELECT *
+    FROM cells
+    WHERE experiment_id = ?{0};
+    """.format(added_str)
+    r = executeQuery(query, args, fetchmany=True)
+    return [CellRow(x) for x in r]
+
 def createOutlinesTable():
     query = "CREATE TABLE outlines ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
