@@ -504,6 +504,7 @@ class Toolbar(NavigationToolbar):
             ("Accept", "Accept outline", "accept", "accept"),
             ("Delete", "Delete outline", "delete", "delete"),
             ("Refine", "Refine outline", "recycle", "refine"),
+            ("Refine1", "Refine one step", "recycle_single", "refine_single"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
@@ -526,6 +527,9 @@ class Toolbar(NavigationToolbar):
 
     def refine(self):
         self.canvas._refine_event()
+
+    def refine_single(self):
+        self.canvas._refine_event(1)
 
     def accept(self):
         self.canvas._accept_event()
