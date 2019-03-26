@@ -64,6 +64,7 @@ class Plotter(FigureCanvas):
 
         self.cell_outlines = []
         self.cell_outline_text = []
+        self.sub_outlines = []
         self.subfigure_patches = []
         self.dragging = False
         self.previous_id = None
@@ -99,6 +100,16 @@ class Plotter(FigureCanvas):
         ax.set_aspect("equal")
         ax.autoscale("off")
 
+    def clear_sub_outlines(self):
+        while True:
+            try:
+                t = self.sub_outlines.pop()
+                t.remove()
+            except ValueError:
+                pass
+            except IndexError:
+                break
+
     def plot_existing_outlines(self):
         self.main_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
         while True:
@@ -120,9 +131,6 @@ class Plotter(FigureCanvas):
                 t.remove()
             except IndexError:
                 break
-
-        for t in self.cell_outline_text:
-            t.remove()
 
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
         for i, outline in enumerate(outline_data):
@@ -185,6 +193,7 @@ class Plotter(FigureCanvas):
     def fit_outline(self, roi, init_nodes=None, centre_offset_left=0, centre_offset_top=0):
         centre = [self.region_width - centre_offset_left,
                   self.region_height - centre_offset_top]
+
         if init_nodes is None:
             self.outline_id = str(uuid.uuid4())
             radius = 5
@@ -197,6 +206,26 @@ class Plotter(FigureCanvas):
         self.sub_ax.set_ylim([self.region_width * 2, 0])
         self.sub_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
         self._plot_nodes()
+
+        self.clear_sub_outlines()
+        outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
+        for outline in outline_data:
+            if not os.path.exists(outline.coords_path):
+                continue
+
+            c = np.load(outline.coords_path) + np.array([
+                outline.offset_left - self.offset_left,
+                outline.offset_top - self.offset_top
+            ])
+            p = matplotlib.patches.Polygon(
+                np.array([c[:, 1], c[:, 0]]).T,
+                edgecolor="r",
+                fill=False,
+                lw=1,
+            )
+            self.sub_ax.add_patch(p)
+            self.sub_outlines.append(p)
+
         self.draw()
 
     def _plot_nodes(self, line=True, patches=True):
@@ -431,6 +460,7 @@ class Plotter(FigureCanvas):
             self.dragging = False
             self.subfigure_patches = []
             self.plot_existing_outlines()
+            self.clear_sub_outlines()
             self.draw()
             return
         else:
@@ -438,6 +468,7 @@ class Plotter(FigureCanvas):
             bf_frame = self.load_frame()
             self.main_frame.set_data(bf_frame)
             self.plot_existing_outlines()
+            self.clear_sub_outlines()
 
         roi = bf_frame[
             self.offset_left:self.offset_left + (self.region_width * 2),
