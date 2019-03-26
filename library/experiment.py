@@ -206,36 +206,19 @@ class ExperimentView:
         self._refreshLayout()
 
     def _addAnalysis(self):
-        box = QtWidgets.QGroupBox("Analysis")
-        layout = QtWidgets.QVBoxLayout()
-        if self._data.analysed:
-            pass
-        else:
-            pass
-
-        analysis_btn = QtWidgets.QPushButton("Analyse Cells")
-        analysis_btn.clicked[bool].connect(lambda: self.analyse_cells())
-        layout.addWidget(analysis_btn)
-
-        box.setLayout(layout)
-        self.main_layout.addWidget(box)
-
-    def analyse_cells(self):
-        analyser = analysis.Analyser(self._data, self.image_loader)
-        desktop = QtWidgets.QDesktopWidget()
-        analyser.set_screen_res(
-            desktop.width(),
-            desktop.height(),
-            desktop.logicalDpiX(),
-        )
-        analyser.start_analysing(self.window)
-        # analyser.window.finished[int].connect(self.analysis_finished)
-
-    def analysis_finished(self, *args):
-        # check for analysis success
-        # database.updateExperimentById(self._data.experiment_id, analysed=True)
-        # database.updateExperimentById(self._data.experiment_id, analysed=False)
-        print("Analysis window finished")
+        if self._data.verified:
+            box = QtWidgets.QGroupBox("Analysis")
+            layout = QtWidgets.QVBoxLayout()
+            self.analyser = analysis.Analyser(self, self._data, self.image_loader)
+            desktop = QtWidgets.QDesktopWidget()
+            self.analyser.set_screen_res(
+                desktop.width(),
+                desktop.height(),
+                desktop.logicalDpiX(),
+            )
+            box.setLayout(layout)
+            self.main_layout.addWidget(box)
+            self.analyser.construct_box(layout)
 
     def _clearLayout(self, l):
         for i in reversed(range(l.count())):

@@ -25,6 +25,23 @@ class Row(dict):
         return row
 
 
+class NucleusRow(Row):
+    COLS = [
+        ("nucleus_num", "INTEGER PRIMARY KEY", int),
+        ("nucleus_id", "TEXT", str),
+        ("outline_id", "TEXT", str),
+        ("cell_id", "TEXT", str),
+        ("experiment_id", "TEXT", str),
+        ("coords_path", "TEXT", str),
+    ]
+    def parseRow(self, r):
+        row = super().parseRow(r)
+        if "\\" in row["coords_path"]:
+            row["coords_path"] = pathlib.PureWindowsPath(row["coords_path"]).as_posix()
+
+        return row
+
+
 class CellRow(Row):
     COLS = [
         ("cell_num", "INTEGER PRIMARY KEY", int),
@@ -63,6 +80,7 @@ class OutlineRow(Row):
         row = super().parseRow(r)
         if "\\" in row["coords_path"]:
             row["coords_path"] = pathlib.PureWindowsPath(row["coords_path"]).as_posix()
+
         return row
 
 
@@ -138,6 +156,32 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createNucleiTable():
+    query = "CREATE TABLE nuclei ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in NucleusRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertNucleus(nucleus_id, outline_id, cell_id, experiment_id, coords_path):
+    query = """
+    INSERT INTO nuclei
+    (nucleus_id, outline_id, cell_id, experiment_id, coords_path)
+    VALUES (?, ?, ?, ?, ?);
+    """
+    args = (nucleus_id, outline_id, cell_id, experiment_id, coords_path)
+    executeQuery(query, args, commit=True)
+
+def getNucleiByExperimentId(experiment_id):
+    query = """
+    SELECT *
+    FROM nuclei
+    WHERE experiment_id = ?;
+    """
+    args = (experiment_id,)
+    results = executeQuery(query, args, fetchmany=True)
+    return [NucleusRow(x) for x in results]
 
 def createCellsTable():
     query = "CREATE TABLE cells ({0});".format(",".join([
