@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import pathlib
 import sqlite3
 import uuid
 
@@ -58,6 +59,11 @@ class OutlineRow(Row):
         ("child_id1", "TEXT DEFAULT ''", str),
         ("child_id2", "TEXT DEFAULT ''", str),
     ]
+    def parseRow(self, r):
+        row = super().parseRow(r)
+        if "\\" in row["coords_path"]:
+            row["coords_path"] = pathlib.PureWindowsPath(row["coords_path"]).as_posix()
+        return row
 
 
 class ExperimentRow(Row):
@@ -80,6 +86,9 @@ class ExperimentRow(Row):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
             row[col_name] = caster(r)
+
+        if "\\" in row["image_path"]:
+            row["image_path"] = pathlib.PureWindowsPath(row["image_path"]).as_posix()
 
         return {
             "experiment_num": row["experiment_num"],
