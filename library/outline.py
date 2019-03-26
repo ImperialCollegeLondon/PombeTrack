@@ -195,6 +195,7 @@ class Plotter(FigureCanvas):
         self.sub_ax.imshow(roi, cmap="gray")
         self.sub_ax.set_xlim([0, self.region_height * 2])
         self.sub_ax.set_ylim([self.region_width * 2, 0])
+        self.sub_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
         self._plot_nodes()
         self.draw()
 
