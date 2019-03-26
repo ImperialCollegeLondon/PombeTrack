@@ -83,14 +83,17 @@ class Plotter(FigureCanvas):
         self.num_frames = self.image_loader.num_frames
         self.num_channels = self.image_loader.num_channels
 
-    def load_frame(self, frame_idx=None):
-        if not frame_idx:
+    def load_frame(self, frame_idx=None, channel_idx=None):
+        if frame_idx is None:
             frame_idx = self.current_frame_idx
+
+        if channel_idx is None:
+            channel_idx = self.current_channel
 
         if frame_idx < 0 or frame_idx > (self.num_frames - 1):
             return np.zeros((100, 100))
 
-        return self.image_loader.load_frame(frame_idx, self.current_channel)
+        return self.image_loader.load_frame(frame_idx, channel_idx)
 
     def refresh(self):
         self.draw()
@@ -358,7 +361,7 @@ class Plotter(FigureCanvas):
                 centre = [self.offset_left + self.region_width,
                           self.offset_top + self.region_height]
                 _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
-                roi = self.load_frame()[
+                roi = self.load_frame(channel_idx=0)[
                     self.offset_left:self.offset_left + (self.region_width * 2),
                     self.offset_top:self.offset_top + (self.region_height * 2)
                 ]
@@ -378,7 +381,7 @@ class Plotter(FigureCanvas):
                 (self.offset_left, self.offset_top,
                  centre_offset_left, centre_offset_top) = self.get_offsets(centre)
 
-                roi = self.load_frame()[
+                roi = self.load_frame(channel_idx=0)[
                     self.offset_left:self.offset_left + (self.region_width * 2),
                     self.offset_top:self.offset_top + (self.region_height * 2)
                 ]
@@ -470,7 +473,7 @@ class Plotter(FigureCanvas):
             self.plot_existing_outlines()
             self.clear_sub_outlines()
 
-        roi = bf_frame[
+        roi = self.load_frame(channel_idx=0)[
             self.offset_left:self.offset_left + (self.region_width * 2),
             self.offset_top:self.offset_top + (self.region_height * 2)
         ]
