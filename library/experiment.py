@@ -166,6 +166,7 @@ class ExperimentView:
         else:
             database.updateExperimentById(self._data.experiment_id, outlined=False)
 
+        self._data = database.getExperimentById(self._data.experiment_id)
         self._refreshLayout()
 
     def _addLineageVerification(self):
@@ -201,6 +202,7 @@ class ExperimentView:
         else:
             database.updateExperimentById(self._data.experiment_id, verified=False)
 
+        self._data = database.getExperimentById(self._data.experiment_id)
         self._refreshLayout()
 
     def _addAnalysis(self):
