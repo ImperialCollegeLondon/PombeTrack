@@ -399,6 +399,9 @@ class Plotter(FigureCanvas):
         self.draw()
 
     def _accept_event(self):
+        if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
+            return
+
         # save outline
         self.save_outline()
 
