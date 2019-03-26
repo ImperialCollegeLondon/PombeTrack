@@ -279,51 +279,7 @@ class Plotter(FigureCanvas):
             self._refine_event(1)
 
         elif evt.key == "enter" and self.subfigure_patches:
-            # save outline
-            self.save_outline()
-
-            offset_centre = self.balloon_obj.get_centre()
-
-            # clear plot
-            self.balloon_obj = None
-            self.dragging = False
-            self.subfigure_patches = []
-            self.sub_ax.clear()
-            self.decorate_axis(self.sub_ax)
-            self.draw()
-
-            # fit next
-            centre = [offset_centre[0] + self.offset_left,
-                      offset_centre[1] + self.offset_top]
-            (self.offset_left, self.offset_top,
-             centre_offset_left, centre_offset_top) = self.get_offsets(centre)
-
-            if self.current_frame_idx == self.num_frames - 1:
-                bf_frame = self.load_frame()
-                self.main_frame.set_data(bf_frame)
-                self.outline_id = None
-                self.balloon_obj = None
-                self.dragging = False
-                self.subfigure_patches = []
-                self.plot_existing_outlines()
-                self.draw()
-                return
-            else:
-                self.current_frame_idx += 1
-                bf_frame = self.load_frame()
-                self.main_frame.set_data(bf_frame)
-                self.plot_existing_outlines()
-
-            roi = bf_frame[
-                self.offset_left:self.offset_left + (self.region_width * 2),
-                self.offset_top:self.offset_top + (self.region_height * 2)
-            ]
-            self.fit_outline(
-                roi,
-                centre_offset_left=centre_offset_left,
-                centre_offset_top=centre_offset_top,
-            )
-
+            self._accept_event()
         else:
             print("Unknown key:", evt.key)
 
@@ -441,6 +397,51 @@ class Plotter(FigureCanvas):
         self.sub_ax.set_ylim([self.region_height * 2, 0])
         self.draw()
 
+    def _accept_event(self):
+        # save outline
+        self.save_outline()
+
+        offset_centre = self.balloon_obj.get_centre()
+
+        # clear plot
+        self.balloon_obj = None
+        self.dragging = False
+        self.subfigure_patches = []
+        self.sub_ax.clear()
+        self.decorate_axis(self.sub_ax)
+        self.draw()
+
+        # fit next
+        centre = [offset_centre[0] + self.offset_left,
+                  offset_centre[1] + self.offset_top]
+        (self.offset_left, self.offset_top,
+         centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
+        if self.current_frame_idx == self.num_frames - 1:
+            bf_frame = self.load_frame()
+            self.main_frame.set_data(bf_frame)
+            self.outline_id = None
+            self.balloon_obj = None
+            self.dragging = False
+            self.subfigure_patches = []
+            self.plot_existing_outlines()
+            self.draw()
+            return
+        else:
+            self.current_frame_idx += 1
+            bf_frame = self.load_frame()
+            self.main_frame.set_data(bf_frame)
+            self.plot_existing_outlines()
+
+        roi = bf_frame[
+            self.offset_left:self.offset_left + (self.region_width * 2),
+            self.offset_top:self.offset_top + (self.region_height * 2)
+        ]
+        self.fit_outline(
+            roi,
+            centre_offset_left=centre_offset_left,
+            centre_offset_top=centre_offset_top,
+        )
 
     def _delete_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
@@ -496,6 +497,7 @@ class Toolbar(NavigationToolbar):
             (None, None, None, None),
             ("Save", "Save view", "filesave_large", "save_figure"),
             (None, None, None, None),
+            ("Accept", "Accept outline", "accept", "accept"),
             ("Delete", "Delete outline", "delete", "delete"),
             ("Refine", "Refine outline", "recycle", "refine"),
         ]
@@ -520,6 +522,10 @@ class Toolbar(NavigationToolbar):
 
     def refine(self):
         self.canvas._refine_event()
+
+    def accept(self):
+        self.canvas._accept_event()
+
 
 class Outliner:
     def __init__(self, experiment_data, image_loader):
