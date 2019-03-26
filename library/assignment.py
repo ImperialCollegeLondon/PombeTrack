@@ -902,12 +902,12 @@ class Assigner:
             parent_cell = database.getCellById(parent_cell_id)
             wildtype = parent_cell and parent_cell.is_wildtype or False
 
-        if self.lineage[-1].child_id2:
+        if len(self.selected_outlines) == 2:
             child_cell_id1 = database.getOutlineById(
-                self.lineage[-1].child_id1
+                self.selected_outlines[0].outline_id
             ).cell_id
             child_cell_id2 = database.getOutlineById(
-                self.lineage[-1].child_id2
+                self.selected_outlines[1].outline_id
             ).cell_id
 
         existing = database.getCellById(cell_id)
@@ -920,7 +920,7 @@ class Assigner:
             "start_frame_idx": int(self.lineage[0].frame_idx),
             "end_frame_idx": int(self.lineage[-1].frame_idx),
             "birth_observed": self.lineage[0].parent_id is not None,
-            "division_observed": self.lineage[-1].child_id2 is not None,
+            "division_observed": len(self.selected_outlines) == 2,
             "is_wildtype": wildtype,
             "first_outline_id": self.lineage[0].outline_id,
             "last_outline_id": self.lineage[-1].outline_id,
