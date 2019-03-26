@@ -245,6 +245,19 @@ class Plotter(FigureCanvas):
         self.main_frame.set_clim([new_im.min(), new_im.max()])
         self.draw()
 
+    def _frame_change(self, delta):
+        if delta < 0 and self.current_frame_idx <= 0:
+            return
+
+        if delta > 0 and self.current_frame_idx >= self.num_frames - 1:
+            return
+
+        self.current_frame_idx += delta
+        new_im = self.load_frame()
+        self.main_frame.set_data(new_im)
+        self.plot_existing_outlines()
+        self.main_frame.set_clim([new_im.min(), new_im.max()])
+        self.draw()
 
     def _key_press_event(self, evt):
         if evt.key == "left":
@@ -254,22 +267,10 @@ class Plotter(FigureCanvas):
             self._channel_change(1)
 
         elif evt.key == "up":
-            if self.current_frame_idx >= self.num_frames - 1:
-                return
-            self.current_frame_idx += 1
-            new_im = self.load_frame()
-            self.main_frame.set_data(new_im)
-            self.plot_existing_outlines()
-            self.draw()
+            self._frame_change(1)
 
         elif evt.key == "down":
-            if self.current_frame_idx <= 0:
-                return
-            self.current_frame_idx -= 1
-            new_im = self.load_frame()
-            self.main_frame.set_data(new_im)
-            self.plot_existing_outlines()
-            self.draw()
+            self._frame_change(-1)
 
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
@@ -509,6 +510,8 @@ class Toolbar(NavigationToolbar):
             (None, None, None, None),
             ("ChannelLeft", "Previous channel", "channel_prev", "channel_prev"),
             ("ChannelRight", "Next channel", "channel_next", "channel_next"),
+            ("FrameUp", "Next frame", "frame_next", "frame_next"),
+            ("FrameDown", "Previous frame", "frame_prev", "frame_prev"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
@@ -543,6 +546,12 @@ class Toolbar(NavigationToolbar):
 
     def channel_next(self):
         self.canvas._channel_change(1)
+
+    def frame_next(self):
+        self.canvas._frame_change(1)
+
+    def frame_prev(self):
+        self.canvas._frame_change(-1)
 
 
 class Outliner:
