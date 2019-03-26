@@ -87,7 +87,7 @@ class Plotter(FigureCanvas):
             frame_idx = self.current_frame_idx
 
         if frame_idx < 0 or frame_idx > (self.num_frames - 1):
-            return
+            return np.zeros((100, 100))
 
         return self.image_loader.load_frame(frame_idx, self.current_channel)
 
@@ -298,10 +298,22 @@ class Plotter(FigureCanvas):
             (self.offset_left, self.offset_top,
              centre_offset_left, centre_offset_top) = self.get_offsets(centre)
 
-            self.current_frame_idx += 1
-            bf_frame = self.load_frame()
-            self.main_frame.set_data(bf_frame)
-            self.plot_existing_outlines()
+            if self.current_frame_idx == self.num_frames - 1:
+                bf_frame = self.load_frame()
+                self.main_frame.set_data(bf_frame)
+                self.outline_id = None
+                self.balloon_obj = None
+                self.dragging = False
+                self.subfigure_patches = []
+                self.plot_existing_outlines()
+                self.draw()
+                return
+            else:
+                self.current_frame_idx += 1
+                bf_frame = self.load_frame()
+                self.main_frame.set_data(bf_frame)
+                self.plot_existing_outlines()
+
             roi = bf_frame[
                 self.offset_left:self.offset_left + (self.region_width * 2),
                 self.offset_top:self.offset_top + (self.region_height * 2)
