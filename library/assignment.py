@@ -686,6 +686,16 @@ class Assigner:
 
         self.exit_assignment()
 
+    def get_cell_area(self, coords):
+        area = np.dot(
+            coords[:, 0],
+            np.roll(coords[:, 1], 1)
+        ) - np.dot(
+            coords[:, 1],
+            np.roll(coords[:, 0], 1)
+        )
+        return area
+
     def previous_frame(self):
         if (hasattr(self, "lineage") and len(self.lineage) <= 1):
             return
@@ -700,8 +710,27 @@ class Assigner:
 
         if len(self.selected_outlines) == 1:
             # next frame
-            self.lineage.append(self.selected_outlines[0])
+            outline = self.selected_outlines[0]
+            coords_current = np.load(outline.coords_path)
+            area_current = self.get_cell_area(coords_current)
+            coords_prev = np.load(self.lineage[-1].coords_path)
+            area_prev = self.get_cell_area(coords_prev)
+            if (area_current / area_prev < 0.7 or
+                    area_prev / area_current < 0.7):
+                confirm = QtWidgets.QMessageBox().question(
+                    self.window,
+                    "Confirm assignment",
+                    ("The outline you have selected causes a greater than 70% change in cell area.\n"
+                     "Are you sure you wish to assign it to the same cell?"),
+                    QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+                    QtWidgets.QMessageBox.No,
+                )
+                if confirm == QtWidgets.QMessageBox.No:
+                    return
+
+            self.lineage.append(outline)
             self.display_frame()
+
         elif len(self.selected_outlines) > 2:
             print("> 2")
             self.status_bar.showMessage(
