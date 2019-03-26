@@ -272,7 +272,7 @@ class Plotter(FigureCanvas):
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
 
-        elif evt.key == "d" and self.subfigure_patches:
+        elif (evt.key == "d" or evt.key == "delete") and self.subfigure_patches:
             self._delete_event()
 
         elif evt.key == "." and self.subfigure_patches:
