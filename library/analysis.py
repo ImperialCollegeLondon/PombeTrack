@@ -457,7 +457,10 @@ class NuclearVerifier:
         lineage_layout = QtWidgets.QVBoxLayout()
 
         for cell_id in self.nuclei.cell_id.unique():
-            outlines = database.getOutlinesByCellId(cell_id)
+            outlines = sorted(
+                database.getOutlinesByCellId(cell_id),
+                key=lambda x: x.frame_idx,
+            )
             nuclei = pd.DataFrame(database.getNucleiByCellId(cell_id))
 
             width = self.max_width_px * 0.1
