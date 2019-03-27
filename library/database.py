@@ -183,6 +183,16 @@ def getNucleiByExperimentId(experiment_id):
     results = executeQuery(query, args, fetchmany=True)
     return [NucleusRow(x) for x in results]
 
+def getNucleiByCellId(cell_id):
+    query = """
+    SELECT *
+    FROM nuclei
+    WHERE cell_id = ?;
+    """
+    args = (cell_id,)
+    results = executeQuery(query, args, fetchmany=True)
+    return [NucleusRow(x) for x in results]
+
 def deleteNucleiByExperimentId(experiment_id):
     query = """
     DELETE

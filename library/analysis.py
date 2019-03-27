@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+import matplotlib
+matplotlib.use('Qt5Agg')
+import matplotlib.widgets
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib.figure
 import numpy as np
 import os
 import pandas as pd
@@ -96,7 +101,7 @@ class Analyser:
             reassign.clicked.connect(lambda: self.assign_nuclei())
             btn_row.addWidget(reassign)
             nuclei_btn = QtWidgets.QPushButton("Verify")
-            nuclei_btn.clicked.connect(lambda: self.verify_nuclei())
+            nuclei_btn.clicked.connect(lambda: self.verify_nuclei(nuclei))
             btn_row.addWidget(nuclei_btn)
             self.grid_layout.addLayout(btn_row, 2, 3)
 
@@ -191,5 +196,128 @@ class Analyser:
                 coords_path,
             )
 
-    def verify_nuclei(self):
-        print("Verify")
+    def verify_nuclei(self, nuclei):
+        verifier = NuclearVerifier(
+            self.experiment_view.window,
+            nuclei,
+            self.max_width_px,
+            self.max_height_px,
+            self.screen_dpi,
+            self.image_loader,
+        )
+        verifier.create_layout()
+
+
+class NuclearVerifier:
+    def __init__(self, parent_window, nuclei, max_width_px, max_height_px, screen_dpi, image_loader):
+        self.parent_window = parent_window
+        self.nuclei = nuclei
+        self.max_width_px = max_width_px
+        self.max_height_px = max_height_px
+        self.screen_dpi = screen_dpi
+        self.image_loader = image_loader
+
+        self.window = QtWidgets.QDialog(self.parent_window)
+        self.window.setModal(True)
+        self.window.setWindowTitle("Verify nuclei")
+        self.window.setGeometry(0, 60, 0.9 * self.max_width_px, 0.9 * self.max_height_px)
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.window.show()
+
+    def create_layout(self):
+        lineage_box = QtWidgets.QWidget()
+        lineage_layout = QtWidgets.QVBoxLayout()
+
+        for cell_id in self.nuclei.cell_id.unique():
+            outlines = database.getOutlinesByCellId(cell_id)
+            nuclei = pd.DataFrame(database.getNucleiByCellId(cell_id))
+
+            width = self.max_width_px * 0.1
+            cell_plot = Plotter(
+                self.window,
+                width=(width * len(outlines)) / self.screen_dpi,
+                height=width / self.screen_dpi,
+                dpi=self.screen_dpi,
+                subplots=len(outlines),
+            )
+            for ax, outline in zip(cell_plot.axes, outlines):
+                c3 = self.image_loader.load_frame(outline.frame_idx, 2)
+                im = c3[
+                    outline.offset_left:outline.offset_left + 150,
+                    outline.offset_top:outline.offset_top + 150,
+                ]
+                ax.imshow(im, cmap="binary")
+                c = np.load(outline.coords_path)
+                outline_poly = matplotlib.patches.Polygon(
+                    np.array([c[:, 1], c[:, 0]]).T,
+                    edgecolor="b",
+                    fill=False,
+                    lw=1,
+                    linestyle="--",
+                )
+                ax.add_patch(outline_poly)
+
+                outline_nuclei = nuclei[nuclei.outline_id == outline.outline_id]
+                if len(outline_nuclei) > 2:
+                    c = "r"
+                else:
+                    c = "y"
+
+                for _, nucleus in outline_nuclei.iterrows():
+                    n = np.load(nucleus.coords_path) - np.array([
+                        outline.offset_left,
+                        outline.offset_top,
+                    ])
+                    n_poly = matplotlib.patches.Polygon(
+                        np.array([n[:, 1], n[:, 0]]).T,
+                        edgecolor=c,
+                        fill=False,
+                        lw=1,
+                    )
+                    ax.add_patch(n_poly)
+
+            cell_scroll_area = QtWidgets.QScrollArea()
+            cell_scroll_area.verticalScrollBar().setEnabled(False)
+            cell_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            cell_scroll_area.setAlignment(QtCore.Qt.AlignLeft)
+            cell_scroll_area.setWidget(cell_plot)
+
+            lineage_layout.addWidget(cell_scroll_area)
+
+        lineage_box.setLayout(lineage_layout)
+        lineage_box.setMinimumWidth(0.9 * self.max_width_px - 40)
+        lineage_box.setMaximumWidth(0.9 * self.max_width_px - 40)
+
+        lineage_scroll_area = QtWidgets.QScrollArea()
+        lineage_scroll_area.horizontalScrollBar().setEnabled(False)
+        lineage_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        lineage_scroll_area.setWidget(lineage_box)
+        self.main_layout.addWidget(lineage_scroll_area)
+
+        self.window.setLayout(self.main_layout)
+
+
+class Plotter(FigureCanvas):
+    def __init__(self, parent_window, width, height, dpi, subplots=3):
+        fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
+        self.axes = []
+        self.offsets = []
+        for sp in range(subplots):
+            ax = fig.add_subplot(1, subplots, sp + 1)
+            # ax.axis("off")
+            ax.set_xticks([], [])
+            ax.set_yticks([], [])
+            ax.set_aspect("equal")
+            ax.autoscale("off")
+            self.axes.append(ax)
+
+        FigureCanvas.__init__(self, fig)
+        self.setParent(parent_window)
+
+        FigureCanvas.setSizePolicy(
+            self,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding,
+        )
+        FigureCanvas.updateGeometry(self)
+        fig.tight_layout()
