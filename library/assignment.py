@@ -866,6 +866,10 @@ class Assigner:
             if i < len(self.lineage) - 1:
                 child_id1 = self.lineage[i + 1].outline_id
                 child_id2 = ""
+                database.updateOutlineById(
+                    child_id1,
+                    parent_id=outline.outline_id,
+                )
             else:
                 if len(self.selected_outlines) == 0:
                     child_id1 = ""
