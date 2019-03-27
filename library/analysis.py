@@ -221,10 +221,10 @@ class NuclearVerifier:
         self.window.setModal(True)
         self.window.setWindowTitle("Verify nuclei")
         self.window.setGeometry(0, 60, 0.9 * self.max_width_px, 0.9 * self.max_height_px)
-        self.main_layout = QtWidgets.QVBoxLayout()
         self.window.show()
 
     def create_layout(self):
+        self.main_layout = QtWidgets.QVBoxLayout()
         lineage_box = QtWidgets.QWidget()
         lineage_layout = QtWidgets.QVBoxLayout()
 
@@ -240,6 +240,7 @@ class NuclearVerifier:
                 dpi=self.screen_dpi,
                 subplots=len(outlines),
             )
+            cell_plot.mpl_connect("button_press_event", lambda x: print(x.button, x.inaxes))
             for ax, outline in zip(cell_plot.axes, outlines):
                 c3 = self.image_loader.load_frame(outline.frame_idx, 2)
                 im = c3[
