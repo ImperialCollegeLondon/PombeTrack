@@ -87,7 +87,7 @@ class Analyser:
         btn_row = QtWidgets.QHBoxLayout()
         if len(background_signals) != len(self.wildtype_outlines):
             recalc = QtWidgets.QPushButton("Re-calculate background")
-            recalc.clicked.connect(lambda: self.calculate_signal(self.wildtype_outlines, channel=2, replace=True, show_progress=True))
+            recalc.clicked.connect(lambda: self.recalculate_background())
             btn_row.addWidget(recalc)
 
         wildtype_associate = QtWidgets.QPushButton("Import wildtype outlines")
@@ -243,6 +243,9 @@ class Analyser:
         ) * px * px
         return area
 
+    def recalculate_background(self):
+        self.background = self.calculate_signal(self.wildtype_outlines, channel=2, replace=True, show_progress=True)
+        self.experiment_view._refreshLayout()
 
     def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False):
         bg_path = os.path.join("data", "signals", "C{0}-{1}.npy".format(
