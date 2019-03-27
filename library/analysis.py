@@ -123,18 +123,36 @@ class Analyser:
             btn_row.addWidget(nuclei_btn)
             self.grid_layout.addLayout(btn_row, 3, 2)
 
-        export_btn = QtWidgets.QPushButton("Export data")
+        export_btn = QtWidgets.QPushButton("Process data")
         export_btn.clicked.connect(lambda: self.export_data())
         self.grid_layout.addWidget(export_btn, 4, 2)
 
         self.main_layout.addLayout(self.grid_layout)
 
     def export_data(self):
+        self.c2_background = self.calculate_signal(self.wildtype_outlines, channel=1)
+        self.c3_background = self.background
         self.outlines["num_nuclei"] = 0
         self.outlines["time_h"] = 0
         self.outlines["mitosis_h"] = 0
         self.outlines["birth_h"] = 0
         self.outlines["cell_area"] = 0
+
+        self.outlines["total_cell_c2"] = 0
+        self.outlines["total_cell_c3"] = 0
+        self.outlines["norm_cell_c2"] = 0
+        self.outlines["norm_cell_c3"] = 0
+        self.outlines["total_nuclear1_c2"] = 0
+        self.outlines["total_nuclear1_c3"] = 0
+        self.outlines["total_nuclear2_c2"] = 0
+        self.outlines["total_nuclear2_c3"] = 0
+        self.outlines["norm_nuclear1_c2"] = 0
+        self.outlines["norm_nuclear1_c3"] = 0
+        self.outlines["norm_nuclear2_c2"] = 0
+        self.outlines["norm_nuclear2_c3"] = 0
+        self.outlines["total_nuclear_area"] = 0
+        self.outlines["nuclear_area1"] = 0
+        self.outlines["nuclear_area2"] = 0
 
         spacer = QtWidgets.QLabel("")
         self.main_layout.addWidget(spacer)
@@ -153,10 +171,12 @@ class Analyser:
         progress_bar.show()
         spacer.show()
 
+        ordered_outlines = []
         cell_data = []
         i = 1
         for _, cell in self.cells.iterrows():
             cell_outlines = self.get_cell_outlines(cell.cell_id)
+            ordered_outlines.extend(list(cell_outlines.outline_id))
 
             out_data = cell.to_dict()
             out_data["start_frame"] = cell.start_frame_idx + 1
@@ -177,7 +197,15 @@ class Analyser:
             ))
             i += 1
 
-        cell_data = pd.DataFrame(cell_data)
+        cell_data = pd.DataFrame(
+            cell_data,
+            columns=[
+                "cell_id", "experiment_id", "parent_cell_id", "child_cell_id1",
+                "child_cell_id2", "first_outline_id", "last_outline_id",
+                "start_frame", "end_frame", "interdivision_time", "birth_area",
+                "division_area", "growth_rate",
+            ]
+        )
         cell_data_path = os.path.join(
             "data", "output", "{0}-{1}-{2}-cell-data-{3}.xlsx".format(
                 self._data.date,
@@ -188,7 +216,53 @@ class Analyser:
         )
         if not os.path.exists(os.path.dirname(cell_data_path)):
             os.makedirs(os.path.dirname(cell_data_path))
+
         cell_data.to_excel(cell_data_path)
+
+        outline_data = []
+        progress_bar.setValue(0)
+        progress_text.setText("Exporting outline data ({0}/{1})".format(
+            0, len(self.outlines),
+        ))
+        for outline_id in ordered_outlines:
+            outline = self.outlines[self.outlines.outline_id == outline_id].iloc[0]
+            out_data = outline.to_dict()
+            for unwanted_col in [
+                "coords_path", "experiment_num", "frame_idx", "offset_left",
+                "offset_top", "outline_num",
+            ]:
+                del out_data[unwanted_col]
+            out_data["frame"] = outline.frame_idx + 1
+            outline_data.append(out_data)
+
+        outline_data = pd.DataFrame(
+            outline_data,
+            columns=[
+                "outline_id", "cell_id", "experiment_id", "parent_id",
+                "child_id1", "child_id2", "image_path", "coords_path",
+                "time_h", "birth_h", "mitosis_h", "frame", "cell_area",
+                "total_cell_c2", "total_cell_c3", "norm_cell_c2",
+                "norm_cell_c3", "num_nuclei", "total_nuclear_area",
+                "total_nuclear1_c2", "total_nuclear1_c3", "norm_nuclear1_c2",
+                "norm_nuclear1_c3", "nuclear_area1", "total_nuclear2_c2",
+                "total_nuclear2_c3", "norm_nuclear2_c2", "norm_nuclear2_c3",
+                "nuclear_area2",
+            ]
+        )
+
+        outline_data_path = os.path.join(
+            "data", "output", "{0}-{1}-{2}-outline-data-{3}.xlsx".format(
+                self._data.date,
+                self._data.strain,
+                self._data.medium,
+                self._data.experiment_id,
+            )
+        )
+        if not os.path.exists(os.path.dirname(outline_data_path)):
+            os.makedirs(os.path.dirname(outline_data_path))
+
+        outline_data.to_excel(outline_data_path)
+        self.experiment_view._refreshLayout()
 
     def get_cell_outlines(self, cell_id):
         cell_outlines = self.outlines[self.outlines.cell_id == cell_id].sort_values("frame_idx")
@@ -197,12 +271,70 @@ class Analyser:
         time_h = []
         num_nuclei = []
         cell_area = []
+        total_cell_c2 = []
+        total_cell_c3 = []
+        norm_cell_c2 = []
+        norm_cell_c3 = []
+        total_nuclear1_c2 = []
+        total_nuclear1_c3 = []
+        total_nuclear2_c2 = []
+        total_nuclear2_c3 = []
+        norm_nuclear1_c2 = []
+        norm_nuclear1_c3 = []
+        norm_nuclear2_c2 = []
+        norm_nuclear2_c3 = []
+        total_nuclear_area = []
+        nuclear_area1 = []
+        nuclear_area2 = []
         for _, outline in cell_outlines.iterrows():
             nuclei = database.getNucleiByOutlineId(outline.outline_id)
             num_nuclei.append(len(nuclei))
             time_h.append(outline.frame_idx / 6)
             birth_h.append((outline.frame_idx - cell_outlines.iloc[0].frame_idx) / 6)
-            cell_area.append(self.get_cell_area(outline))
+            this_cell_area = self.get_cell_area(outline)
+            cell_area.append(this_cell_area)
+
+            c2 = self.image_loader.load_frame(outline.frame_idx, 1) - self.c2_background
+            c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.c3_background
+            outline_coords = np.load(outline.coords_path) + np.array([
+                outline.offset_left,
+                outline.offset_top,
+            ])
+            c2_signal = self.get_signal_from_coords(outline_coords, c2)[0]
+            c3_signal = self.get_signal_from_coords(outline_coords, c3)[0]
+            total_cell_c2.append(c2_signal)
+            total_cell_c3.append(c3_signal)
+            norm_cell_c2.append(c2_signal / this_cell_area)
+            norm_cell_c3.append(c3_signal / this_cell_area)
+
+            this_total_nuclear_area = 0
+            for i, nucleus in enumerate(nuclei):
+                this_nuclear_coords = np.load(nucleus.coords_path)
+                this_nuclear_area = self.get_cell_area(this_nuclear_coords, is_coords=True)
+                this_total_nuclear_area += this_nuclear_area
+                c2_signal = self.get_signal_from_coords(this_nuclear_coords, c2)[0]
+                c3_signal = self.get_signal_from_coords(this_nuclear_coords, c3)[0]
+                if i == 0:
+                    total_nuclear1_c2.append(c2_signal)
+                    total_nuclear1_c3.append(c3_signal)
+                    norm_nuclear1_c2.append(c2_signal / this_nuclear_area)
+                    norm_nuclear1_c3.append(c3_signal / this_nuclear_area)
+                    nuclear_area1.append(this_nuclear_area)
+                elif i == 1:
+                    total_nuclear2_c2.append(c2_signal)
+                    total_nuclear2_c3.append(c3_signal)
+                    norm_nuclear2_c2.append(c2_signal / this_nuclear_area)
+                    norm_nuclear2_c3.append(c3_signal / this_nuclear_area)
+                    nuclear_area2.append(this_nuclear_area)
+
+            if len(nuclei) == 1:
+                total_nuclear2_c2.append(None)
+                total_nuclear2_c3.append(None)
+                norm_nuclear2_c2.append(None)
+                norm_nuclear2_c3.append(None)
+                nuclear_area2.append(None)
+
+            total_nuclear_area.append(this_total_nuclear_area)
 
         cell_outlines["num_nuclei"] = num_nuclei
         cell_outlines["time_h"] = time_h
@@ -210,15 +342,31 @@ class Analyser:
         two_nucl = cell_outlines[cell_outlines.num_nuclei >= 2].time_h.min()
         mitosis_h = cell_outlines.time_h - two_nucl
 
-        cell_outlines["mitosis_h"] = mitosis_h
-        cell_outlines["birth_h"] = birth_h
-        cell_outlines["cell_area"] = cell_area
-
-        self.outlines.loc[self.outlines.cell_id == cell_id, ["num_nuclei"]] = num_nuclei
-        self.outlines.loc[self.outlines.cell_id == cell_id, ["time_h"]] = time_h
-        self.outlines.loc[self.outlines.cell_id == cell_id, ["mitosis_h"]] = mitosis_h
-        self.outlines.loc[self.outlines.cell_id == cell_id, ["birth_h"]] = birth_h
-        self.outlines.loc[self.outlines.cell_id == cell_id, ["cell_area"]] = cell_area
+        for var, var_name in [
+            (birth_h, "birth_h"),
+            (time_h, "time_h"),
+            (num_nuclei, "num_nuclei"),
+            (mitosis_h, "mitosis_h"),
+            (num_nuclei, "num_nuclei"),
+            (cell_area, "cell_area"),
+            (total_cell_c2, "total_cell_c2"),
+            (total_cell_c3, "total_cell_c3"),
+            (norm_cell_c2, "norm_cell_c2"),
+            (norm_cell_c3, "norm_cell_c3"),
+            (total_nuclear1_c2, "total_nuclear1_c2"),
+            (total_nuclear1_c3, "total_nuclear1_c3"),
+            (total_nuclear2_c2, "total_nuclear2_c2"),
+            (total_nuclear2_c3, "total_nuclear2_c3"),
+            (norm_nuclear1_c2, "norm_nuclear1_c2"),
+            (norm_nuclear1_c3, "norm_nuclear1_c3"),
+            (norm_nuclear2_c2, "norm_nuclear2_c2"),
+            (norm_nuclear2_c3, "norm_nuclear2_c3"),
+            (total_nuclear_area, "total_nuclear_area"),
+            (nuclear_area1, "nuclear_area1"),
+            (nuclear_area2, "nuclear_area2"),
+        ]:
+            cell_outlines[var_name] = var
+            self.outlines.loc[self.outlines.cell_id == cell_id, [var_name]] = var
 
         return cell_outlines
 
@@ -247,7 +395,17 @@ class Analyser:
         self.background = self.calculate_signal(self.wildtype_outlines, channel=2, replace=True, show_progress=True)
         self.experiment_view._refreshLayout()
 
-    def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False):
+    def get_signal_from_coords(self, coords, img):
+        rr, cc = skimage.draw.polygon(
+            coords[:, 0], coords[:, 1]
+        )
+        blank = np.zeros_like(img)
+        blank[rr, cc] = img[rr, cc]
+        signal = blank.sum()
+        num_pixels = len(rr)
+        return signal, num_pixels
+
+    def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False, save=True):
         bg_path = os.path.join("data", "signals", "C{0}-{1}.npy".format(
             channel,
             self._data.experiment_id
@@ -281,13 +439,7 @@ class Analyser:
                     outline.offset_left,
                     outline.offset_top,
                 ])
-                cell_rr, cell_cc = skimage.draw.polygon(
-                    c[:, 0], c[:, 1]
-                )
-                blank = np.zeros_like(img)
-                blank[cell_rr, cell_cc] = img[cell_rr, cell_cc]
-                signal = blank.sum()
-                num_pixels = (blank > 0).flatten().sum()
+                signal, num_pixels = self.get_signal_from_coords(c, img)
                 signals[i] = signal / num_pixels
                 i += 1
                 if show_progress:
@@ -304,7 +456,9 @@ class Analyser:
 
             if len(signals) == 0:
                 signals = np.array([0])
-            np.save(bg_path, signals)
+
+            if save:
+                np.save(bg_path, signals)
 
         if stat is not None:
             return stat(signals)
@@ -401,7 +555,7 @@ class Analyser:
             # take the largest 2
             nuclei = sorted(
                 nuclei,
-                lambda x: x["nuclear_area"],
+                key=lambda x: x["nuclear_area"],
                 reverse=True,
             )[:2]
 
