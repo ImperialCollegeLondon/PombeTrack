@@ -62,26 +62,38 @@ class Analyser:
         self.outlines = all_outlines[
             all_outlines.cell_id.isin(cells.cell_id.unique())
         ]
-        self.wildtype_outlines = all_outlines[
-            all_outlines.cell_id.isin(wildtype.cell_id.unique())
-        ]
 
         self.grid_layout.addWidget(QtWidgets.QLabel("Cells observed from birth to division:"), 0, 0)
         self.grid_layout.addWidget(QtWidgets.QLabel("{0}".format(
             len(cells),
         )), 0, 1)
 
-        self.grid_layout.addWidget(QtWidgets.QLabel("Outlines (total):"), 1, 0)
-        self.grid_layout.addWidget(QtWidgets.QLabel("{0} ({1})".format(
+        self.grid_layout.addWidget(QtWidgets.QLabel("Outlines:"), 1, 0)
+        self.grid_layout.addWidget(QtWidgets.QLabel("{0}".format(
             len(self.outlines),
-            len(all_outlines) - len(self.wildtype_outlines),
         )), 1, 1)
 
-        self.grid_layout.addWidget(QtWidgets.QLabel("Wildtype outlines (cells):"), 2, 0)
+        self.wildtype_outlines = all_outlines[
+            all_outlines.cell_id.isin(wildtype.cell_id.unique())
+        ]
+        background_signals = self.calculate_signal(self.wildtype_outlines, stat=None, channel=2)
+        self.background = np.mean(background_signals)
+
+        self.grid_layout.addWidget(QtWidgets.QLabel("Wildtype outlines:"), 2, 0)
         self.grid_layout.addWidget(QtWidgets.QLabel("{0} ({1})".format(
             len(self.wildtype_outlines),
-            len(wildtype),
+            len(background_signals),
         )), 2, 1)
+        btn_row = QtWidgets.QHBoxLayout()
+        if len(background_signals) != len(self.wildtype_outlines):
+            recalc = QtWidgets.QPushButton("Re-calculate background")
+            recalc.clicked.connect(lambda: self.calculate_signal(self.wildtype_outlines, channel=2, replace=True, show_progress=True))
+            btn_row.addWidget(recalc)
+
+        wildtype_associate = QtWidgets.QPushButton("Import wildtype outlines")
+        wildtype_associate.clicked.connect(lambda: self.associate_wildtype())
+        btn_row.addWidget(wildtype_associate)
+        self.grid_layout.addLayout(btn_row, 2, 2)
 
         self.grid_layout.addWidget(QtWidgets.QLabel("Nuclei assigned:"), 3, 0)
         nuclei = pd.DataFrame(database.getNucleiByExperimentId(self._data.experiment_id))
@@ -112,6 +124,70 @@ class Analyser:
             self.grid_layout.addLayout(btn_row, 3, 2)
 
         self.main_layout.addLayout(self.grid_layout)
+
+    def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False):
+        bg_path = os.path.join("data", "signals", "C{0}-{1}.npy".format(
+            channel,
+            self._data.experiment_id
+        ))
+        if os.path.exists(bg_path) and not replace:
+            signals = np.load(bg_path)
+        else:
+            if show_progress:
+                progress_bar = QtWidgets.QProgressBar()
+                progress_bar.setMaximum(100)
+                progress_bar.setMinimum(0)
+                progress_bar.setValue(0)
+                self.main_layout.addWidget(QtWidgets.QLabel(""))
+                self.main_layout.addWidget(progress_bar)
+                progress_bar.show()
+                comment = QtWidgets.QLabel("Determining background ({0}/{1})".format(
+                    0, len(outlines),
+                ))
+                self.main_layout.addWidget(comment)
+                comment.show()
+
+            if not os.path.exists(os.path.dirname(bg_path)):
+                os.makedirs(os.path.dirname(bg_path))
+
+            signals = np.zeros(len(outlines))
+
+            i = 0
+            for _, outline in outlines.iterrows():
+                img = self.image_loader.load_frame(outline.frame_idx, channel)
+                c = np.load(outline.coords_path) + np.array([
+                    outline.offset_left,
+                    outline.offset_top,
+                ])
+                cell_rr, cell_cc = skimage.draw.polygon(
+                    c[:, 0], c[:, 1]
+                )
+                blank = np.zeros_like(img)
+                blank[cell_rr, cell_cc] = img[cell_rr, cell_cc]
+                signal = blank.sum()
+                num_pixels = (blank > 0).flatten().sum()
+                signals[i] = signal / num_pixels
+                i += 1
+                if show_progress:
+                    progress_bar.setValue(100 * i / len(outlines))
+                    comment.setText("Determining background ({0}/{1})".format(
+                        i, len(outlines)
+                    ))
+
+            if show_progress:
+                progress_bar.hide()
+                progress_bar.deleteLater()
+                comment.hide()
+                comment.deleteLater()
+
+            if len(signals) == 0:
+                signals = np.array([0])
+            np.save(bg_path, signals)
+
+        if stat is not None:
+            return stat(signals)
+        else:
+            return signals
 
     def assign_nuclei(self, existing=None):
         if self.ASSIGNING:
@@ -151,7 +227,7 @@ class Analyser:
         self.experiment_view._refreshLayout()
 
     def define_nucleus(self, outline):
-        c3 = self.image_loader.load_frame(outline.frame_idx, 2)
+        c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
         c = np.load(outline.coords_path) + np.array([
             outline.offset_left,
             outline.offset_top,
@@ -204,18 +280,23 @@ class Analyser:
             self.max_height_px,
             self.screen_dpi,
             self.image_loader,
+            self.background
         )
         verifier.create_layout()
 
+    def associate_wildtype(self):
+        print("Associate")
+
 
 class NuclearVerifier:
-    def __init__(self, parent_window, nuclei, max_width_px, max_height_px, screen_dpi, image_loader):
+    def __init__(self, parent_window, nuclei, max_width_px, max_height_px, screen_dpi, image_loader, background):
         self.parent_window = parent_window
         self.nuclei = nuclei
         self.max_width_px = max_width_px
         self.max_height_px = max_height_px
         self.screen_dpi = screen_dpi
         self.image_loader = image_loader
+        self.background = background
 
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
@@ -242,7 +323,7 @@ class NuclearVerifier:
             )
             cell_plot.mpl_connect("button_press_event", lambda x: print(x.button, x.inaxes))
             for ax, outline in zip(cell_plot.axes, outlines):
-                c3 = self.image_loader.load_frame(outline.frame_idx, 2)
+                c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
                 im = c3[
                     outline.offset_left:outline.offset_left + 150,
                     outline.offset_top:outline.offset_top + 150,
