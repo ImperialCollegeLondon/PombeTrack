@@ -342,7 +342,7 @@ class Assigner:
     def get_child_ids(self, cell_id):
         this_cell = database.getCellById(cell_id)
         cell_ids = []
-        if this_cell.child_cell_id1:
+        if this_cell and this_cell.child_cell_id1:
             cell_ids.append(this_cell.child_cell_id1)
             cell_ids.extend(self.get_child_ids(this_cell.child_cell_id1))
             cell_ids.append(this_cell.child_cell_id2)
