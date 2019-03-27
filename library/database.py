@@ -183,6 +183,15 @@ def getNucleiByExperimentId(experiment_id):
     results = executeQuery(query, args, fetchmany=True)
     return [NucleusRow(x) for x in results]
 
+def deleteNucleiByExperimentId(experiment_id):
+    query = """
+    DELETE
+    FROM nuclei
+    WHERE experiment_id = ?;
+    """
+    args = (experiment_id,)
+    executeQuery(query, args, commit=True)
+
 def createCellsTable():
     query = "CREATE TABLE cells ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])

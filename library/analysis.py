@@ -128,6 +128,9 @@ class Analyser:
         self.main_layout.addWidget(comment)
         comment.show()
 
+        if existing is None:
+            database.deleteNucleiByExperimentId(self._data.experiment_id)
+
         i = 1
         for _, outline in self.outlines.iterrows():
             if existing is None or (existing is not None and len(existing[existing.outline_id == outline.outline_id]) == 0):
