@@ -362,7 +362,9 @@ class Analyser:
         blank = skimage.morphology.dilation(blank)
         labels = skimage.measure.label(blank)
         labels = skimage.morphology.remove_small_objects(labels, 100)
+        px = self.image_loader.get_pixel_conversion()
 
+        nuclei = []
         for label in np.unique(labels):
             if label == 0:
                 continue
@@ -379,16 +381,39 @@ class Analyser:
                 outline.outline_id,
                 "{0}.npy".format(nucleus_id),
             )
-            if not os.path.exists(os.path.dirname(coords_path)):
-                os.makedirs(os.path.dirname(coords_path))
+            nuclei.append({
+                "nucleus_id": nucleus_id,
+                "outline_id": outline.outline_id,
+                "cell_id": outline.cell_id,
+                "experiment_id": outline.experiment_id,
+                "coords": coords,
+                "coords_path": coords_path,
+                "nuclear_area": 0.5 * np.abs(
+                    np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) -
+                    np.dot(coords[:, 1], np.roll(coords[:, 0], 1))
+                ) * px * px,
+            })
 
-            np.save(coords_path, coords)
+        if len(nuclei) > 2:
+            # take the largest 2
+            nuclei = sorted(
+                nuclei,
+                lambda x: x["nuclear_area"],
+                reverse=True,
+            )[:2]
+
+
+        if not os.path.exists(os.path.dirname(coords_path)):
+            os.makedirs(os.path.dirname(coords_path))
+
+        for nucleus in nuclei:
+            np.save(nucleus["coords_path"], nucleus["coords"])
             database.insertNucleus(
-                nucleus_id,
-                outline.outline_id,
-                outline.cell_id,
-                outline.experiment_id,
-                coords_path,
+                nucleus["nucleus_id"],
+                nucleus["outline_id"],
+                nucleus["cell_id"],
+                nucleus["experiment_id"],
+                nucleus["coords_path"],
             )
 
     def verify_nuclei(self, nuclei):
