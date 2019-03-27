@@ -77,7 +77,13 @@ class Analyser:
             len(all_outlines) - len(self.wildtype_outlines),
         )), 1, 1)
 
-        self.grid_layout.addWidget(QtWidgets.QLabel("Nuclei assigned:"), 2, 0)
+        self.grid_layout.addWidget(QtWidgets.QLabel("Wildtype outlines (cells):"), 2, 0)
+        self.grid_layout.addWidget(QtWidgets.QLabel("{0} ({1})".format(
+            len(self.wildtype_outlines),
+            len(wildtype),
+        )), 2, 1)
+
+        self.grid_layout.addWidget(QtWidgets.QLabel("Nuclei assigned:"), 3, 0)
         nuclei = pd.DataFrame(database.getNucleiByExperimentId(self._data.experiment_id))
         if len(nuclei) == 0:
             nuclei = pd.DataFrame(columns=[x[0] for x in database.NucleusRow.COLS])
@@ -87,14 +93,14 @@ class Analyser:
         num_nuclei_label = QtWidgets.QLabel("{0}".format(
             num_nuclei,
         ))
-        self.grid_layout.addWidget(num_nuclei_label, 2, 1)
+        self.grid_layout.addWidget(num_nuclei_label, 3, 1)
         if num_nuclei < len(self.outlines):
             num_nuclei_label.setText("<font color='red'>{0}</font>".format(
                 num_nuclei,
             ))
             nuclei_btn = QtWidgets.QPushButton("Assign")
             nuclei_btn.clicked.connect(lambda: self.assign_nuclei(nuclei))
-            self.grid_layout.addWidget(nuclei_btn, 2, 2)
+            self.grid_layout.addWidget(nuclei_btn, 3, 2)
         else:
             btn_row = QtWidgets.QHBoxLayout()
             reassign = QtWidgets.QPushButton("Re-assign")
@@ -103,13 +109,7 @@ class Analyser:
             nuclei_btn = QtWidgets.QPushButton("Verify")
             nuclei_btn.clicked.connect(lambda: self.verify_nuclei(nuclei))
             btn_row.addWidget(nuclei_btn)
-            self.grid_layout.addLayout(btn_row, 2, 3)
-
-        self.grid_layout.addWidget(QtWidgets.QLabel("Wildtype outlines (cells):"), 3, 0)
-        self.grid_layout.addWidget(QtWidgets.QLabel("{0} ({1})".format(
-            len(self.wildtype_outlines),
-            len(wildtype),
-        )))
+            self.grid_layout.addLayout(btn_row, 3, 2)
 
         self.main_layout.addLayout(self.grid_layout)
 
