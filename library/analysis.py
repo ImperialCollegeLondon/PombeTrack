@@ -40,14 +40,14 @@ class Analyser:
         self.grid_layout = QtWidgets.QGridLayout()
         self.grid_layout.setHorizontalSpacing(100)
 
-        cells = pd.DataFrame(database.getCellsByExperimentId(
+        self.cells = pd.DataFrame(database.getCellsByExperimentId(
             self._data.experiment_id,
             birth_observed=True,
             division_observed=True,
             is_wildtype=False,
         ))
-        if len(cells) == 0:
-            cells = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
+        if len(self.cells) == 0:
+            self.cells = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
 
         wildtype = pd.DataFrame(database.getCellsByExperimentId(
             self._data.experiment_id,
@@ -60,12 +60,12 @@ class Analyser:
             self._data.experiment_id,
         ))
         self.outlines = all_outlines[
-            all_outlines.cell_id.isin(cells.cell_id.unique())
+            all_outlines.cell_id.isin(self.cells.cell_id.unique())
         ]
 
         self.grid_layout.addWidget(QtWidgets.QLabel("Cells observed from birth to division:"), 0, 0)
         self.grid_layout.addWidget(QtWidgets.QLabel("{0}".format(
-            len(cells),
+            len(self.cells),
         )), 0, 1)
 
         self.grid_layout.addWidget(QtWidgets.QLabel("Outlines:"), 1, 0)
@@ -123,7 +123,126 @@ class Analyser:
             btn_row.addWidget(nuclei_btn)
             self.grid_layout.addLayout(btn_row, 3, 2)
 
+        export_btn = QtWidgets.QPushButton("Export data")
+        export_btn.clicked.connect(lambda: self.export_data())
+        self.grid_layout.addWidget(export_btn, 4, 2)
+
         self.main_layout.addLayout(self.grid_layout)
+
+    def export_data(self):
+        self.outlines["num_nuclei"] = 0
+        self.outlines["time_h"] = 0
+        self.outlines["mitosis_h"] = 0
+        self.outlines["birth_h"] = 0
+        self.outlines["cell_area"] = 0
+
+        spacer = QtWidgets.QLabel("")
+        self.main_layout.addWidget(spacer)
+
+        progress_bar = QtWidgets.QProgressBar()
+        progress_bar.setMaximum(100)
+        progress_bar.setMinimum(0)
+        progress_bar.setValue(0)
+        self.main_layout.addWidget(progress_bar)
+
+        progress_text = QtWidgets.QLabel("Exporting cell data ({0}/{1})".format(
+            0, len(self.cells),
+        ))
+        self.main_layout.addWidget(progress_text)
+        progress_text.show()
+        progress_bar.show()
+        spacer.show()
+
+        cell_data = []
+        i = 1
+        for _, cell in self.cells.iterrows():
+            cell_outlines = self.get_cell_outlines(cell.cell_id)
+
+            out_data = cell.to_dict()
+            out_data["start_frame"] = cell.start_frame_idx + 1
+            out_data["end_frame"] = cell.end_frame_idx + 1
+
+            for var in ["start_frame_idx", "end_frame_idx", "birth_observed", "division_observed", "cell_num", "is_wildtype"]:
+                del out_data[var]
+
+            out_data["growth_rate"] = self.get_growth_rate(cell_outlines)
+            out_data["interdivision_time"] = self.get_interdivision_time(cell_outlines)
+            out_data["birth_area"] = cell_outlines.iloc[0].cell_area
+            out_data["division_area"] = cell_outlines.iloc[-1].cell_area
+            cell_data.append(out_data)
+
+            progress_bar.setValue(100 * i / len(self.cells))
+            progress_text.setText("Exporting cell data ({0}/{1})".format(
+                i, len(self.cells),
+            ))
+            i += 1
+
+        cell_data = pd.DataFrame(cell_data)
+        cell_data_path = os.path.join(
+            "data", "output", "{0}-{1}-{2}-cell-data-{3}.xlsx".format(
+                self._data.date,
+                self._data.strain,
+                self._data.medium,
+                self._data.experiment_id,
+            )
+        )
+        if not os.path.exists(os.path.dirname(cell_data_path)):
+            os.makedirs(os.path.dirname(cell_data_path))
+        cell_data.to_excel(cell_data_path)
+
+    def get_cell_outlines(self, cell_id):
+        cell_outlines = self.outlines[self.outlines.cell_id == cell_id].sort_values("frame_idx")
+
+        birth_h = []
+        time_h = []
+        num_nuclei = []
+        cell_area = []
+        for _, outline in cell_outlines.iterrows():
+            nuclei = database.getNucleiByOutlineId(outline.outline_id)
+            num_nuclei.append(len(nuclei))
+            time_h.append(outline.frame_idx / 6)
+            birth_h.append((outline.frame_idx - cell_outlines.iloc[0].frame_idx) / 6)
+            cell_area.append(self.get_cell_area(outline))
+
+        cell_outlines["num_nuclei"] = num_nuclei
+        cell_outlines["time_h"] = time_h
+
+        two_nucl = cell_outlines[cell_outlines.num_nuclei >= 2].time_h.min()
+        mitosis_h = cell_outlines.time_h - two_nucl
+
+        cell_outlines["mitosis_h"] = mitosis_h
+        cell_outlines["birth_h"] = birth_h
+        cell_outlines["cell_area"] = cell_area
+
+        self.outlines.loc[self.outlines.cell_id == cell_id, ["num_nuclei"]] = num_nuclei
+        self.outlines.loc[self.outlines.cell_id == cell_id, ["time_h"]] = time_h
+        self.outlines.loc[self.outlines.cell_id == cell_id, ["mitosis_h"]] = mitosis_h
+        self.outlines.loc[self.outlines.cell_id == cell_id, ["birth_h"]] = birth_h
+        self.outlines.loc[self.outlines.cell_id == cell_id, ["cell_area"]] = cell_area
+
+        return cell_outlines
+
+    def get_growth_rate(self, outlines):
+        pre_mitotic = outlines[outlines.mitosis_h <= 0]
+        gamma, log_A0 = np.polyfit(pre_mitotic.birth_h, np.log(pre_mitotic.cell_area), 1)
+        return gamma
+
+    def get_interdivision_time(self, outlines):
+        return outlines.birth_h.iloc[-1]
+
+    def get_cell_area(self, outline, is_coords=False):
+        if not is_coords:
+            coords = np.load(outline.coords_path)
+        else:
+            coords = outline
+
+        px = self.image_loader.get_pixel_conversion()
+        area = 0.5 * np.abs(
+            np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) -
+            np.dot(coords[:, 1], np.roll(coords[:, 0], 1))
+        ) * px * px
+        return area
+
 
     def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False):
         bg_path = os.path.join("data", "signals", "C{0}-{1}.npy".format(
