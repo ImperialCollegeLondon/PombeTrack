@@ -182,7 +182,8 @@ class Analyser:
             out_data["start_frame"] = cell.start_frame_idx + 1
             out_data["end_frame"] = cell.end_frame_idx + 1
 
-            for var in ["start_frame_idx", "end_frame_idx", "birth_observed", "division_observed", "cell_num", "is_wildtype"]:
+            for var in ["start_frame_idx", "end_frame_idx", "birth_observed",
+                        "division_observed", "cell_num", "is_wildtype"]:
                 del out_data[var]
 
             out_data["growth_rate"] = self.get_growth_rate(cell_outlines)
@@ -226,6 +227,7 @@ class Analyser:
         ))
         for outline_id in ordered_outlines:
             outline = self.outlines[self.outlines.outline_id == outline_id].iloc[0]
+
             out_data = outline.to_dict()
             for unwanted_col in [
                 "coords_path", "experiment_num", "frame_idx", "offset_left",
