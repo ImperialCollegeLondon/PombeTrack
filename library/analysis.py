@@ -569,7 +569,66 @@ class Analyser:
         verifier.create_layout()
 
     def associate_wildtype(self):
-        print("Associate")
+        experiments = database.getExperiments()
+
+        assoc_window = QtWidgets.QDialog(self.experiment_view.window)
+        assoc_window.setModal(True)
+        assoc_window.setWindowTitle("Associate wildtype outlines from another experiment")
+        assoc_window.setGeometry(0, 60, 500, 200)
+
+        table = QtWidgets.QTableWidget()
+        table.setRowCount(len(experiments) - 1)
+        table_headers = ["Date", "Medium", "Strain", "Wildtype outlines"]
+        table.setColumnCount(len(table_headers))
+        table.setHorizontalHeaderLabels(table_headers)
+
+        row_num = 0
+        for exp in experiments:
+            if exp.experiment_id == self._data.experiment_id:
+                continue
+
+            for col_num, var in enumerate(["date", "medium", "strain", "wildtype"]):
+                item = QtWidgets.QTableWidgetItem()
+
+                if var == "wildtype":
+                    # calculate number of wildtype cells
+                    wildtype = set([
+                        x.cell_id
+                        for x in database.getCellsByExperimentId(
+                            exp.experiment_id,
+                            is_wildtype=True,
+                        )
+                    ])
+                    outlines = database.getOutlinesByExperimentId(
+                        exp.experiment_id,
+                    )
+                    wt = 0
+                    for out in outlines:
+                        if out.cell_id in wildtype:
+                            wt += 1
+                    item.setText(str(wt))
+                else:
+                    item.setText(str(exp[var]))
+
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+                table.setItem(row_num, col_num, item)
+
+            row_num += 1
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(table)
+
+        btns = QtWidgets.QHBoxLayout()
+        ok_btn = QtWidgets.QPushButton("OK")
+        ok_btn.clicked.connect(lambda: assoc_window.close())
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn.clicked.connect(lambda: assoc_window.close())
+        btns.addWidget(ok_btn)
+        btns.addWidget(cancel_btn)
+        layout.addLayout(btns)
+
+        assoc_window.setLayout(layout)
+        assoc_window.show()
 
 
 class NuclearVerifier:
