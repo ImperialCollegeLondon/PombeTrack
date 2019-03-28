@@ -266,33 +266,12 @@ class Analyser:
 
     def get_cell_outlines(self, cell_id):
         cell_outlines = self.outlines[self.outlines.cell_id == cell_id].sort_values("frame_idx")
-
-        birth_h = []
-        time_h = []
-        num_nuclei = []
-        cell_area = []
-        total_cell_c2 = []
-        total_cell_c3 = []
-        norm_cell_c2 = []
-        norm_cell_c3 = []
-        total_nuclear1_c2 = []
-        total_nuclear1_c3 = []
-        total_nuclear2_c2 = []
-        total_nuclear2_c3 = []
-        norm_nuclear1_c2 = []
-        norm_nuclear1_c3 = []
-        norm_nuclear2_c2 = []
-        norm_nuclear2_c3 = []
-        total_nuclear_area = []
-        nuclear_area1 = []
-        nuclear_area2 = []
         for _, outline in cell_outlines.iterrows():
             nuclei = database.getNucleiByOutlineId(outline.outline_id)
-            num_nuclei.append(len(nuclei))
-            time_h.append(outline.frame_idx / 6)
-            birth_h.append((outline.frame_idx - cell_outlines.iloc[0].frame_idx) / 6)
-            this_cell_area = self.get_cell_area(outline)
-            cell_area.append(this_cell_area)
+            num_nuclei = len(nuclei)
+            time_h = outline.frame_idx / 6
+            birth_h = (outline.frame_idx - cell_outlines.iloc[0].frame_idx) / 6
+            cell_area = self.get_cell_area(outline)
 
             c2 = self.image_loader.load_frame(outline.frame_idx, 1) - self.c2_background
             c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.c3_background
@@ -302,76 +281,73 @@ class Analyser:
             ])
             c2_signal = self.get_signal_from_coords(outline_coords, c2)[0]
             c3_signal = self.get_signal_from_coords(outline_coords, c3)[0]
-            total_cell_c2.append(c2_signal)
-            total_cell_c3.append(c3_signal)
-            norm_cell_c2.append(c2_signal / this_cell_area)
-            norm_cell_c3.append(c3_signal / this_cell_area)
+            total_cell_c2 = c2_signal
+            total_cell_c3 = c3_signal
+            norm_cell_c2 = c2_signal / cell_area
+            norm_cell_c3 = c3_signal / cell_area
 
-            this_total_nuclear_area = 0
+            total_nuclear_area = 0
             for i, nucleus in enumerate(nuclei):
                 this_nuclear_coords = np.load(nucleus.coords_path)
                 this_nuclear_area = self.get_cell_area(this_nuclear_coords, is_coords=True)
-                this_total_nuclear_area += this_nuclear_area
+                total_nuclear_area += this_nuclear_area
                 c2_signal = self.get_signal_from_coords(this_nuclear_coords, c2)[0]
                 c3_signal = self.get_signal_from_coords(this_nuclear_coords, c3)[0]
                 if i == 0:
-                    total_nuclear1_c2.append(c2_signal)
-                    total_nuclear1_c3.append(c3_signal)
-                    norm_nuclear1_c2.append(c2_signal / this_nuclear_area)
-                    norm_nuclear1_c3.append(c3_signal / this_nuclear_area)
-                    nuclear_area1.append(this_nuclear_area)
+                    total_nuclear1_c2 = c2_signal
+                    total_nuclear1_c3 = c3_signal
+                    norm_nuclear1_c2 = c2_signal / this_nuclear_area
+                    norm_nuclear1_c3 = c3_signal / this_nuclear_area
+                    nuclear_area1 = this_nuclear_area
                 elif i == 1:
-                    total_nuclear2_c2.append(c2_signal)
-                    total_nuclear2_c3.append(c3_signal)
-                    norm_nuclear2_c2.append(c2_signal / this_nuclear_area)
-                    norm_nuclear2_c3.append(c3_signal / this_nuclear_area)
-                    nuclear_area2.append(this_nuclear_area)
+                    total_nuclear2_c2 = c2_signal
+                    total_nuclear2_c3 = c3_signal
+                    norm_nuclear2_c2 = c2_signal / this_nuclear_area
+                    norm_nuclear2_c3 = c3_signal / this_nuclear_area
+                    nuclear_area2 = this_nuclear_area
 
             if len(nuclei) == 1:
-                total_nuclear2_c2.append(None)
-                total_nuclear2_c3.append(None)
-                norm_nuclear2_c2.append(None)
-                norm_nuclear2_c3.append(None)
-                nuclear_area2.append(None)
+                total_nuclear2_c2 = None
+                total_nuclear2_c3 = None
+                norm_nuclear2_c2 = None
+                norm_nuclear2_c3 = None
+                nuclear_area2 = None
 
-            total_nuclear_area.append(this_total_nuclear_area)
-
-        cell_outlines["num_nuclei"] = num_nuclei
-        cell_outlines["time_h"] = time_h
+            for target in [cell_outlines, self.outlines]:
+                stuff = [
+                    ("num_nuclei", num_nuclei),
+                    ("time_h", time_h),
+                    ("birth_h", birth_h),
+                    ("cell_area", cell_area),
+                    ("total_cell_c2", total_cell_c2),
+                    ("total_cell_c3", total_cell_c3),
+                    ("norm_cell_c2", norm_cell_c2),
+                    ("norm_cell_c3", norm_cell_c3),
+                    ("total_nuclear1_c2", total_nuclear1_c2),
+                    ("total_nuclear1_c3", total_nuclear1_c3),
+                    ("norm_nuclear1_c2", norm_nuclear1_c2),
+                    ("norm_nuclear1_c3", norm_nuclear1_c3),
+                    ("nuclear_area1", nuclear_area1),
+                    ("total_nuclear2_c2", total_nuclear2_c2),
+                    ("total_nuclear2_c3", total_nuclear2_c3),
+                    ("norm_nuclear2_c2", norm_nuclear2_c2),
+                    ("norm_nuclear2_c3", norm_nuclear2_c3),
+                    ("nuclear_area2", nuclear_area2),
+                    ("total_nuclear_area", total_nuclear_area),
+                ]
+                target.loc[_, [x[0] for x in stuff]] = [x[1] for x in stuff]
 
         two_nucl = cell_outlines[cell_outlines.num_nuclei >= 2].time_h.min()
-        if time_h[-1] - two_nucl > 1.5:
+        if time_h - two_nucl > 1.5:
             two_nucl = cell_outlines[(
                 (cell_outlines.num_nuclei >= 2) &
                 (cell_outlines.time_h > cell_outlines.time_h.iloc[-1] - 1.5)
             )].time_h.min()
-        mitosis_h = cell_outlines.time_h - two_nucl
 
-        for var, var_name in [
-            (birth_h, "birth_h"),
-            (time_h, "time_h"),
-            (num_nuclei, "num_nuclei"),
-            (mitosis_h, "mitosis_h"),
-            (num_nuclei, "num_nuclei"),
-            (cell_area, "cell_area"),
-            (total_cell_c2, "total_cell_c2"),
-            (total_cell_c3, "total_cell_c3"),
-            (norm_cell_c2, "norm_cell_c2"),
-            (norm_cell_c3, "norm_cell_c3"),
-            (total_nuclear1_c2, "total_nuclear1_c2"),
-            (total_nuclear1_c3, "total_nuclear1_c3"),
-            (total_nuclear2_c2, "total_nuclear2_c2"),
-            (total_nuclear2_c3, "total_nuclear2_c3"),
-            (norm_nuclear1_c2, "norm_nuclear1_c2"),
-            (norm_nuclear1_c3, "norm_nuclear1_c3"),
-            (norm_nuclear2_c2, "norm_nuclear2_c2"),
-            (norm_nuclear2_c3, "norm_nuclear2_c3"),
-            (total_nuclear_area, "total_nuclear_area"),
-            (nuclear_area1, "nuclear_area1"),
-            (nuclear_area2, "nuclear_area2"),
-        ]:
-            cell_outlines[var_name] = var
-            self.outlines.loc[self.outlines.cell_id == cell_id, [var_name]] = var
+        mitosis_h = cell_outlines.time_h - two_nucl
+        cell_outlines["mitosis_h"] = mitosis_h
+        for _, outline in cell_outlines.iterrows():
+            self.outlines.loc[_, ["mitosis_h"]] = outline.mitosis_h
 
         return cell_outlines
 
