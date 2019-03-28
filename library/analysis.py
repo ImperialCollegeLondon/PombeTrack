@@ -340,6 +340,11 @@ class Analyser:
         cell_outlines["time_h"] = time_h
 
         two_nucl = cell_outlines[cell_outlines.num_nuclei >= 2].time_h.min()
+        if time_h[-1] - two_nucl > 1.5:
+            two_nucl = cell_outlines[(
+                (cell_outlines.num_nuclei >= 2) &
+                (cell_outlines.time_h > cell_outlines.time_h.iloc[-1] - 1.5)
+            )].time_h.min()
         mitosis_h = cell_outlines.time_h - two_nucl
 
         for var, var_name in [
