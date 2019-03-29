@@ -405,6 +405,7 @@ class Analyser:
 
     def recalculate_background(self):
         self.background = self.calculate_signal(self.wildtype_outlines, channel=2, replace=True, show_progress=True)
+        self.calculate_signal(self.wildtype_outlines, channel=1, replace=True, show_progress=True)
         self.experiment_view._refreshLayout()
 
     def get_signal_from_coords(self, coords, img):
