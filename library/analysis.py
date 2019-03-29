@@ -132,6 +132,9 @@ class Analyser:
         ]
 
         # get associations
+        if not database.checkTable("associations"):
+            database.createAssociationsTable()
+
         associations = database.getAssociationsByExperimentId(self._data.experiment_id, "wildtype")
         for association in associations:
             wt = pd.DataFrame(database.getCellsByExperimentId(
