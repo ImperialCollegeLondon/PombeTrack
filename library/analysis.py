@@ -375,8 +375,17 @@ class Analyser:
 
     def get_growth_rate(self, outlines):
         pre_mitotic = outlines[outlines.mitosis_h <= 0]
-        gamma, log_A0 = np.polyfit(pre_mitotic.birth_h, np.log(pre_mitotic.cell_area), 1)
-        return gamma
+        try:
+            gamma, log_A0 = np.polyfit(pre_mitotic.birth_h, np.log(pre_mitotic.cell_area), 1)
+        except:
+            print("ERROR:")
+            print("pre_mitotic:")
+            print(pre_mitotic)
+            print("birth_h:", pre_mitotic.birth_h)
+            print("cell_area:", pre_mitotic.cell_area)
+            return None
+        else:
+            return gamma
 
     def get_interdivision_time(self, outlines):
         return outlines.birth_h.iloc[-1]
