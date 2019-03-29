@@ -25,6 +25,16 @@ class Row(dict):
         return row
 
 
+class AssociationRow(Row):
+    COLS = [
+        ("association_num", "INTEGER PRIMARY KEY", int),
+        ("association_id", "TEXT", str),
+        ("experiment_id", "TEXT", str),
+        ("associated_experiment_id", "TEXT", str),
+        ("association_type", "TEXT", str),
+    ]
+
+
 class NucleusRow(Row):
     COLS = [
         ("nucleus_num", "INTEGER PRIMARY KEY", int),
@@ -156,6 +166,60 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createAssociationsTable():
+    query = "CREATE TABLE associations ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in AssociationRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertAssociation(association_id, experiment_id, associated_id, association_type):
+    query = """
+    INSERT INTO associations
+    (association_id, experiment_id, associated_experiment_id, association_type)
+    VALUES (?, ?, ?, ?);
+    """
+    args = (association_id, experiment_id, associated_id, association_type)
+    executeQuery(query, args, commit=True)
+
+def deleteAssociationById(association_id):
+    query = """
+    DELETE FROM associations
+    WHERE association_id = ?;
+    """
+    args = (association_id,)
+    executeQuery(query, args, commit=True)
+
+def getAssociationsByExperimentId(experiment_id, association_type):
+    query = """
+    SELECT *
+    FROM associations
+    WHERE experiment_id = ?
+      AND association_type = ?;
+    """
+    args = (experiment_id, association_type)
+    r = executeQuery(query, args, fetchmany=True)
+    return [AssociationRow(x) for x in r]
+
+def updateAssociationById(association_id, **kwargs):
+    args = []
+    set_statement = []
+    for kw, val in kwargs.items():
+        if kw not in [x[0] for x in AssociationRow.COLS]:
+            raise ValueError("Column name {0} is illegal".format(kw))
+        set_statement.append("{0} = ?".format(kw))
+        args.append(val)
+
+    set_string = ", ".join(set_statement)
+    args.append(association_id)
+
+    query = """
+    UPDATE cells
+    SET {0}
+    WHERE association_id = ?;
+    """.format(set_string)
+    executeQuery(query, args, commit=True)
 
 def createNucleiTable():
     query = "CREATE TABLE nuclei ({0});".format(",".join([

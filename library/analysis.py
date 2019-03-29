@@ -35,33 +35,11 @@ class Analyser:
         self.screen_dpi = screen_dpi
 
     def construct_box(self, layout):
+        self.get_outline_objects()
         self.main_layout = layout
 
         self.grid_layout = QtWidgets.QGridLayout()
         self.grid_layout.setHorizontalSpacing(100)
-
-        self.cells = pd.DataFrame(database.getCellsByExperimentId(
-            self._data.experiment_id,
-            birth_observed=True,
-            division_observed=True,
-            is_wildtype=False,
-        ))
-        if len(self.cells) == 0:
-            self.cells = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
-
-        wildtype = pd.DataFrame(database.getCellsByExperimentId(
-            self._data.experiment_id,
-            is_wildtype=True,
-        ))
-        if len(wildtype) == 0:
-            wildtype = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
-
-        all_outlines = pd.DataFrame(database.getOutlinesByExperimentId(
-            self._data.experiment_id,
-        ))
-        self.outlines = all_outlines[
-            all_outlines.cell_id.isin(self.cells.cell_id.unique())
-        ]
 
         self.grid_layout.addWidget(QtWidgets.QLabel("Cells observed from birth to division:"), 0, 0)
         self.grid_layout.addWidget(QtWidgets.QLabel("{0}".format(
@@ -73,9 +51,6 @@ class Analyser:
             len(self.outlines),
         )), 1, 1)
 
-        self.wildtype_outlines = all_outlines[
-            all_outlines.cell_id.isin(wildtype.cell_id.unique())
-        ]
         background_signals = self.calculate_signal(self.wildtype_outlines, stat=None, channel=2)
         self.background = np.mean(background_signals)
 
@@ -128,6 +103,51 @@ class Analyser:
         self.grid_layout.addWidget(export_btn, 4, 2)
 
         self.main_layout.addLayout(self.grid_layout)
+
+    def get_outline_objects(self):
+        self.cells = pd.DataFrame(database.getCellsByExperimentId(
+            self._data.experiment_id,
+            birth_observed=True,
+            division_observed=True,
+            is_wildtype=False,
+        ))
+        if len(self.cells) == 0:
+            self.cells = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
+
+        wildtype = pd.DataFrame(database.getCellsByExperimentId(
+            self._data.experiment_id,
+            is_wildtype=True,
+        ))
+        if len(wildtype) == 0:
+            wildtype = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
+
+        all_outlines = pd.DataFrame(database.getOutlinesByExperimentId(
+            self._data.experiment_id,
+        ))
+        self.outlines = all_outlines[
+            all_outlines.cell_id.isin(self.cells.cell_id.unique())
+        ]
+        self.wildtype_outlines = all_outlines[
+            all_outlines.cell_id.isin(wildtype.cell_id.unique())
+        ]
+
+        # get associations
+        associations = database.getAssociationsByExperimentId(self._data.experiment_id, "wildtype")
+        for association in associations:
+            wt = pd.DataFrame(database.getCellsByExperimentId(
+                association.associated_experiment_id,
+                is_wildtype=True,
+            ))
+            if len(wt) == 0:
+                wt = pd.DataFrame(columns=[x[0] for x in database.CellRow.COLS])
+
+            assoc_outlines = pd.DataFrame(database.getOutlinesByExperimentId(
+                association.associated_experiment_id
+            ))
+            wt_outlines = assoc_outlines[
+                assoc_outlines.cell_id.isin(wt.cell_id.unique())
+            ]
+            self.wildtype_outlines = self.wildtype_outlines.append(wt_outlines, ignore_index=True)
 
     def export_data(self):
         self.c2_background = self.calculate_signal(self.wildtype_outlines, channel=1)
@@ -569,26 +589,35 @@ class Analyser:
         verifier.create_layout()
 
     def associate_wildtype(self):
+        if not database.checkTable("associations"):
+            database.createAssociationsTable()
+
         experiments = database.getExperiments()
+        self.associations = database.getAssociationsByExperimentId(self._data.experiment_id, "wildtype")
+        self.associated_experiment_ids = [x.associated_experiment_id for x in self.associations]
 
         assoc_window = QtWidgets.QDialog(self.experiment_view.window)
         assoc_window.setModal(True)
         assoc_window.setWindowTitle("Associate wildtype outlines from another experiment")
-        assoc_window.setGeometry(0, 60, 500, 200)
+        assoc_window.setGeometry(0, 60, 700, 200)
 
         table = QtWidgets.QTableWidget()
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         table.setRowCount(len(experiments) - 1)
-        table_headers = ["Date", "Medium", "Strain", "Wildtype outlines"]
+        table_headers = ["Date", "Medium", "Strain", "Wildtype outlines", "Included"]
         table.setColumnCount(len(table_headers))
         table.setHorizontalHeaderLabels(table_headers)
 
         row_num = 0
+        table_items = []
         for exp in experiments:
+            row_items = []
             if exp.experiment_id == self._data.experiment_id:
                 continue
 
             for col_num, var in enumerate(["date", "medium", "strain", "wildtype"]):
                 item = QtWidgets.QTableWidgetItem()
+                item.setFlags(QtCore.Qt.ItemIsEnabled)
 
                 if var == "wildtype":
                     # calculate number of wildtype cells
@@ -611,8 +640,61 @@ class Analyser:
                     item.setText(str(exp[var]))
 
                 item.setTextAlignment(QtCore.Qt.AlignCenter)
-                table.setItem(row_num, col_num, item)
+                if exp.experiment_id in self.associated_experiment_ids:
+                    item.setData(
+                        QtCore.Qt.BackgroundRole,
+                        QtGui.QBrush(QtGui.QColor("green"))
+                    )
+                else:
+                    item.setData(
+                        QtCore.Qt.BackgroundRole,
+                        QtGui.QBrush(QtGui.QColor("white"))
+                    )
 
+                table.setItem(row_num, col_num, item)
+                row_items.append(item)
+
+            include_btn = QtWidgets.QPushButton(table)
+            include_btn._experiment_id = exp.experiment_id
+            include_btn._row_num = row_num
+            include_btn.setText("Include")
+
+            def _set_association():
+                sender = self.experiment_view.window.sender()
+                experiment_id = sender._experiment_id
+                row_num = sender._row_num
+                if experiment_id in self.associated_experiment_ids:
+                    association_id = [
+                        x.association_id
+                        for x in self.associations
+                        if x.associated_experiment_id == experiment_id
+                    ][0]
+                    database.deleteAssociationById(association_id)
+                    for col_num in range(len(table_headers) - 1):
+                        table_items[row_num][col_num].setData(
+                            QtCore.Qt.BackgroundRole,
+                            QtGui.QBrush(QtGui.QColor("white"))
+                        )
+                else:
+                    association_id = str(uuid.uuid4())
+                    database.insertAssociation(
+                        association_id,
+                        self._data.experiment_id,
+                        experiment_id,
+                        "wildtype",
+                    )
+                    for col_num in range(len(table_headers) - 1):
+                        table_items[row_num][col_num].setData(
+                            QtCore.Qt.BackgroundRole,
+                            QtGui.QBrush(QtGui.QColor("green"))
+                        )
+
+                self.associations = database.getAssociationsByExperimentId(self._data.experiment_id, "wildtype")
+                self.associated_experiment_ids = [x.associated_experiment_id for x in self.associations]
+
+            include_btn.clicked.connect(_set_association)
+            table.setCellWidget(row_num, 4, include_btn)
+            table_items.append(row_items)
             row_num += 1
 
         layout = QtWidgets.QVBoxLayout()
@@ -621,14 +703,12 @@ class Analyser:
         btns = QtWidgets.QHBoxLayout()
         ok_btn = QtWidgets.QPushButton("OK")
         ok_btn.clicked.connect(lambda: assoc_window.close())
-        cancel_btn = QtWidgets.QPushButton("Cancel")
-        cancel_btn.clicked.connect(lambda: assoc_window.close())
         btns.addWidget(ok_btn)
-        btns.addWidget(cancel_btn)
         layout.addLayout(btns)
 
         assoc_window.setLayout(layout)
         assoc_window.show()
+        assoc_window.finished.connect(lambda: self.experiment_view._refreshLayout())
 
 
 class NuclearVerifier:
