@@ -737,7 +737,7 @@ class NuclearVerifier:
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
         self.window.setWindowTitle("Verify nuclei")
-        self.window.setGeometry(0, 60, 0.9 * self.max_width_px, 0.9 * self.max_height_px)
+        self.window.setGeometry(0, 60, 0.5 * self.max_width_px, 0.9 * self.max_height_px)
         self.window.show()
 
     def create_layout(self):
@@ -806,8 +806,8 @@ class NuclearVerifier:
             lineage_layout.addWidget(cell_scroll_area)
 
         lineage_box.setLayout(lineage_layout)
-        lineage_box.setMinimumWidth(0.9 * self.max_width_px - 40)
-        lineage_box.setMaximumWidth(0.9 * self.max_width_px - 40)
+        lineage_box.setMinimumWidth(0.48 * self.max_width_px)
+        lineage_box.setMaximumWidth(0.48 * self.max_width_px)
 
         lineage_scroll_area = QtWidgets.QScrollArea()
         lineage_scroll_area.horizontalScrollBar().setEnabled(False)
