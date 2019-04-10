@@ -740,10 +740,33 @@ class NuclearVerifier:
         self.window.setGeometry(0, 60, 0.5 * self.max_width_px, 0.9 * self.max_height_px)
         self.window.show()
 
+    def _nucleus_press(self, evt):
+        if evt.inaxes is None:
+            return
+
+        elif evt.button != 1:
+            return
+
+        elif not hasattr(evt.inaxes, "_outline_id"):
+            return
+
+        outline_id = evt.inaxes._outline_id
+
+        ax = self.cell_plots[outline_id]["ax"]
+        plotter = self.cell_plots[outline_id]["plotter"]
+        outline = self.cell_plots[outline_id]["outline"]
+        nuclei = self.cell_plots[outline_id]["nuclei_patches"]
+        for n in nuclei:
+            n.remove()
+            del n
+
+        plotter.draw()
+
     def create_layout(self):
         self.main_layout = QtWidgets.QVBoxLayout()
         lineage_box = QtWidgets.QWidget()
         lineage_layout = QtWidgets.QVBoxLayout()
+        self.cell_plots = {}
 
         for cell_id in self.nuclei.cell_id.unique():
             outlines = sorted(
@@ -760,8 +783,10 @@ class NuclearVerifier:
                 dpi=self.screen_dpi,
                 subplots=len(outlines),
             )
-            cell_plot.mpl_connect("button_press_event", lambda x: print(x.button, x.inaxes))
+            cell_plot.mpl_connect("button_press_event", lambda x: self._nucleus_press(x))
             for ax, outline in zip(cell_plot.axes, outlines):
+                ax._outline_id = outline.outline_id
+
                 c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
                 im = c3[
                     outline.offset_left:outline.offset_left + 150,
@@ -784,6 +809,7 @@ class NuclearVerifier:
                 else:
                     c = "y"
 
+                nuclei_patches = []
                 for _, nucleus in outline_nuclei.iterrows():
                     n = np.load(nucleus.coords_path) - np.array([
                         outline.offset_left,
@@ -796,6 +822,14 @@ class NuclearVerifier:
                         lw=1,
                     )
                     ax.add_patch(n_poly)
+                    nuclei_patches.append(n_poly)
+
+                self.cell_plots[outline.outline_id] = {
+                    "ax": ax,
+                    "outline": outline,
+                    "plotter": cell_plot,
+                    "nuclei_patches": nuclei_patches,
+                }
 
             cell_scroll_area = QtWidgets.QScrollArea()
             cell_scroll_area.verticalScrollBar().setEnabled(False)
