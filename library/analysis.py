@@ -740,6 +740,8 @@ class NuclearVerifier:
         self.window.setGeometry(0, 60, 0.5 * self.max_width_px, 0.9 * self.max_height_px)
         self.window.show()
 
+        self.detail_window = None
+
     def _nucleus_press(self, evt):
         if evt.inaxes is None:
             return
@@ -750,17 +752,94 @@ class NuclearVerifier:
         elif not hasattr(evt.inaxes, "_outline_id"):
             return
 
+        elif self.detail_window is not None:
+            return
+
+        elif hasattr(evt.inaxes, "_is_selected") and evt.inaxes._is_selected:
+            return
+            evt.inaxes._is_selected = False
+            # deselect everything!
+
         outline_id = evt.inaxes._outline_id
 
         ax = self.cell_plots[outline_id]["ax"]
+        ax._is_selected = True
         plotter = self.cell_plots[outline_id]["plotter"]
         outline = self.cell_plots[outline_id]["outline"]
-        nuclei = self.cell_plots[outline_id]["nuclei_patches"]
-        for n in nuclei:
-            n.remove()
-            del n
+        # nuclei = self.cell_plots[outline_id]["nuclei_patches"]
+        # for n in nuclei:
+        #     n.remove()
+        #     del n
+
+        for sp in ["top", "right", "bottom", "left"]:
+            ax.spines[sp].set_color("#BFFF00")
 
         plotter.draw()
+
+        # add new section
+        self.detail_window = QtWidgets.QWidget()
+        self.detail_window.setFixedHeight(0.6 * self.max_height_px)
+        detail_section = QtWidgets.QVBoxLayout()
+        detail_plot = Plotter(
+            self.window,
+            width=(0.3 * self.max_width_px) / self.screen_dpi,
+            height=(0.3 * self.max_width_px) / self.screen_dpi,
+            dpi=self.screen_dpi,
+            subplots=1,
+        )
+        detail_plot.mpl_connect("pick_event", lambda x: print("pick", x.artist._nucleus_id))
+        self.plot_outline(detail_plot.axes[0], outline, hooks=True)
+        detail_plot.draw()
+        detail_section.addWidget(detail_plot)
+        # detail_section.addWidget(QtWidgets.QLabel("Test"))
+        self.detail_window.setLayout(detail_section)
+        self.main_layout.addWidget(self.detail_window)
+
+    def plot_outline(self, ax, outline, hooks=False):
+        c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
+        im = c3[
+            outline.offset_left:outline.offset_left + 150,
+            outline.offset_top:outline.offset_top + 150,
+        ]
+        ax.imshow(im, cmap="binary")
+        c = np.load(outline.coords_path)
+        kwargs = dict(
+            edgecolor="b",
+            fill=False,
+            lw=1,
+            linestyle="--",
+        )
+        outline_poly = matplotlib.patches.Polygon(
+            np.array([c[:, 1], c[:, 0]]).T,
+            **kwargs
+        )
+        ax.add_patch(outline_poly)
+
+        outline_nuclei = self.nuclei[self.nuclei.outline_id == outline.outline_id]
+        if len(outline_nuclei) > 2:
+            c = "r"
+        else:
+            c = "y"
+
+        for _, nucleus in outline_nuclei.iterrows():
+            n = np.load(nucleus.coords_path) - np.array([
+                outline.offset_left,
+                outline.offset_top,
+            ])
+            kwargs = dict(
+                edgecolor=c,
+                fill=False,
+                lw=1,
+            )
+            if hooks:
+                kwargs["picker"] = True
+
+            n_poly = matplotlib.patches.Polygon(
+                np.array([n[:, 1], n[:, 0]]).T,
+                **kwargs
+            )
+            n_poly._nucleus_id = nucleus.nucleus_id
+            ax.add_patch(n_poly)
 
     def create_layout(self):
         self.main_layout = QtWidgets.QVBoxLayout()
@@ -773,7 +852,6 @@ class NuclearVerifier:
                 database.getOutlinesByCellId(cell_id),
                 key=lambda x: x.frame_idx,
             )
-            nuclei = pd.DataFrame(database.getNucleiByCellId(cell_id))
 
             width = self.max_width_px * 0.1
             cell_plot = Plotter(
@@ -786,49 +864,11 @@ class NuclearVerifier:
             cell_plot.mpl_connect("button_press_event", lambda x: self._nucleus_press(x))
             for ax, outline in zip(cell_plot.axes, outlines):
                 ax._outline_id = outline.outline_id
-
-                c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
-                im = c3[
-                    outline.offset_left:outline.offset_left + 150,
-                    outline.offset_top:outline.offset_top + 150,
-                ]
-                ax.imshow(im, cmap="binary")
-                c = np.load(outline.coords_path)
-                outline_poly = matplotlib.patches.Polygon(
-                    np.array([c[:, 1], c[:, 0]]).T,
-                    edgecolor="b",
-                    fill=False,
-                    lw=1,
-                    linestyle="--",
-                )
-                ax.add_patch(outline_poly)
-
-                outline_nuclei = nuclei[nuclei.outline_id == outline.outline_id]
-                if len(outline_nuclei) > 2:
-                    c = "r"
-                else:
-                    c = "y"
-
-                nuclei_patches = []
-                for _, nucleus in outline_nuclei.iterrows():
-                    n = np.load(nucleus.coords_path) - np.array([
-                        outline.offset_left,
-                        outline.offset_top,
-                    ])
-                    n_poly = matplotlib.patches.Polygon(
-                        np.array([n[:, 1], n[:, 0]]).T,
-                        edgecolor=c,
-                        fill=False,
-                        lw=1,
-                    )
-                    ax.add_patch(n_poly)
-                    nuclei_patches.append(n_poly)
-
+                self.plot_outline(ax, outline)
                 self.cell_plots[outline.outline_id] = {
                     "ax": ax,
                     "outline": outline,
                     "plotter": cell_plot,
-                    "nuclei_patches": nuclei_patches,
                 }
 
             cell_scroll_area = QtWidgets.QScrollArea()
