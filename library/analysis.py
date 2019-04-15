@@ -789,7 +789,6 @@ class NuclearVerifier:
             dpi=self.screen_dpi,
             subplots=1,
         )
-        self.detail_plot.mpl_connect("pick_event", self._detail_pick)
         self.detail_plot.mpl_connect("button_press_event", self._detail_button_press)
         self.detail_plot.mpl_connect("button_release_event", self._detail_button_release)
         self.detail_plot.mpl_connect("motion_notify_event", self._detail_motion_notify)
@@ -803,15 +802,34 @@ class NuclearVerifier:
         self.detail_window.setLayout(detail_section)
         self.main_layout.addWidget(self.detail_window)
 
-    def _detail_pick(self, evt):
-        print("pick", evt.artist._object_type, evt.artist._nucleus_id, end=" ")
-        if evt.artist._object_type == "node":
-            print("node #{0}".format(evt.artist._node_idx))
-        else:
-            print()
-
     def _flatten(self, x):
         return functools.reduce(operator.iconcat, x, [])
+
+    def _detail_remove_nucleus(self, nucleus_id):
+        # confirm
+        mbox = QtWidgets.QMessageBox()
+        confirm = mbox.question(
+            self.window,
+            "Delete nuclear outline?",
+            "Are you sure you want to delete this nucleus?"
+        )
+        if confirm != QtWidgets.QMessageBox.Yes:
+            return
+
+        for node in self.nuclear_points[nucleus_id]:
+            node.remove()
+            del node
+
+        del self.nuclear_points[nucleus_id]
+
+        for i, n in enumerate(self.nuclear_outline_objects):
+            if n._nucleus_id == nucleus_id:
+                self.nuclear_outline_objects.pop(i)
+                n.remove()
+                del n
+                break
+
+        self.detail_plot.draw()
 
     def _detail_button_press(self, evt):
         if evt.inaxes == self.detail_plot.axes[0]:
@@ -879,6 +897,13 @@ class NuclearVerifier:
                         break
 
                 if pop_item is None:
+                    if len(self.nuclear_outline_objects) == 1:
+                        return
+
+                    for n in self.nuclear_outline_objects:
+                        if n.contains_point((evt.x, evt.y)):
+                            self._detail_remove_nucleus(n._nucleus_id)
+
                     return
 
                 nucleus_id = pop_item._nucleus_id
