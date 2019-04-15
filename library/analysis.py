@@ -780,20 +780,68 @@ class NuclearVerifier:
         self.detail_window = QtWidgets.QWidget()
         self.detail_window.setFixedHeight(0.6 * self.max_height_px)
         detail_section = QtWidgets.QVBoxLayout()
-        detail_plot = Plotter(
+        self.detail_plot = Plotter(
             self.window,
             width=(0.3 * self.max_width_px) / self.screen_dpi,
             height=(0.3 * self.max_width_px) / self.screen_dpi,
             dpi=self.screen_dpi,
             subplots=1,
         )
-        detail_plot.mpl_connect("pick_event", lambda x: print("pick", x.artist._nucleus_id))
-        self.plot_outline(detail_plot.axes[0], outline, hooks=True)
-        detail_plot.draw()
-        detail_section.addWidget(detail_plot)
+        self.detail_plot.mpl_connect("pick_event", self._detail_pick)
+        self.detail_plot.mpl_connect("button_press_event", self._detail_button_press)
+        self.detail_plot.mpl_connect("button_release_event", self._detail_button_release)
+        self.detail_plot.mpl_connect("motion_notify_event", self._detail_motion_notify)
+        self.detail_dragging = False
+        self.nuclear_outline_objects = []
+        self.nuclear_points = []
+        self.plot_outline(self.detail_plot.axes[0], outline, hooks=True)
+        self.detail_plot.draw()
+        detail_section.addWidget(self.detail_plot)
         # detail_section.addWidget(QtWidgets.QLabel("Test"))
         self.detail_window.setLayout(detail_section)
         self.main_layout.addWidget(self.detail_window)
+
+    def _detail_pick(self, evt):
+        print("pick", evt.artist._object_type, evt.artist._nucleus_id, end=" ")
+        if evt.artist._object_type == "node":
+            print("node #{0}".format(evt.artist._node_idx))
+        else:
+            print()
+
+    def _detail_button_press(self, evt):
+        if evt.inaxes == self.detail_plot.axes[0]:
+            if evt.button == 1:
+                for p in self.nuclear_points:
+                    if p.contains_point((evt.x, evt.y)):
+                        p.set_facecolor("r")
+                        self.detail_dragging = p
+                        self.detail_plot.draw()
+
+    def _detail_button_release(self, evt):
+        if not self.detail_dragging:
+            return
+
+        nucleus_id = self.detail_dragging._nucleus_id
+        node_idx = self.detail_dragging._node_idx
+
+        for n_poly in self.nuclear_outline_objects:
+            if n_poly._nucleus_id == nucleus_id:
+                xy = n_poly.xy
+                xy[node_idx] = [evt.xdata, evt.ydata]
+                if node_idx == 0:
+                    xy = xy[:-1]
+                n_poly.set_xy(xy)
+
+        self.detail_dragging.set_facecolor("y")
+        self.detail_dragging = False
+        self.detail_plot.draw()
+
+    def _detail_motion_notify(self, evt):
+        if not self.detail_dragging:
+            return
+
+        self.detail_dragging.center = evt.xdata, evt.ydata
+        self.detail_plot.draw()
 
     def plot_outline(self, ax, outline, hooks=False):
         c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
@@ -826,6 +874,20 @@ class NuclearVerifier:
                 outline.offset_left,
                 outline.offset_top,
             ])
+            if hooks:
+                for i, (n_x, n_y) in enumerate(n):
+                    node = matplotlib.patches.Circle(
+                        (n_y, n_x),
+                        1.5,
+                        fc="y",
+                        picker=True,
+                    )
+                    node._nucleus_id = nucleus.nucleus_id
+                    node._object_type = "node"
+                    node._node_idx = i
+                    ax.add_patch(node)
+                    self.nuclear_points.append(node)
+
             kwargs = dict(
                 edgecolor=c,
                 fill=False,
@@ -838,7 +900,11 @@ class NuclearVerifier:
                 np.array([n[:, 1], n[:, 0]]).T,
                 **kwargs
             )
-            n_poly._nucleus_id = nucleus.nucleus_id
+            if hooks:
+                n_poly._nucleus_id = nucleus.nucleus_id
+                n_poly._object_type = "nucleus"
+                self.nuclear_outline_objects.append(n_poly)
+
             ax.add_patch(n_poly)
 
     def create_layout(self):
