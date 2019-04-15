@@ -817,6 +817,33 @@ class NuclearVerifier:
                         self.detail_dragging = p
                         self.detail_plot.draw()
 
+            elif evt.button == 3:
+                pop_idx = None
+                for i, p in enumerate(self.nuclear_points):
+                    if p.contains_point((evt.x, evt.y)):
+                        pop_idx = i
+                        break
+
+                if pop_idx is None:
+                    return
+
+                for n_poly in self.nuclear_outline_objects:
+                    if n_poly._nucleus_id == p._nucleus_id:
+                        xy = list(n_poly.xy)
+                        xy.pop(pop_idx)
+                        if pop_idx == 0:
+                            xy = xy[:-1]
+                        n_poly.set_xy(np.array(xy))
+
+                p = self.nuclear_points.pop(pop_idx)
+                p.remove()
+                del p
+
+                self.detail_plot.draw()
+
+                for i, p in enumerate(self.nuclear_points):
+                    p._node_idx = i
+
     def _detail_button_release(self, evt):
         if not self.detail_dragging:
             return
