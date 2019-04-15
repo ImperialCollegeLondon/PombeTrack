@@ -821,6 +821,55 @@ class NuclearVerifier:
                         p.set_facecolor("r")
                         self.detail_dragging = p
                         self.detail_plot.draw()
+                        return
+
+                # not in nuclear_points
+                for n in self.nuclear_outline_objects:
+                    if n.contains_point((evt.x, evt.y)):
+                        # get closest pair of points to click
+                        this_point = [evt.xdata, evt.ydata]
+                        node_points = n.xy[:-1]
+                        distances = np.sqrt(
+                            (node_points[:, 0] - evt.xdata) ** 2 +
+                            (node_points[:, 1] - evt.ydata) ** 2
+                        )
+                        if np.min(distances) < 2:
+                            return
+
+                        min_idx = np.argmin(distances)
+                        if min_idx == len(distances) - 1:
+                            next_idx = 0
+                            prev_idx = min_idx - 1
+                        elif min_idx == 0:
+                            next_idx = min_idx + 1
+                            prev_idx = len(distances) - 1
+                        else:
+                            next_idx = min_idx + 1
+                            prev_idx = min_idx - 1
+
+                        if distances[next_idx] > distances[prev_idx]:
+                            insert_before = min_idx
+                        else:
+                            insert_before = next_idx
+
+                        new_node = matplotlib.patches.Circle(
+                            (evt.xdata, evt.ydata),
+                            1.5,
+                            fc="y",
+                            picker=True,
+                        )
+                        new_node._nucleus_id = n._nucleus_id
+                        new_node._object_type = "node"
+                        self.detail_plot.axes[0].add_patch(new_node)
+                        self.nuclear_points[n._nucleus_id].insert(insert_before, new_node)
+                        for i, p in enumerate(self.nuclear_points[n._nucleus_id]):
+                            p._node_idx = i
+
+                        node_points = list(node_points)
+                        node_points.insert(insert_before, this_point)
+                        n.set_xy(node_points)
+
+                        self.detail_plot.draw()
 
             elif evt.button == 3:
                 pop_item = None
