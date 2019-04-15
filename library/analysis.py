@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
+import functools
 import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.figure
 import numpy as np
+import operator
 import os
 import pandas as pd
 import PyQt5.QtWidgets as QtWidgets
@@ -793,7 +795,7 @@ class NuclearVerifier:
         self.detail_plot.mpl_connect("motion_notify_event", self._detail_motion_notify)
         self.detail_dragging = False
         self.nuclear_outline_objects = []
-        self.nuclear_points = []
+        self.nuclear_points = {}
         self.plot_outline(self.detail_plot.axes[0], outline, hooks=True)
         self.detail_plot.draw()
         detail_section.addWidget(self.detail_plot)
@@ -808,40 +810,45 @@ class NuclearVerifier:
         else:
             print()
 
+    def _flatten(self, x):
+        return functools.reduce(operator.iconcat, x, [])
+
     def _detail_button_press(self, evt):
         if evt.inaxes == self.detail_plot.axes[0]:
             if evt.button == 1:
-                for p in self.nuclear_points:
+                for p in self._flatten(self.nuclear_points.values()):
                     if p.contains_point((evt.x, evt.y)):
                         p.set_facecolor("r")
                         self.detail_dragging = p
                         self.detail_plot.draw()
 
             elif evt.button == 3:
-                pop_idx = None
-                for i, p in enumerate(self.nuclear_points):
+                pop_item = None
+                for p in self._flatten(self.nuclear_points.values()):
                     if p.contains_point((evt.x, evt.y)):
-                        pop_idx = i
+                        pop_item = p
                         break
 
-                if pop_idx is None:
+                if pop_item is None:
                     return
 
+                nucleus_id = pop_item._nucleus_id
                 for n_poly in self.nuclear_outline_objects:
-                    if n_poly._nucleus_id == p._nucleus_id:
+                    if n_poly._nucleus_id == nucleus_id:
                         xy = list(n_poly.xy)
-                        xy.pop(pop_idx)
-                        if pop_idx == 0:
+                        xy.pop(pop_item._node_idx)
+                        if pop_item._node_idx == 0:
                             xy = xy[:-1]
                         n_poly.set_xy(np.array(xy))
 
-                p = self.nuclear_points.pop(pop_idx)
+                p = self.nuclear_points[nucleus_id].pop(pop_item._node_idx)
                 p.remove()
                 del p
+                del pop_item
 
                 self.detail_plot.draw()
 
-                for i, p in enumerate(self.nuclear_points):
+                for i, p in enumerate(self.nuclear_points[nucleus_id]):
                     p._node_idx = i
 
     def _detail_button_release(self, evt):
@@ -913,7 +920,9 @@ class NuclearVerifier:
                     node._object_type = "node"
                     node._node_idx = i
                     ax.add_patch(node)
-                    self.nuclear_points.append(node)
+                    if nucleus.nucleus_id not in self.nuclear_points:
+                        self.nuclear_points[nucleus.nucleus_id] = []
+                    self.nuclear_points[nucleus.nucleus_id].append(node)
 
             kwargs = dict(
                 edgecolor=c,
