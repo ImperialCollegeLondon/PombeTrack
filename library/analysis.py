@@ -6,6 +6,7 @@ matplotlib.use('Qt5Agg')
 import matplotlib.widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.figure
+import matplotlib.transforms
 import numpy as np
 import operator
 import os
@@ -15,6 +16,7 @@ import PyQt5.QtGui as QtGui
 import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
 import scipy.spatial
+import seaborn as sns
 import skimage.draw
 import skimage.measure
 import skimage.morphology
@@ -744,6 +746,20 @@ class NuclearVerifier:
 
         self.detail_window = None
 
+    def _construct_slider(self, centre_y):
+        return [
+            (0, centre_y),
+            (0.4, centre_y),
+            (0.4, centre_y + self.slider_height),
+            (0.6, centre_y + self.slider_height),
+            (0.6, centre_y),
+            (1, centre_y),
+            (0.6, centre_y),
+            (0.6, centre_y - self.slider_height),
+            (0.4, centre_y - self.slider_height),
+            (0.4, centre_y)
+        ]
+
     def _nucleus_press(self, evt):
         if evt.inaxes is None:
             return
@@ -781,10 +797,10 @@ class NuclearVerifier:
         # add new section
         self.detail_window = QtWidgets.QWidget()
         self.detail_window.setFixedHeight(0.6 * self.max_height_px)
-        detail_section = QtWidgets.QVBoxLayout()
+        detail_section = QtWidgets.QHBoxLayout()
         self.detail_plot = Plotter(
             self.window,
-            width=(0.3 * self.max_width_px) / self.screen_dpi,
+            width=(0.2 * self.max_width_px) / self.screen_dpi,
             height=(0.3 * self.max_width_px) / self.screen_dpi,
             dpi=self.screen_dpi,
             subplots=1,
@@ -798,9 +814,89 @@ class NuclearVerifier:
         self.plot_outline(self.detail_plot.axes[0], outline, hooks=True)
         self.detail_plot.draw()
         detail_section.addWidget(self.detail_plot)
-        # detail_section.addWidget(QtWidgets.QLabel("Test"))
+
+        # add control buttons
+        # accept changes, cancel changes, brightness slider with histogram
+        control_layout = QtWidgets.QVBoxLayout()
+        # create brightness slider
+        self.brightness_slider = Plotter(
+            self.window,
+            width=(0.1 * self.max_width_px) / self.screen_dpi,
+            height=(0.2 * self.max_width_px) / self.screen_dpi,
+            dpi=self.screen_dpi,
+            subplots=1,
+            equal_aspect=False,
+            autoscale=True,
+        )
+        self.brightness_slider.axes[0].axis("off")
+        self.brightness_slider.axes[0].set_ylabel("Intensity")
+        c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
+        im = c3[
+            outline.offset_left:outline.offset_left + 150,
+            outline.offset_top:outline.offset_top + 150,
+        ]
+        sns.distplot(im.ravel(), vertical=True, ax=self.brightness_slider.axes[0])
+
+        trans = matplotlib.transforms.blended_transform_factory(
+            self.brightness_slider.axes[0].transAxes,
+            self.brightness_slider.axes[0].transData,
+        )
+        im_obj = self.detail_plot.axes[0].get_images()[0]
+        self.slider_height = np.diff(im_obj.get_clim()) / 50
+        slider_kw = dict(
+            edgecolor="k",
+            linewidth=2,
+            transform=trans,
+            zorder=10,
+        )
+        lower_lim = matplotlib.patches.Polygon(
+            self._construct_slider(im_obj.get_clim()[0]),
+            facecolor="r",
+            **slider_kw,
+        )
+        lower_lim._id = "lower_slider"
+        upper_lim = matplotlib.patches.Polygon(
+            self._construct_slider(im_obj.get_clim()[1]),
+            **slider_kw,
+        )
+        upper_lim._id = "upper_slider"
+        self.brightness_slider.axes[0].add_patch(lower_lim)
+        self.brightness_slider.axes[0].add_patch(upper_lim)
+        self.sliding = None
+        self.brightness_slider.mpl_connect("button_press_event", lambda x: self._slider_btn_press(x, lower_lim, upper_lim))
+        self.brightness_slider.mpl_connect("button_release_event", self._slider_btn_release)
+        self.brightness_slider.mpl_connect("motion_notify_event", self._slider_movement)
+
+        self.brightness_slider.setFixedWidth(0.1 * self.max_width_px)
+        self.brightness_slider.setFixedHeight(0.2 * self.max_width_px)
+
+        control_layout.addWidget(self.brightness_slider)
+        detail_section.addLayout(control_layout)
+
         self.detail_window.setLayout(detail_section)
         self.main_layout.addWidget(self.detail_window)
+
+    def _slider_btn_press(self, evt, lower_lim, upper_lim):
+        if lower_lim.contains_point((evt.x, evt.y)):
+            self.sliding = lower_lim
+        elif upper_lim.contains_point((evt.x, evt.y)):
+            self.sliding = upper_lim
+
+    def _slider_btn_release(self, evt):
+        if self.sliding is not None:
+            im_obj = self.detail_plot.axes[0].get_images()[0]
+            if self.sliding._id == "lower_slider":
+                clim = [evt.ydata, im_obj.get_clim()[1]]
+            elif self.sliding._id == "upper_slider":
+                clim = [im_obj.get_clim()[0], evt.ydata]
+            im_obj.set_clim(clim)
+            self.detail_plot.draw()
+            self.sliding = None
+
+    def _slider_movement(self, evt):
+        if self.sliding is not None:
+            self.sliding.set_xy(self._construct_slider(evt.ydata))
+            self.brightness_slider.draw()
 
     def _flatten(self, x):
         return functools.reduce(operator.iconcat, x, [])
@@ -1069,17 +1165,23 @@ class NuclearVerifier:
 
 
 class Plotter(FigureCanvas):
-    def __init__(self, parent_window, width, height, dpi, subplots=3):
+    def __init__(self, parent_window, width, height, dpi, subplots=3, ticks=False, equal_aspect=True, autoscale=False):
         fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
         self.axes = []
         self.offsets = []
         for sp in range(subplots):
             ax = fig.add_subplot(1, subplots, sp + 1)
             # ax.axis("off")
-            ax.set_xticks([], [])
-            ax.set_yticks([], [])
-            ax.set_aspect("equal")
-            ax.autoscale("off")
+            if not ticks:
+                ax.set_xticks([], [])
+                ax.set_yticks([], [])
+
+            if equal_aspect:
+                ax.set_aspect("equal")
+
+            if not autoscale:
+                ax.autoscale("off")
+
             self.axes.append(ax)
 
         FigureCanvas.__init__(self, fig)
