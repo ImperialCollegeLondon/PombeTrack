@@ -246,6 +246,16 @@ def deleteNucleusById(nucleus_id):
     args = (nucleus_id,)
     executeQuery(query, args, commit=True)
 
+def getNucleusById(nucleus_id):
+    query = """
+    SELECT *
+    FROM nuclei
+    WHERE nucleus_id = ?;
+    """
+    args = (nucleus_id,)
+    r = executeQuery(query, args, fetchone=True)
+    return NucleusRow(r)
+
 def getNucleiByExperimentId(experiment_id):
     query = """
     SELECT *

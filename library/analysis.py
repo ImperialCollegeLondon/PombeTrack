@@ -886,10 +886,15 @@ class NuclearVerifier:
 
         control_layout.addWidget(self.brightness_slider)
         control_btns = QtWidgets.QHBoxLayout()
+        self.detail_add_mode = False
+        self.detail_add_nucleus_btn = QtWidgets.QPushButton("Add nucleus")
+        self.detail_add_nucleus_btn.setCheckable(True)
+        self.detail_add_nucleus_btn.toggled[bool].connect(lambda x: self._detail_add_nucleus(x))
         accept_btn = QtWidgets.QPushButton("Accept")
         accept_btn.clicked.connect(lambda: self._detail_accept(outline_id))
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(lambda: self._detail_reject(outline_id))
+        control_btns.addWidget(self.detail_add_nucleus_btn)
         control_btns.addWidget(accept_btn)
         control_btns.addWidget(cancel_btn)
         control_layout.addLayout(control_btns)
@@ -897,6 +902,24 @@ class NuclearVerifier:
 
         self.detail_window.setLayout(detail_section)
         self.main_layout.addWidget(self.detail_window)
+
+    def _detail_add_nucleus(self, checked):
+        if checked:
+            self.detail_add_mode = True
+            for outline in self.nuclear_outline_objects:
+                outline.set_edgecolor("k")
+                for point in self.nuclear_points[outline._nucleus_id]:
+                    point.set_facecolor("k")
+                    point.set_edgecolor("k")
+                self.detail_plot.draw()
+        else:
+            self.detail_add_mode = False
+            for outline in self.nuclear_outline_objects:
+                outline.set_edgecolor("y")
+                for point in self.nuclear_points[outline._nucleus_id]:
+                    point.set_facecolor("y")
+                    point.set_edgecolor("w")
+                self.detail_plot.draw()
 
     def _detail_accept(self, outline_id):
         ax = self.cell_plots[outline_id]["ax"]
@@ -946,6 +969,41 @@ class NuclearVerifier:
                     outline.offset_top,
                 ])
                 np.save(record_path, new_coords)
+
+        previous_nucleus_ids = list(previous_nuclei.nucleus_id)
+        posteriors = [
+            x
+            for x in current_nucleus_ids
+            if x not in previous_nucleus_ids
+        ]
+        for posterior in posteriors:
+            # add new nucleus
+            record_path = os.path.join(
+                "data/nuclei",
+                outline.experiment_id,
+                outline.cell_id,
+                outline.outline_id,
+                "{0}.npy".format(posterior),
+            )
+            nodes = self.nuclear_outline_objects[
+                current_nucleus_ids.index(posterior)
+            ].xy[:-1]
+            new_coords = np.array([
+                nodes[:, 1], nodes[:, 0]
+            ]).T + np.array([
+                outline.offset_left,
+                outline.offset_top,
+            ])
+            np.save(record_path, new_coords)
+            database.insertNucleus(
+                posterior,
+                outline.outline_id,
+                outline.cell_id,
+                outline.experiment_id,
+                record_path,
+            )
+            new_record = pd.Series(database.getNucleusById(posterior))
+            self.nuclei = self.nuclei.append(new_record, ignore_index=True)
 
         self.plot_outline(ax, outline)
         plotter = self.cell_plots[outline_id]["plotter"]
@@ -1021,99 +1079,152 @@ class NuclearVerifier:
 
         self.detail_plot.draw()
 
-    def _detail_button_press(self, evt):
-        if evt.inaxes == self.detail_plot.axes[0]:
-            if evt.button == 1:
-                for p in self._flatten(self.nuclear_points.values()):
-                    if p.contains_point((evt.x, evt.y)):
-                        p.set_facecolor("r")
-                        self.detail_dragging = p
-                        self.detail_plot.draw()
-                        return
+    def _detail_process_leftclick(self, evt):
+        for p in self._flatten(self.nuclear_points.values()):
+            if p.contains_point((evt.x, evt.y)):
+                p.set_facecolor("r")
+                self.detail_dragging = p
+                self.detail_plot.draw()
+                return
 
-                # not in nuclear_points
-                for n in self.nuclear_outline_objects:
-                    if n.contains_point((evt.x, evt.y)):
-                        # get closest pair of points to click
-                        this_point = [evt.xdata, evt.ydata]
-                        node_points = n.xy[:-1]
-                        distances = np.sqrt(
-                            (node_points[:, 0] - evt.xdata) ** 2 +
-                            (node_points[:, 1] - evt.ydata) ** 2
-                        )
-                        if np.min(distances) < 2:
-                            return
-
-                        min_idx = np.argmin(distances)
-                        if min_idx == len(distances) - 1:
-                            next_idx = 0
-                            prev_idx = min_idx - 1
-                        elif min_idx == 0:
-                            next_idx = min_idx + 1
-                            prev_idx = len(distances) - 1
-                        else:
-                            next_idx = min_idx + 1
-                            prev_idx = min_idx - 1
-
-                        if distances[next_idx] > distances[prev_idx]:
-                            insert_before = min_idx
-                        else:
-                            insert_before = next_idx
-
-                        new_node = matplotlib.patches.Circle(
-                            (evt.xdata, evt.ydata),
-                            1.5,
-                            fc="y",
-                            picker=True,
-                        )
-                        new_node._nucleus_id = n._nucleus_id
-                        new_node._object_type = "node"
-                        self.detail_plot.axes[0].add_patch(new_node)
-                        self.nuclear_points[n._nucleus_id].insert(insert_before, new_node)
-                        for i, p in enumerate(self.nuclear_points[n._nucleus_id]):
-                            p._node_idx = i
-
-                        node_points = list(node_points)
-                        node_points.insert(insert_before, this_point)
-                        n.set_xy(node_points)
-
-                        self.detail_plot.draw()
-
-            elif evt.button == 3:
-                pop_item = None
-                for p in self._flatten(self.nuclear_points.values()):
-                    if p.contains_point((evt.x, evt.y)):
-                        pop_item = p
-                        break
-
-                if pop_item is None:
-                    if len(self.nuclear_outline_objects) == 1:
-                        return
-
-                    for n in self.nuclear_outline_objects:
-                        if n.contains_point((evt.x, evt.y)):
-                            self._detail_remove_nucleus(n._nucleus_id)
-
+        # not in nuclear_points
+        for n in self.nuclear_outline_objects:
+            if n.contains_point((evt.x, evt.y)):
+                # get closest pair of points to click
+                this_point = [evt.xdata, evt.ydata]
+                node_points = n.xy[:-1]
+                distances = np.sqrt(
+                    (node_points[:, 0] - evt.xdata) ** 2 +
+                    (node_points[:, 1] - evt.ydata) ** 2
+                )
+                if np.min(distances) < 2:
                     return
 
-                nucleus_id = pop_item._nucleus_id
-                for n_poly in self.nuclear_outline_objects:
-                    if n_poly._nucleus_id == nucleus_id:
-                        xy = list(n_poly.xy)
-                        xy.pop(pop_item._node_idx)
-                        if pop_item._node_idx == 0:
-                            xy = xy[:-1]
-                        n_poly.set_xy(np.array(xy))
+                min_idx = np.argmin(distances)
+                if min_idx == len(distances) - 1:
+                    next_idx = 0
+                    prev_idx = min_idx - 1
+                elif min_idx == 0:
+                    next_idx = min_idx + 1
+                    prev_idx = len(distances) - 1
+                else:
+                    next_idx = min_idx + 1
+                    prev_idx = min_idx - 1
 
-                p = self.nuclear_points[nucleus_id].pop(pop_item._node_idx)
-                p.remove()
-                del p
-                del pop_item
+                if distances[next_idx] > distances[prev_idx]:
+                    insert_before = min_idx
+                else:
+                    insert_before = next_idx
+
+                new_node = matplotlib.patches.Circle(
+                    (evt.xdata, evt.ydata),
+                    1.5,
+                    fc="y",
+                )
+                new_node._nucleus_id = n._nucleus_id
+                new_node._object_type = "node"
+                self.detail_plot.axes[0].add_patch(new_node)
+                self.nuclear_points[n._nucleus_id].insert(insert_before, new_node)
+                for i, p in enumerate(self.nuclear_points[n._nucleus_id]):
+                    p._node_idx = i
+
+                node_points = list(node_points)
+                node_points.insert(insert_before, this_point)
+                n.set_xy(node_points)
 
                 self.detail_plot.draw()
 
-                for i, p in enumerate(self.nuclear_points[nucleus_id]):
-                    p._node_idx = i
+    def _detail_process_rightclick(self, evt):
+        pop_item = None
+        for p in self._flatten(self.nuclear_points.values()):
+            if p.contains_point((evt.x, evt.y)):
+                pop_item = p
+                break
+
+        if pop_item is None:
+            if len(self.nuclear_outline_objects) == 1:
+                return
+
+            for n in self.nuclear_outline_objects:
+                if n.contains_point((evt.x, evt.y)):
+                    self._detail_remove_nucleus(n._nucleus_id)
+
+            return
+
+        nucleus_id = pop_item._nucleus_id
+        for n_poly in self.nuclear_outline_objects:
+            if n_poly._nucleus_id == nucleus_id:
+                xy = list(n_poly.xy)
+                xy.pop(pop_item._node_idx)
+                if pop_item._node_idx == 0:
+                    xy = xy[:-1]
+                n_poly.set_xy(np.array(xy))
+
+        p = self.nuclear_points[nucleus_id].pop(pop_item._node_idx)
+        p.remove()
+        del p
+        del pop_item
+
+        self.detail_plot.draw()
+
+        for i, p in enumerate(self.nuclear_points[nucleus_id]):
+            p._node_idx = i
+
+    def _detail_process_leftclick_add(self, evt):
+        for n in self.nuclear_outline_objects:
+            if n.contains_point((evt.x, evt.y)):
+                return
+
+        centre = ((evt.xdata, evt.ydata))
+        initial_nodes = np.array([
+            (centre[0] + 5 * np.sin(x),
+             centre[1] + 5 * np.cos(x))
+            for x in np.linspace(0, 2 * np.pi, 10)[:-1]
+        ])
+        kwargs = dict(
+            edgecolor="y",
+            fill=False,
+            lw=1,
+        )
+        n_poly = matplotlib.patches.Polygon(
+            initial_nodes,
+            **kwargs
+        )
+        nucleus_id = str(uuid.uuid4())
+        self.nuclear_points[nucleus_id] = []
+        n_poly._nucleus_id = nucleus_id
+        n_poly._object_type = "nucleus"
+        self.nuclear_outline_objects.append(n_poly)
+        self.detail_plot.axes[0].add_patch(n_poly)
+
+        for i, (n_y, n_x) in enumerate(initial_nodes):
+            node = matplotlib.patches.Circle(
+                (n_y, n_x),
+                1.5,
+                fc="y",
+            )
+            node._nucleus_id = nucleus_id
+            node._object_type = "node"
+            node._node_idx = i
+            self.nuclear_points[nucleus_id].append(node)
+            self.detail_plot.axes[0].add_patch(node)
+
+        self.detail_plot.draw()
+
+        self.detail_add_nucleus_btn.setChecked(False)
+
+    def _detail_button_press(self, evt):
+        if evt.inaxes != self.detail_plot.axes[0]:
+            return
+
+        if self.detail_add_mode:
+            if evt.button == 1:
+                self._detail_process_leftclick_add(evt)
+        else:
+            if evt.button == 1:
+                self._detail_process_leftclick(evt)
+            elif evt.button == 3:
+                self._detail_process_rightclick(evt)
 
     def _detail_button_release(self, evt):
         if not self.detail_dragging:
@@ -1178,7 +1289,6 @@ class NuclearVerifier:
                         (n_y, n_x),
                         1.5,
                         fc="y",
-                        picker=True,
                     )
                     node._nucleus_id = nucleus.nucleus_id
                     node._object_type = "node"
@@ -1193,8 +1303,6 @@ class NuclearVerifier:
                 fill=False,
                 lw=1,
             )
-            if hooks:
-                kwargs["picker"] = True
 
             n_poly = matplotlib.patches.Polygon(
                 np.array([n[:, 1], n[:, 0]]).T,
