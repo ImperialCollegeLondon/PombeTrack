@@ -237,6 +237,15 @@ def insertNucleus(nucleus_id, outline_id, cell_id, experiment_id, coords_path):
     args = (nucleus_id, outline_id, cell_id, experiment_id, coords_path)
     executeQuery(query, args, commit=True)
 
+def deleteNucleusById(nucleus_id):
+    query = """
+    DELETE
+    FROM nuclei
+    WHERE nucleus_id = ?;
+    """
+    args = (nucleus_id,)
+    executeQuery(query, args, commit=True)
+
 def getNucleiByExperimentId(experiment_id):
     query = """
     SELECT *

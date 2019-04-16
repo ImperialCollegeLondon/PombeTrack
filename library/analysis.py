@@ -871,10 +871,90 @@ class NuclearVerifier:
         self.brightness_slider.setFixedHeight(0.2 * self.max_width_px)
 
         control_layout.addWidget(self.brightness_slider)
+        control_btns = QtWidgets.QHBoxLayout()
+        accept_btn = QtWidgets.QPushButton("Accept")
+        accept_btn.clicked.connect(lambda: self._detail_accept(outline_id))
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn.clicked.connect(lambda: self._detail_reject(outline_id))
+        control_btns.addWidget(accept_btn)
+        control_btns.addWidget(cancel_btn)
+        control_layout.addLayout(control_btns)
         detail_section.addLayout(control_layout)
 
         self.detail_window.setLayout(detail_section)
         self.main_layout.addWidget(self.detail_window)
+
+    def _detail_accept(self, outline_id):
+        ax = self.cell_plots[outline_id]["ax"]
+        ax._is_selected = False
+        for sp in ["top", "right", "bottom", "left"]:
+            ax.spines[sp].set_color("g")
+
+        ax.clear()
+        ax.set_xticks([], [])
+        ax.set_yticks([], [])
+        ax.set_aspect("equal")
+        ax.autoscale("off")
+        outline = self.cell_plots[outline_id]["outline"]
+        previous_nuclei = self.nuclei[
+            self.nuclei.outline_id == outline.outline_id
+        ]
+        current_nucleus_ids = [
+            x._nucleus_id
+            for x in self.nuclear_outline_objects
+        ]
+        for _, prior in previous_nuclei.iterrows():
+            record_path = os.path.join(
+                "data/nuclei",
+                outline.experiment_id,
+                outline.cell_id,
+                outline.outline_id,
+                "{0}.npy".format(prior.nucleus_id),
+            )
+            if prior.nucleus_id not in current_nucleus_ids:
+                # delete record from nuclei table
+                database.deleteNucleusById(prior.nucleus_id)
+                # remove from self.nuclei
+                self.nuclei = self.nuclei[
+                    self.nuclei.nucleus_id != prior.nucleus_id
+                ]
+                if os.path.exists(record_path):
+                    os.remove(record_path)
+            else:
+                # check for coordinate changes
+                nodes = self.nuclear_outline_objects[
+                    current_nucleus_ids.index(prior.nucleus_id)
+                ].xy[:-1]
+                new_coords = np.array([
+                    nodes[:, 1], nodes[:, 0]
+                ]).T + np.array([
+                    outline.offset_left,
+                    outline.offset_top,
+                ])
+                np.save(record_path, new_coords)
+
+        self.plot_outline(ax, outline)
+        plotter = self.cell_plots[outline_id]["plotter"]
+        plotter.draw()
+        self._remove_details()
+
+    def _detail_reject(self, outline_id):
+        ax = self.cell_plots[outline_id]["ax"]
+        ax._is_selected = False
+        for sp in ["top", "right", "bottom", "left"]:
+            ax.spines[sp].set_color("k")
+        plotter = self.cell_plots[outline_id]["plotter"]
+        plotter.draw()
+        self._remove_details()
+
+    def _remove_details(self):
+        self.detail_window.deleteLater()
+        self.detail_window = None
+        self.detail_axes = None
+        self.detail_plot.close()
+        self.detail_plot = None
+        self.brightness_slider.close()
+        self.brightness_slider = None
 
     def _slider_btn_press(self, evt, lower_lim, upper_lim):
         if lower_lim.contains_point((evt.x, evt.y)):
