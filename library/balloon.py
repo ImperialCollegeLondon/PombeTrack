@@ -474,7 +474,6 @@ class Balloon(object):
         return area
 
 
-
 def initial_nodes(centre, radius, num_nodes):
     initial_nodes = np.array([
         (centre[0] + radius * np.sin(x),
