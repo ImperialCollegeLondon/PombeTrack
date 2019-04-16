@@ -506,6 +506,20 @@ class Analyser:
         comment.show()
 
         if existing is None:
+            outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
+            for outline in outlines:
+                path = os.path.join(
+                    "data/nuclei",
+                    outline.experiment_id,
+                    outline.cell_id,
+                    outline.outline_id,
+                )
+                if not os.path.exists(path):
+                    continue
+
+                for fn in os.listdir(path):
+                    os.remove(os.path.join(path, fn))
+
             database.deleteNucleiByExperimentId(self._data.experiment_id)
 
         i = 1
