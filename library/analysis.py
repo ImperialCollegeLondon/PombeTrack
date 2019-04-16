@@ -1036,18 +1036,40 @@ class NuclearVerifier:
 
     def _slider_btn_release(self, evt):
         if self.sliding is not None:
-            im_obj = self.detail_plot.axes[0].get_images()[0]
-            if self.sliding._id == "lower_slider":
-                clim = [evt.ydata, im_obj.get_clim()[1]]
-            elif self.sliding._id == "upper_slider":
-                clim = [im_obj.get_clim()[0], evt.ydata]
-            im_obj.set_clim(clim)
-            self.detail_plot.draw()
+            if evt.ydata is not None:
+                im_obj = self.detail_plot.axes[0].get_images()[0]
+                if self.sliding._id == "lower_slider":
+                    if evt.ydata >= im_obj.get_clim()[1]:
+                        clim = [im_obj.get_clim()[1] - 1,
+                                im_obj.get_clim()[1]]
+                    else:
+                        clim = [evt.ydata, im_obj.get_clim()[1]]
+                elif self.sliding._id == "upper_slider":
+                    if evt.ydata <= im_obj.get_clim()[0]:
+                        clim = [im_obj.get_clim()[0],
+                                im_obj.get_clim()[0] + 1]
+                    else:
+                        clim = [im_obj.get_clim()[0], evt.ydata]
+                im_obj.set_clim(clim)
+                self.detail_plot.draw()
             self.sliding = None
 
     def _slider_movement(self, evt):
-        if self.sliding is not None:
+        if self.sliding is not None and evt.ydata is not None:
+            im_obj = self.detail_plot.axes[0].get_images()[0]
+            if self.sliding._id == "lower_slider":
+                if evt.ydata >= im_obj.get_clim()[1]:
+                    return
+                clim = [evt.ydata, im_obj.get_clim()[1]]
+
+            elif self.sliding._id == "upper_slider":
+                if evt.ydata <= im_obj.get_clim()[0]:
+                    return
+                clim = [im_obj.get_clim()[0], evt.ydata]
+
             self.sliding.set_xy(self._construct_slider(evt.ydata))
+            im_obj.set_clim(clim)
+            self.detail_plot.draw()
             self.brightness_slider.draw()
 
     def _flatten(self, x):
