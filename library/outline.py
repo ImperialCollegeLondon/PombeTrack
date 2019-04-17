@@ -446,6 +446,19 @@ class Plotter(FigureCanvas):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
+        # check balloon object has been refined at least once
+        if self.balloon_obj.refining_cycles == 0:
+            alert = QtWidgets.QMessageBox()
+            message = ("The outline you are about to add has not been refined."
+                        "\nAre you sure you want to add it?")
+            add_confirm = alert.question(
+                self.parent(),
+                "Add outline?",
+                message,
+            )
+            if add_confirm != QtWidgets.QMessageBox.Yes:
+                return
+
         # check difference in total area is small
         if self.previous_id:
             previous_outline_entry = database.getOutlineById(self.previous_id)

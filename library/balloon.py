@@ -118,6 +118,7 @@ class Balloon(object):
         self.nodes = self.create_nodes(initial_coords)
         self.base_image = base_image
         self.centre = self.get_centre()
+        self.refining_cycles = 0
 
     def create_nodes(self, coords):
         nodes = []
@@ -226,6 +227,7 @@ class Balloon(object):
         return new_nodes
 
     def evolve(self, display=False, image_percentile=5):
+        self.refining_cycles += 1
         node_positions = np.array([(x.x, x.y) for x in self.nodes])
         poly_rr, poly_cc = skimage.draw.polygon(
             node_positions[:, 0],
