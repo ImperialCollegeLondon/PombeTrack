@@ -56,7 +56,10 @@ class Analyser:
         )), 1, 1)
 
         background_signals = self.calculate_signal(self.wildtype_outlines, stat=None, channel=2)
-        self.background = np.mean(background_signals)
+        if len(background_signals) == 0:
+            self.background = 0
+        else:
+            self.background = np.mean(background_signals)
 
         self.grid_layout.addWidget(QtWidgets.QLabel("Wildtype outlines:"), 2, 0)
         self.grid_layout.addWidget(QtWidgets.QLabel("{0} ({1})".format(
@@ -490,12 +493,13 @@ class Analyser:
                 comment.hide()
                 comment.deleteLater()
 
-            if len(signals) == 0:
-                signals = np.array([0])
-
         if stat is not None:
+            if len(signals) == 0:
+                return stat([0])
             return stat(signals)
         else:
+            if len(signals) == 0:
+                return []
             return signals
 
     def assign_nuclei(self, existing=None):
