@@ -432,9 +432,41 @@ class Plotter(FigureCanvas):
         self.sub_ax.set_ylim([self.region_height * 2, 0])
         self.draw()
 
+    def get_area(self, coords):
+        area = np.dot(
+            coords[:, 0],
+            np.roll(coords[:, 1], 1)
+        ) - np.dot(
+            coords[:, 1],
+            np.roll(coords[:, 0], 1)
+        )
+        return area
+
     def _accept_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
+
+        # check difference in total area is small
+        if self.previous_id:
+            previous_outline_entry = database.getOutlineById(self.previous_id)
+            previous_outline = np.load(previous_outline_entry.coords_path)
+            if previous_outline_entry.cell_id == self.cell_id:
+                previous_area = self.get_area(previous_outline)
+                current_area = self.get_area(np.array([(n.x, n.y) for n in self.balloon_obj.nodes]))
+                area_diff = abs(previous_area - current_area) / previous_area
+                if area_diff > 0.3:
+                    alert = QtWidgets.QMessageBox()
+                    message = ("The outline you are about to add has a large "
+                               "difference in cell area compared to its "
+                               "predecessor in the previous frame ({0:.0f}%).\n"
+                               "Are you sure you want to add it?")
+                    add_confirm = alert.question(
+                        self.parent(),
+                        "Add outline?",
+                        message.format(area_diff * 100),
+                    )
+                    if add_confirm != QtWidgets.QMessageBox.Yes:
+                        return
 
         # save outline
         self.save_outline()
