@@ -94,6 +94,20 @@ class OutlineRow(Row):
         return row
 
 
+class SignalRow(Row):
+    BACKGROUND = 1
+    COLS = [
+        ("signal_num", "INTEGER PRIMARY KEY", int),
+        ("signal_id", "TEXT", str),
+        ("outline_id", "TEXT", str),
+        ("cell_id", "TEXT", str),
+        ("experiment_id", "TEXT", str),
+        ("channel", "INTEGER", int),
+        ("signal_type", "INTEGER DEFAULT 0", int),
+        ("signal_value", "REAL", float),
+    ]
+
+
 class ExperimentRow(Row):
     COLS = [
         ("experiment_num", "INTEGER PRIMARY KEY", int),
@@ -166,6 +180,64 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createSignalsTable():
+    query = """
+    CREATE TABLE signals
+    ({0});
+    """.format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in SignalRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertSignal(signal_id, outline_id, cell_id, experiment_id, channel, signal_type, signal_value):
+    query = """
+    INSERT INTO signals
+    (signal_id, outline_id, cell_id, experiment_id, channel, signal_type, signal_value)
+    VALUES (?, ?, ?, ?, ?, ?, ?);
+    """
+    args = (signal_id, outline_id, cell_id, experiment_id, channel, signal_type, signal_value)
+    executeQuery(query, args, commit=True)
+
+def getSignalById(signal_id):
+    query = """
+    SELECT *
+    FROM signals
+    WHERE signal_id = ?;
+    """
+    args = (signal_id,)
+    r = executeQuery(query, args, fetchone=True)
+    return SignalRow(r)
+
+def getSignalsByCriteria(**kwargs):
+    selectors = []
+    args = []
+    for k, v in kwargs.items():
+        selectors.append("{0} = ?".format(k))
+        args.append(v)
+
+    query = """
+    SELECT *
+    FROM signals
+    WHERE {0};
+    """.format("\nAND ".join(selectors))
+    r = executeQuery(query, args, fetchmany=True)
+    return [SignalRow(x) for x in r]
+
+def deleteSignalsByCriteria(**kwargs):
+    selectors = []
+    args = []
+    for k, v in kwargs.items():
+        selectors.append("{0} = ?".format(k))
+        args.append(v)
+
+    query = """
+    DELETE
+    FROM signals
+    WHERE {0};
+    """.format("\nAND ".join(selectors))
+    executeQuery(query, args, commit=True)
 
 def createAssociationsTable():
     query = "CREATE TABLE associations ({0});".format(",".join([

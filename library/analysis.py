@@ -426,13 +426,22 @@ class Analyser:
         return signal, num_pixels
 
     def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False, save=True):
-        bg_path = os.path.join("data", "signals", "C{0}-{1}.npy".format(
-            channel,
-            self._data.experiment_id
-        ))
-        if os.path.exists(bg_path) and not replace:
-            signals = np.load(bg_path)
+        if not database.checkTable("signals"):
+            database.createSignalsTable()
+
+        signal_data = database.getSignalsByCriteria(
+            experiment_id=self._data.experiment_id,
+            signal_type=database.SignalRow.BACKGROUND,
+            channel=channel,
+        )
+        if len(signal_data) > 0 and not replace:
+            signals = np.array([x.signal_value for x in signal_data])
         else:
+            database.deleteSignalsByCriteria(
+                experiment_id=self._data.experiment_id,
+                signal_type=database.SignalRow.BACKGROUND,
+                channel=channel,
+            )
             if show_progress:
                 progress_bar = QtWidgets.QProgressBar()
                 progress_bar.setMaximum(100)
@@ -447,9 +456,6 @@ class Analyser:
                 self.main_layout.addWidget(comment)
                 comment.show()
 
-            if not os.path.exists(os.path.dirname(bg_path)):
-                os.makedirs(os.path.dirname(bg_path))
-
             signals = np.zeros(len(outlines))
 
             i = 0
@@ -461,6 +467,16 @@ class Analyser:
                 ])
                 signal, num_pixels = self.get_signal_from_coords(c, img)
                 signals[i] = signal / num_pixels
+                signal_id = str(uuid.uuid4())
+                database.insertSignal(
+                    signal_id,
+                    outline.outline_id,
+                    outline.cell_id,
+                    self._data.experiment_id,
+                    channel,
+                    database.SignalRow.BACKGROUND,
+                    signal / num_pixels,
+                )
                 i += 1
                 if show_progress:
                     progress_bar.setValue(100 * i / len(outlines))
@@ -476,9 +492,6 @@ class Analyser:
 
             if len(signals) == 0:
                 signals = np.array([0])
-
-            if save:
-                np.save(bg_path, signals)
 
         if stat is not None:
             return stat(signals)
