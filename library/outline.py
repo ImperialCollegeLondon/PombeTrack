@@ -373,6 +373,7 @@ class Plotter(FigureCanvas):
                     centre_offset_left=centre_offset_left,
                     centre_offset_top=centre_offset_top,
                 )
+                self.balloon_obj.refining_cycles = 1
 
             else:
                 self.previous_id = None
