@@ -213,7 +213,7 @@ class Plotter(FigureCanvas):
         self.clear_sub_outlines()
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
         for outline in outline_data:
-            if not os.path.exists(outline.coords_path):
+            if not os.path.exists(outline.coords_path) or outline.outline_id == self.outline_id:
                 continue
 
             c = np.load(outline.coords_path) + np.array([
@@ -481,6 +481,27 @@ class Plotter(FigureCanvas):
                     )
                     if add_confirm != QtWidgets.QMessageBox.Yes:
                         return
+
+        # check overlap with other outlines?
+        # objects already exist (red lines) so can compare perhaps?
+        Ypoints, Xpoints = self.sub_ax.lines[0].get_data()
+        existing_points = np.row_stack([Xpoints, Ypoints]).T
+        for outline in self.sub_outlines:
+            contains_new = sum(outline.get_path().contains_points(
+                existing_points,
+            ))
+            if contains_new > 0:
+                alert = QtWidgets.QMessageBox()
+                message = ("The outline you are about to add may overlap with "
+                           "existing outlines.\n"
+                           "Are you sure you would like to add it?")
+                add_confirm = alert.question(
+                    self.parent(),
+                    "Add outline?",
+                    message,
+                )
+                if add_confirm != QtWidgets.QMessageBox.Yes:
+                    return
 
         # save outline
         self.save_outline()
