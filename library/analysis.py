@@ -1315,7 +1315,7 @@ class NuclearVerifier:
         if len(outline_nuclei) > 2:
             c = "r"
         else:
-            c = "y"
+            c = "m"
 
         for _, nucleus in outline_nuclei.iterrows():
             n = np.load(nucleus.coords_path) - np.array([
@@ -1328,6 +1328,7 @@ class NuclearVerifier:
                         (n_y, n_x),
                         1.5,
                         fc="y",
+                        zorder=2,
                     )
                     node._nucleus_id = nucleus.nucleus_id
                     node._object_type = "node"
@@ -1341,6 +1342,7 @@ class NuclearVerifier:
                 edgecolor=c,
                 fill=False,
                 lw=1,
+                zorder=1,
             )
 
             n_poly = matplotlib.patches.Polygon(
