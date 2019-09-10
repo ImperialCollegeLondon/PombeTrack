@@ -94,7 +94,7 @@ class Node(object):
             int(round(self.x)) - 1:int(round(self.x)) + 2,
             int(round(self.y)) - 1:int(round(self.y)) + 2,
         ].flatten()
-        image_multiplier = vicinity.mean() / np.percentile(image, percentile) - 1
+        image_multiplier = np.log(vicinity.mean() / np.percentile(image, percentile))
         self.set_position((
             self.x + (image_multiplier * cforce[0]) + nforce[0],
             self.y + (image_multiplier * cforce[1]) + nforce[1],
@@ -264,8 +264,8 @@ class Balloon(object):
             ax.imshow(self.base_image, cmap="gray")
             ax.plot(skel_coords[:, 1], skel_coords[:, 0], color="b", marker="o", ms=3, ls="none")
             ax.set_aspect("equal")
-            ax.plot(original_positions[:, 1], original_positions[:, 0], marker="o", ms=5, color="k")
-            ax.plot(new_positions[:, 1], new_positions[:, 0], marker="o", ms=5, color="r")
+            #  ax.plot(original_positions[:, 1], original_positions[:, 0], marker="o", ms=5, color="k")
+            ax.plot(new_positions[:, 1], new_positions[:, 0], marker="o", ms=0.1, color="r")
             ax.set_title("Change in area: {0:.5f}".format(delta_area))
 
             if type(display) is int:
@@ -473,7 +473,7 @@ class Balloon(object):
             coords[:, 1],
             np.roll(coords[:, 0], 1)
         )
-        return area
+        return area * 0.5
 
 
 def initial_nodes(centre, radius, num_nodes):
