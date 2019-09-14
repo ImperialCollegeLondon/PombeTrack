@@ -20,6 +20,10 @@ import uuid
 from . import balloon
 from . import database
 
+from . import segmentation
+
+
+
 sns.set_context("talk")
 sns.set_style("white")
 
@@ -68,7 +72,7 @@ class Plotter(FigureCanvas):
         self.subfigure_patches = []
         self.dragging = False
         self.previous_id = None
-        self.current_frame_idx = 0
+        self.current_frame_idx = 1
         self.current_channel = 0
 
         self.mpl_connect("key_press_event", self._key_press_event)
@@ -77,7 +81,30 @@ class Plotter(FigureCanvas):
         self.mpl_connect("motion_notify_event", self._motion_notify_event)
 
         self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
+        self.automatic_segmentation()
         self.plot_existing_outlines()
+
+
+    def automatic_segmentation(self):
+        im_mid=self.load_frame(int(np.floor(self.num_frames/2)),0)
+        im_up=self.load_frame(int(np.floor(self.num_frames/2)-1),0)
+        im=np.maximum(im_mid,im_up)
+
+        im_pp=segmentation.preprocessing(im)
+        im_i=segmentation.find_cellinterior(im_pp)
+        im_wat=segmentation.find_watershed(im_i)
+        bd=segmentation.find_bd(im_wat)
+        for index in range(0, len(bd)):
+            self.full_coords=np.array(bd[index][::5])
+            self.outline_id = str(uuid.uuid4())
+            self.cell_id = str(uuid.uuid4())
+            centre=[np.mean(self.full_coords[:,1]).astype(int),np.mean(self.full_coords[:,0]).astype(int)]
+            (self.offset_left, self.offset_top,
+                 centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+            self.auto_coords=self.full_coords-np.array([self.offset_left, self.offset_top])
+            self.save_outline(auto=True)
+
+
 
     def load_metadata(self):
         self.num_frames = self.image_loader.num_frames
@@ -156,7 +183,7 @@ class Plotter(FigureCanvas):
             )
             self.cell_outline_text.append(t)
 
-    def save_outline(self):
+    def save_outline(self,auto=False):
         coords_path = os.path.join(
             self.outline_store,
             "{0}.npy".format(self.outline_id)
@@ -178,8 +205,10 @@ class Plotter(FigureCanvas):
             os.remove(coords_path)
         else:
             database.insertOutline(**data)
-
-        coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
+        if auto:
+            coords=self.auto_coords
+        else:
+            coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
         np.save(coords_path, coords)
 
         if self.previous_id:

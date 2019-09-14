@@ -22,11 +22,15 @@ class ImageLoader:
             self.im_metadata = im_frames.imagej_metadata
             self.num_frames = 1
             self.num_channels = 1
+            self.num_stacks = 1
             if "frames" in self.im_metadata:
                 self.num_frames = int(self.im_metadata["frames"])
 
             if "channels" in self.im_metadata:
                 self.num_channels  = int(self.im_metadata["channels"])
+
+            if "slices" in self.im_metadata:
+                self.num_frames = int(self.im_metadata["slices"])
 
     def get_pixel_conversion(self):
         with tifffile.TiffFile(self.path) as im_frames:
