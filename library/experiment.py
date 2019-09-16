@@ -389,10 +389,15 @@ class Experiment:
 
     def overwrite_settings(self, old_id):
         # by definition, to overwrite, the date, medium, and strain must be the same
+        if self.settings["image_mode"] == "movie":
+            image_mode = 1
+        else:
+            image_mode = 2
+
         database.updateExperimentById(
             old_id,
             image_path=self.settings["image_path"],
-            image_mode=self.settings["image_mode"],
+            image_mode=image_mode,
             num_channels=self.settings["num_channels"],
             num_slices=self.settings["num_slices"],
             num_frames=self.settings["num_frames"],
@@ -406,7 +411,7 @@ class Experiment:
             self.settings["medium"],
             self.settings["strain"],
             self.settings["image_path"],
-            self.settings["image_mode"],
+            self.settings["image_mode"] == "movie" and 1 or 2,
             self.settings["num_channels"],
             self.settings["num_slices"],
             self.settings["num_frames"],
