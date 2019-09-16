@@ -2,7 +2,10 @@
 
 import os
 import pathlib
+import shutil
 import sqlite3
+import sys
+import time
 import uuid
 
 
@@ -23,6 +26,13 @@ class Row(dict):
             row[col_name] = casted
 
         return row
+
+
+class VersionRow(Row):
+    COLS = [
+        ("major_version", "INTEGER", int),
+        ("minor_version", "INTEGER", int),
+    ]
 
 
 class AssociationRow(Row):
@@ -180,6 +190,48 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createVersionTable():
+    query = """
+    CREATE TABLE version
+    (major_version INTEGER, minor_version INTEGER);
+    """
+    query = """
+    CREATE TABLE version
+    ({0});
+    """.format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in VersionRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertVersion(major, minor):
+    query = """
+    INSERT INTO version
+    (major_version, minor_version)
+    VALUES
+    (?, ?);
+    """
+    args = (major, minor)
+    executeQuery(query, args, commit=True)
+
+def updateVersion(major, minor):
+    query = """
+    UPDATE version
+    SET (major_version, minor_version)
+    ?, ?;
+    """
+    args = (major, minor)
+    executeQuery(query, args, commit=True)
+
+def getVersion():
+    query = """
+    SELECT *
+    From version
+    """
+    result = executeQuery(query, fetchone=True)
+    version = VersionRow(result)
+    return (version["major_version"], version["minor_version"])
 
 def createSignalsTable():
     query = """
@@ -680,6 +732,40 @@ def deleteExperimentById(experiment_id):
     """
     args = (experiment_id,)
     executeQuery(query, args, commit=True)
+
+
+def backup_tables():
+    backup_str = "{0}-pombetrack.db.backup".format(time.strftime("%Y-%m-%d"))
+    backup_path = os.path.join("data", "backups", backup_str)
+    backup_num = 1
+    while os.path.exists(backup_path):
+        backup_path = os.path.join("data", "backups", "{0}-{1}".format(
+            backup_str, backup_num
+        ))
+        backup_num += 1
+
+    db_path = os.path.join("data", "pombetrack.db")
+    if not os.path.exists(os.path.dirname(backup_path)):
+        os.makedirs(os.path.dirname(backup_path))
+
+    shutil.copyfile(db_path, backup_path)
+    print("Backed up database to {0}".format(backup_path))
+
+
+def run_database_updates(from_version, to_version):
+    backup_tables()
+    update_sequence = [
+        ((0, 0), (0, 1), _update1),
+    ]
+    for seq_prev, seq_next, update_func in update_sequence:
+        if seq_prev == from_version and seq_prev != to_version:
+            print("Updating from version {0} to {1}".format(seq_prev, seq_next))
+            update_func()
+            from_version = seq_next
+
+def _update1():
+    pass
+
 
 if __name__ == "__main__":
     print("This should be imported")

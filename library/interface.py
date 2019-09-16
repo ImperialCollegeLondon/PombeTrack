@@ -11,7 +11,9 @@ from . import database
 
 
 class Interface:
+    VERSION = (0, 0)
     def __init__(self):
+        self.checkDatabase()
         self.app = QtWidgets.QApplication([])
         self.app.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
         main_font = QtGui.QFont("Fira Sans", 11)
@@ -29,6 +31,17 @@ class Interface:
         self.add_menu()
         self.decorate_window()
         self.window.setLayout(self.base_layout)
+
+    def checkDatabase(self):
+        version_check = database.checkTable("version")
+        if not version_check:
+            database.createVersionTable()
+            database.insertVersion(0, 0)
+
+        known_version = database.getVersion()
+
+        if known_version != self.VERSION:
+            database.run_database_updates(known_version, self.VERSION)
 
     def add_menu(self):
         menubar = QtWidgets.QMenuBar(self.window)
