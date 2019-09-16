@@ -51,17 +51,14 @@ for index in range(0, len(bd)):
 
     # Evolve the contour
     try:
-#         sensitivity=0.5
-#         for i in range(100):
-#             balloon_obj.evolve(display=False,image_percentile=sensitivity)
         sensitivity=0.4
         area_init=balloon_obj.get_area()
-        for i in range(200):
+        for i in range(20):
             balloon_obj.evolve(display=False,image_percentile=sensitivity)
             if balloon_obj.get_area()>1.5*area_init or balloon_obj.get_area()<0.5*area_init:
                 raise ValueError()
         CellList=np.append(CellList, Cell(balloon_obj, origin_y, origin_x, halfwidth))
-    except:
+    except ValueError:
         pass
 
 # Create Image object

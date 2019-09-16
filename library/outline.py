@@ -23,6 +23,7 @@ from . import database
 from . import segmentation
 
 
+import time
 
 sns.set_context("talk")
 sns.set_style("white")
@@ -81,7 +82,8 @@ class Plotter(FigureCanvas):
         self.mpl_connect("motion_notify_event", self._motion_notify_event)
 
         self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
-        self.automatic_segmentation()
+
+
         self.plot_existing_outlines()
 
 
@@ -95,14 +97,24 @@ class Plotter(FigureCanvas):
         im_wat=segmentation.find_watershed(im_i)
         bd=segmentation.find_bd(im_wat)
         for index in range(0, len(bd)):
-            self.full_coords=np.array(bd[index][::5])
-            self.outline_id = str(uuid.uuid4())
-            self.cell_id = str(uuid.uuid4())
-            centre=[np.mean(self.full_coords[:,1]).astype(int),np.mean(self.full_coords[:,0]).astype(int)]
-            (self.offset_left, self.offset_top,
-                 centre_offset_left, centre_offset_top) = self.get_offsets(centre)
-            self.auto_coords=self.full_coords-np.array([self.offset_left, self.offset_top])
-            self.save_outline(auto=True)
+            balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd[index][::5], im)
+            # Evolve the contour
+            try:
+                sensitivity=0.4
+                area_init=balloon_obj.get_area()
+                for i in range(20):
+                    balloon_obj.evolve(display=False,image_percentile=sensitivity)
+                    if balloon_obj.get_area()>1.5*area_init or balloon_obj.get_area()<0.5*area_init:
+                        raise ValueError()
+                self.full_coords=balloon_obj.get_coordinates(accept=True) + [origin_y, origin_x]
+                self.outline_id = str(uuid.uuid4())
+                self.cell_id = str(uuid.uuid4())
+                centre=[np.mean(self.full_coords[:,1]).astype(int),np.mean(self.full_coords[:,0]).astype(int)]
+                self.offset_top, self.offset_left,_,_ = self.get_offsets(centre)
+                self.auto_coords=self.full_coords-np.array([self.offset_left, self.offset_top])
+                self.save_outline(auto=True)
+            except ValueError:
+                pass 
 
 
 
@@ -628,6 +640,8 @@ class Toolbar(NavigationToolbar):
         self.toolitems = [
             ("Home", "Home", "home_large", "home_event"),
             (None, None, None, None),
+            ("Auto", "Automatic segmentation", "auto_segmentation", "auto_segmentation"),
+            (None, None, None, None),
             ("Pan", "Pan", "move_large", "pan"),
             ("Zoom", "Zoom", "zoom_to_rect_large", "zoom"),
             (None, None, None, None),
@@ -658,6 +672,14 @@ class Toolbar(NavigationToolbar):
 
     def home_event(self, *args, **kwargs):
         self.canvas._home_event()
+
+    def auto_segmentation(self):
+        startt=time.time()
+        self.canvas.automatic_segmentation()
+        print(time.time()-startt)
+        self.canvas.plot_existing_outlines()
+        self.canvas.refresh()
+
 
     def delete(self):
         self.canvas._delete_event()

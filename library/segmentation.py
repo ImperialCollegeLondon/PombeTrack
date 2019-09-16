@@ -10,6 +10,7 @@ import skimage
 from skimage.segmentation import find_boundaries
 from scipy import ndimage as ndi
 
+from . import balloon
 # import sys
 # sys.path.append('./src/PombeTrack/library')
 # #  sys.path.append('../PombeTrack/library')
@@ -202,40 +203,40 @@ def find_bd(im_wat):
 
 
 
-# # Find balloon object in a small window
-# def find_balloon_obj(edges, base_image):
-#     halfwidth=int(np.amax(np.amax(edges,0)-np.amin(edges,0))/2)+50
-#     # Centre of the cell
-#     cy=np.mean(edges[:,0]).astype(int)
-#     cx=np.mean(edges[:,1]).astype(int)
-
-#     # Set initial origin and Find offset
-#     oy=cy-halfwidth
-#     ox=cx-halfwidth
-#     if oy<0:
-#         offset_y=oy
-#     elif oy>2047:
-#         offset_y=oy-2047
-#     else:
-#         offset_y=0
-#     if ox<0:
-#         offset_x=ox
-#     elif ox>2047:
-#         offset_x=ox-2047
-#     else:
-#         offset_x=0
-
-#     # Find origin(top left corner) for window
-#     origin_y=oy-offset_y
-#     origin_x=ox-offset_x
-
-#     # Set initial nodes
-#     init_nodes=deepcopy(edges)
-#     init_nodes[:,0]=init_nodes[:,0]-origin_y
-#     init_nodes[:,1]=init_nodes[:,1]-origin_x
-
-#     # Set im_window and balloon object
-#     im_window=base_image[origin_y:origin_y+2*halfwidth,origin_x:origin_x+2*halfwidth]
-
-#     balloon_obj=balloon.Balloon(init_nodes,im_window)
-#     return balloon_obj, origin_y, origin_x, halfwidth
+# Find balloon object in a small window
+def find_balloon_obj(edges, base_image):
+   halfwidth=int(np.amax(np.amax(edges,0)-np.amin(edges,0))/2)+50
+   # Centre of the cell
+   cy=np.mean(edges[:,0]).astype(int)
+   cx=np.mean(edges[:,1]).astype(int)
+#
+   # Set initial origin and Find offset
+   oy=cy-halfwidth
+   ox=cx-halfwidth
+   if oy<0:
+       offset_y=oy
+   elif oy>2047:
+       offset_y=oy-2047
+   else:
+       offset_y=0
+   if ox<0:
+       offset_x=ox
+   elif ox>2047:
+       offset_x=ox-2047
+   else:
+       offset_x=0
+#
+   # Find origin(top left corner) for window
+   origin_y=oy-offset_y
+   origin_x=ox-offset_x
+#
+   # Set initial nodes
+   init_nodes=deepcopy(edges)
+   init_nodes[:,0]=init_nodes[:,0]-origin_y
+   init_nodes[:,1]=init_nodes[:,1]-origin_x
+#
+   # Set im_window and balloon object
+   im_window=base_image[origin_y:origin_y+2*halfwidth,origin_x:origin_x+2*halfwidth]
+#
+   balloon_obj=balloon.Balloon(init_nodes,im_window)
+   return balloon_obj, origin_y, origin_x, halfwidth

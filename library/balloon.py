@@ -168,7 +168,7 @@ class Balloon(object):
         if len(self.nodes) < 20:
             return self.nodes
 
-        neighbour_min_angle = np.pi / 3
+        neighbour_min_angle = np.pi*2 / 3
         for n1 in self.nodes:
             n0 = n1.neighbour1
             n2 = n1.neighbour2
@@ -194,7 +194,7 @@ class Balloon(object):
         return new_nodes
 
     def insert_nodes(self):
-        neighbour_max_distance = 5
+        neighbour_max_distance = 10
         new_nodes = []
         for n in self.nodes:
             left_distance = n._get_distance(n.neighbour1)
