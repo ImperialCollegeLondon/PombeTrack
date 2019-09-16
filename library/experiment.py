@@ -392,8 +392,10 @@ class Experiment:
         database.updateExperimentById(
             old_id,
             image_path=self.settings["image_path"],
-            channel_green=self.settings["channels"]["green"],
-            channel_red=self.settings["channels"]["red"],
+            image_mode=self.settings["image_mode"],
+            num_channels=self.settings["num_channels"],
+            num_slices=self.settings["num_slices"],
+            num_frames=self.settings["num_frames"],
         )
         print("Experiment ID={0} overwritten".format(old_id))
         self.window.close()
@@ -404,8 +406,10 @@ class Experiment:
             self.settings["medium"],
             self.settings["strain"],
             self.settings["image_path"],
-            self.settings["channels"]["green"],
-            self.settings["channels"]["red"],
+            self.settings["image_mode"],
+            self.settings["num_channels"],
+            self.settings["num_slices"],
+            self.settings["num_frames"],
         )
         print("Experiment saved with ID={0}".format(new_id))
         self.window.close()
