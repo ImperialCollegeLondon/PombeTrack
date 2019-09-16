@@ -83,7 +83,7 @@ class ExperimentView:
         self._addLineageVerification()
         self._addAnalysis()
 
-    def delete_experiment(self):
+    def delete_experiment(self, close_window=True):
         # confirm first
         alert = QtWidgets.QMessageBox()
         delete_confirm = alert.question(
@@ -93,7 +93,8 @@ class ExperimentView:
         )
         if delete_confirm == QtWidgets.QMessageBox.Yes:
             database.deleteExperimentById(self._data.experiment_id)
-            self.window.close()
+            if close_window:
+                self.window.close()
 
     def _addDetails(self):
         details_box = QtWidgets.QGroupBox("Details")

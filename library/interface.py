@@ -191,6 +191,10 @@ class Interface:
         self.edit_btn.clicked[bool].connect(self.view_experiment)
         self.btn_row.addWidget(self.edit_btn)
 
+        self.delete_btn = QtWidgets.QPushButton("Delete experiment")
+        self.delete_btn.clicked[bool].connect(self.delete_experiment)
+        self.btn_row.addWidget(self.delete_btn)
+
         self.btn_row.setAlignment(QtCore.Qt.AlignLeft)
         self.base_layout.addLayout(self.btn_row)
 
@@ -218,6 +222,7 @@ class Interface:
 
     def table_click_event(self, item):
         self.edit_btn._experiment_id = item._experiment_id
+        self.delete_btn._experiment_id = item._experiment_id
 
     def get_existing_experiments(self):
         experiments = database.getExperiments()
@@ -244,6 +249,16 @@ class Interface:
         dialog.setModal(True)
         dialog.finished[int].connect(self._refresh_layout)
         e.show_experiment(window=dialog)
+
+    def delete_experiment(self):
+        if (not hasattr(self.experiment_table, "selectedItems") or
+                len(self.experiment_table.selectedItems()) == 0):
+            return
+
+        e = experiment.ExperimentView(self.delete_btn._experiment_id)
+        e.window = self.window
+        e.delete_experiment(close_window=False)
+        self._refresh_layout()
 
     def _clear_layout(self, l):
         for i in reversed(range(l.count())):
