@@ -8,6 +8,8 @@ import sys
 import time
 import uuid
 
+from . import loader
+
 
 class Row(dict):
     COLS = []
@@ -128,8 +130,10 @@ class ExperimentRow(Row):
         ("medium", "TEXT", str),
         ("strain", "TEXT", str),
         ("image_path", "TEXT", str),
-        ("channel_green", "INTEGER", bool),
-        ("channel_red", "INTEGER", bool),
+        ("image_mode", "INTEGER DEFAULT 1", int),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
         ("outlined", "INTEGER DEFAULT 0", bool),
         ("verified", "INTEGER DEFAULT 0", bool),
         ("analysed", "INTEGER DEFAULT 0", bool),
@@ -137,7 +141,10 @@ class ExperimentRow(Row):
     def parseRow(self, r):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
-            row[col_name] = caster(r)
+            if r is None:
+                row[col_name] = None
+            else:
+                row[col_name] = caster(r)
 
         if "\\" in row["image_path"]:
             row["image_path"] = pathlib.PureWindowsPath(row["image_path"]).as_posix()
@@ -149,8 +156,10 @@ class ExperimentRow(Row):
             "medium": row["medium"],
             "strain": row["strain"],
             "image_path": row["image_path"],
-            "channels": {"green": bool(row["channel_green"]),
-                         "red": bool(row["channel_red"])},
+            "image_mode": row["image_mode"] == 1 and "movie" or "static",
+            "num_channels": row["num_channels"],
+            "num_slices": row["num_slices"],
+            "num_frames": row["num_frames"],
             "outlined": bool(row["outlined"]),
             "verified": bool(row["verified"]),
             "analysed": bool(row["analysed"]),
@@ -660,18 +669,19 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, im
         return False
 
 def insertExperiment(date_year, date_month, date_day, medium, strain,
-                     image_path, channel_green, channel_red):
+                     image_path, image_mode, num_channels, num_slices,
+                     num_frames):
     query = """
     INSERT INTO experiments
-    (experiment_id, date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    (experiment_id, date_year, date_month, date_day, medium, strain,
+     image_path, image_mode, num_channels, num_slices, num_frames)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     experiment_id = str(uuid.uuid4())
     args = (
         experiment_id,
-        date_year, date_month, date_day,
-        medium, strain, image_path,
-        channel_green, channel_red,
+        date_year, date_month, date_day, medium, strain, image_path,
+        image_mode, num_channels, num_slices, num_frames,
     )
     new_id = executeQuery(query, args, commit=True)
     return new_id
@@ -681,8 +691,8 @@ def updateExperimentById(experiment_id, **kwargs):
     set_statement = []
 
     permitted_columns = [
-        "medium", "strain", "image_path", "channel_green", "channel_red",
-        "outlined", "verified", "analysed",
+        "medium", "strain", "image_path", "image_mode", "num_channels",
+        "num_slices", "num_frames", "outlined", "verified", "analysed",
     ]
     for kw, val in kwargs.items():
         if kw not in permitted_columns:
@@ -764,7 +774,70 @@ def run_database_updates(from_version, to_version):
             from_version = seq_next
 
 def _update1():
-    pass
+    print("Adding image_mode, num_frames, num_channels, num_slices columns to "
+          "experiments table and removing channels column")
+    old_columns = ",".join([
+        "experiment_num", "experiment_id", "date_year", "date_month",
+        "date_day", "medium", "strain", "image_path", "outlined", "verified",
+        "analysed",
+    ])
+    create_query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in ExperimentRow.COLS
+    ]))
+    queries = [
+        "CREATE TABLE _backup({0});".format(old_columns),
+        """
+        INSERT INTO _backup
+        SELECT {0} FROM experiments;
+        """.format(old_columns),
+        "DROP TABLE experiments;",
+        create_query,
+        "INSERT INTO experiments ({0}) SELECT {0} FROM _backup;".format(old_columns),
+        "DROP TABLE _backup;",
+    ]
+    for query in queries:
+        executeQuery(query, commit=True)
+
+    print("Inspecting image files for channel information")
+    experiments = getExperiments()
+    for experiment in experiments:
+        # load image for movie/static, num_frames, num_channels, num_slices
+        image_path = experiment["image_path"]
+        if not os.path.exists(image_path):
+            print("! File {0} is not accessible, skipping it".format(
+                image_path
+            ))
+            num_frames, num_channels, num_slices = 1, 1, 1
+        else:
+            meta = loader.ImageLoader(image_path).im_metadata
+            if "frames" in meta:
+                num_frames = meta["frames"]
+            else:
+                num_frames = 1
+
+            if "channels" in meta:
+                num_channels = meta["channels"]
+            else:
+                num_channels = 1
+
+            if "slices" in meta:
+                num_slices = meta["slices"]
+            else:
+                num_slices = 1
+
+            if num_frames == 1:
+                image_mode = 2
+            else:
+                image_mode = 1
+
+        updateExperimentById(
+            experiment["experiment_id"],
+            image_mode=image_mode,
+            num_frames=num_frames,
+            num_channels=num_channels,
+            num_slices=num_slices,
+        )
 
 
 if __name__ == "__main__":

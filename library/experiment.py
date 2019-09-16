@@ -258,6 +258,96 @@ class Experiment:
 
     def setImagePath(self, path):
         self.settings["image_path"] = path
+        self._assignDimensions()
+        if self.settings["num_frames"] == 1:
+            self.setImageMode("static", True)
+        elif self.settings["num_frames"] > 1:
+            self.setImageMode("movie", True)
+
+    def _getNum(self, value, widget=None):
+        try:
+            num = int(value)
+            assert num > 0
+        except (ValueError, AssertionError):
+            if widget:
+                widget.setStyleSheet("QLineEdit { border: 1px solid red }")
+            return
+        else:
+            if widget:
+                widget.setStyleSheet("QLineEdit { }")
+            return num
+
+    def setNumF(self, value):
+        widget = self.dim_widgets["frames"][1]
+        num = self._getNum(value, widget)
+        if not num:
+            return
+
+        widget.setText(str(num))
+        self.settings["num_frames"] = num
+
+    def setNumZ(self, value):
+        widget = self.dim_widgets["zslices"][1]
+        num = self._getNum(value, widget)
+        if not num:
+            return
+
+        widget.setText(str(num))
+        self.settings["num_slices"] = num
+
+    def setNumC(self, value):
+        widget = self.dim_widgets["channels"][1]
+        num = self._getNum(value, widget)
+        if not num:
+            return
+
+        widget.setText(str(num))
+        self.settings["num_channels"] = num
+
+    def _assignDimensions(self):
+        image_path = self.settings["image_path"]
+        if os.path.exists(image_path):
+            meta = loader.ImageLoader(image_path).im_metadata
+            if "frames" in meta:
+                self.setNumF(meta["frames"])
+            else:
+                self.setNumF(1)
+
+            if "channels" in meta:
+                self.setNumC(meta["channels"])
+            else:
+                self.setNumC(1)
+
+            if "slices" in meta:
+                self.setNumZ(meta["slices"])
+            else:
+                self.setNumZ(1)
+
+    def setImageMode(self, imagemode, state):
+        static_test = (
+            (imagemode == "static" and state == True) or
+            (imagemode == "movie" and state == False)
+        )
+        movie_test = (
+            (imagemode == "movie" and state == True) or
+            (imagemode == "static" and state == False)
+        )
+        if static_test and self.settings["image_mode"] != "static":
+            self.settings["image_mode"] = "static"
+            # hide num frames input box
+            self.dim_widgets["frames"][0].setVisible(False)
+            self.dim_widgets["frames"][1].setVisible(False)
+            self.image_mode_buttons[1].setChecked(True)
+            if self.settings["image_path"]:
+                self._assignDimensions()
+
+        elif movie_test and self.settings["image_mode"] != "movie":
+            self.settings["image_mode"] = "movie"
+            self.dim_widgets["frames"][0].setVisible(True)
+            self.dim_widgets["frames"][1].setVisible(True)
+            self.image_mode_buttons[0].setChecked(True)
+            if self.settings["image_path"]:
+                self._assignDimensions()
 
     def setChannelGreen(self, state):
         self.settings["channels"]["green"] = state
@@ -329,8 +419,9 @@ class Experiment:
             self.medium_form[2].setCurrentIndex(0)
             self.strain_form[1].setText("")
             self.strain_form[2].setCurrentIndex(0)
-            self.channels_form[1][0].setChecked(True)
-            self.channels_form[1][1].setChecked(True)
+            self.setImageMode("movie", True)
+            # self.channels_form[1][0].setChecked(True)
+            # self.channels_form[1][1].setChecked(True)
 
         self.settings = {
             "date": (datetime.datetime.today().year,
@@ -339,7 +430,10 @@ class Experiment:
             "medium": None,
             "strain": None,
             "image_path": None,
-            "channels": {"red": True, "green": True},
+            "image_mode": "movie",
+            "num_channels": 1,
+            "num_slices": 1,
+            "num_frames": 1,
         }
 
 
@@ -350,7 +444,8 @@ class Experiment:
             medium
             strain
             image file location
-            channels
+            image mode (static or movie)
+            image dimensions (frames, slices, channels)
 
         Note, needs a ANALYSED boolean flag somewhere, or possibly a date stamp specifying when
         """
@@ -424,22 +519,59 @@ class Experiment:
             initial_path="/mnt/d",
         )
 
-        label = QtWidgets.QLabel("Fluorescent channels")
+        label = QtWidgets.QLabel("Image mode")
         btngroup = QtWidgets.QHBoxLayout()
-        green = QtWidgets.QPushButton("Green")
-        green.setCheckable(True)
-        green.setChecked(True)
-        green.clicked[bool].connect(self.setChannelGreen)
-        red = QtWidgets.QPushButton("Red")
-        red.setCheckable(True)
-        red.setChecked(True)
-        red.clicked[bool].connect(self.setChannelRed)
-        btngroup.addWidget(green)
-        btngroup.addWidget(red)
+        movie = QtWidgets.QRadioButton("Movie")
+        movie.setChecked(True)
+        movie.clicked[bool].connect(lambda state: self.setImageMode("movie", state))
+        static = QtWidgets.QRadioButton("Static")
+        static.setChecked(False)
+        static.clicked[bool].connect(lambda state: self.setImageMode("static", state))
+        self.image_mode_buttons = [movie, static]
+        btngroup.addWidget(movie)
+        btngroup.addWidget(static)
         layout.addWidget(label, self.current_row, 0)
         layout.addLayout(btngroup, self.current_row, 1)
-        self.channels_form = label, (green, red)
         self.current_row += 1
+
+        label = QtWidgets.QLabel("Dimensionality")
+        dim_layout = QtWidgets.QHBoxLayout()
+        dim_frames = QtWidgets.QLabel("Frames")
+        dim_frames_widget = QtWidgets.QLineEdit("1")
+        dim_zslices = QtWidgets.QLabel("Z-slices")
+        dim_zslices_widget = QtWidgets.QLineEdit("1")
+        dim_channels = QtWidgets.QLabel("Channels")
+        dim_channels_widget = QtWidgets.QLineEdit("1")
+        self.dim_widgets = {
+            "frames": (dim_frames, dim_frames_widget, self.setNumF),
+            "zslices": (dim_zslices, dim_zslices_widget, self.setNumZ),
+            "channels": (dim_channels, dim_channels_widget, self.setNumC),
+        }
+        for k, (wlabel, wwidg, wcb) in self.dim_widgets.items():
+            wwidg.textChanged[str].connect(wcb)
+            dim_layout.addWidget(wlabel)
+            dim_layout.addWidget(wwidg)
+
+        layout.addWidget(label, self.current_row, 0)
+        layout.addLayout(dim_layout, self.current_row, 1)
+        self.current_row += 1
+
+        # label = QtWidgets.QLabel("Fluorescent channels")
+        # btngroup = QtWidgets.QHBoxLayout()
+        # green = QtWidgets.QPushButton("Green")
+        # green.setCheckable(True)
+        # green.setChecked(True)
+        # green.clicked[bool].connect(self.setChannelGreen)
+        # red = QtWidgets.QPushButton("Red")
+        # red.setCheckable(True)
+        # red.setChecked(True)
+        # red.clicked[bool].connect(self.setChannelRed)
+        # btngroup.addWidget(green)
+        # btngroup.addWidget(red)
+        # layout.addWidget(label, self.current_row, 0)
+        # layout.addLayout(btngroup, self.current_row, 1)
+        # self.channels_form = label, (green, red)
+        # self.current_row += 1
 
         confirm_btn = QtWidgets.QPushButton("OK")
         confirm_btn.clicked.connect(self.confirm_settings)
