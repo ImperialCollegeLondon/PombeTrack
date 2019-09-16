@@ -11,7 +11,7 @@ from . import database
 
 
 class Interface:
-    VERSION = (0, 1)
+    VERSION = (0, 2)
     def __init__(self):
         self.checkDatabase()
         self.app = QtWidgets.QApplication([])

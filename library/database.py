@@ -130,7 +130,7 @@ class ExperimentRow(Row):
         ("medium", "TEXT", str),
         ("strain", "TEXT", str),
         ("image_path", "TEXT", str),
-        ("image_mode", "INTEGER DEFAULT 1", int),
+        ("image_mode", "TEXT", str),
         ("num_channels", "INTEGER", int),
         ("num_slices", "INTEGER", int),
         ("num_frames", "INTEGER", int),
@@ -766,6 +766,7 @@ def run_database_updates(from_version, to_version):
     backup_tables()
     update_sequence = [
         ((0, 0), (0, 1), _update1),
+        ((0, 1), (0, 2), _update2),
     ]
     for seq_prev, seq_next, update_func in update_sequence:
         if seq_prev == from_version and seq_prev != to_version:
@@ -871,6 +872,82 @@ def _update1():
     args = (0, 1)
     cursor.execute(query, args)
     conn.commit()
+    conn.close()
+
+def _update2():
+    print("Changing image_mode column to TEXT")
+    new_cols = [
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("image_mode", "TEXT", str),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
+    ]
+    col_names = [x[0] for x in new_cols]
+    col_subset = [x[0] for x in new_cols if x[0] != "image_mode"]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    query = "CREATE TABLE _backup({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(query)
+    conn.commit()
+
+    query = "INSERT INTO _backup ({0}) SELECT {0} FROM experiments;".format(
+        ",".join(col_subset)
+    )
+    cursor.execute(query)
+    conn.commit()
+
+    query = "SELECT experiment_id, image_mode FROM experiments;"
+    cursor.execute(query)
+    for experiment in cursor.fetchall():
+        query = "UPDATE _backup SET image_mode = ? WHERE experiment_id = ?"
+        if experiment[1] == 1:
+            args = ("movie", experiment[0])
+        if experiment[1] == 2:
+            args = ("static", experiment[0])
+
+        cursor.execute(query, args)
+    conn.commit()
+
+    query = "DROP TABLE experiments;"
+    cursor.execute(query)
+    conn.commit()
+
+    create_query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(create_query)
+    conn.commit()
+
+    query = "INSERT INTO experiments ({0}) SELECT {0} from _backup;".format(
+        ",".join(col_names),
+    )
+    cursor.execute(query)
+
+    query = "DROP TABLE _backup;"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 1)
+    cursor.execute(query, args)
+    conn.commit()
+
     conn.close()
 
 
