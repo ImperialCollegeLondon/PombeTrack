@@ -227,8 +227,8 @@ def insertVersion(major, minor):
 def updateVersion(major, minor):
     query = """
     UPDATE version
-    SET (major_version, minor_version)
-    ?, ?;
+    SET major_version = ?,
+        minor_version = ?;
     """
     args = (major, minor)
     executeQuery(query, args, commit=True)
@@ -866,6 +866,11 @@ def _update1():
         args = (image_mode, num_frames, num_channels, num_slices, experiment[1])
         cursor.execute(query, args)
         conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 1)
+    cursor.execute(query, args)
+    conn.commit()
     conn.close()
 
 
