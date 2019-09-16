@@ -763,7 +763,6 @@ def backup_tables():
 
 
 def run_database_updates(from_version, to_version):
-    backup_tables()
     update_sequence = [
         ((0, 0), (0, 1), _update1),
         ((0, 1), (0, 2), _update2),
@@ -771,6 +770,7 @@ def run_database_updates(from_version, to_version):
     for seq_prev, seq_next, update_func in update_sequence:
         if seq_prev == from_version and seq_prev != to_version:
             print("Updating from version {0} to {1}".format(seq_prev, seq_next))
+            backup_tables()
             update_func()
             from_version = seq_next
 
