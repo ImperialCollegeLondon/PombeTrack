@@ -36,10 +36,12 @@ class Interface:
         version_check = database.checkTable("version")
         if not version_check:
             database.createVersionTable()
-            database.insertVersion(0, 0)
+            if database.checkTable("experiments"):
+                database.insertVersion(0, 0)
+            else:
+                database.insertVersion(*self.VERSION)
 
         known_version = database.getVersion()
-
         if known_version != self.VERSION:
             database.run_database_updates(known_version, self.VERSION)
 
