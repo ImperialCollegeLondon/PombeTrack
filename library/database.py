@@ -781,9 +781,27 @@ def _update1():
         "date_day", "medium", "strain", "image_path", "outlined", "verified",
         "analysed",
     ])
+    new_cols = [
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("image_mode", "INTEGER DEFAULT 1", int),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
+    ]
+
     create_query = "CREATE TABLE experiments ({0});".format(",".join([
         "{0} {1}".format(x[0], x[1])
-        for x in ExperimentRow.COLS
+        for x in new_cols
     ]))
     queries = [
         "CREATE TABLE _backup({0});".format(old_columns),
@@ -796,14 +814,20 @@ def _update1():
         "INSERT INTO experiments ({0}) SELECT {0} FROM _backup;".format(old_columns),
         "DROP TABLE _backup;",
     ]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
     for query in queries:
-        executeQuery(query, commit=True)
+        cursor.execute(query)
+        conn.commit()
 
     print("Inspecting image files for channel information")
-    experiments = getExperiments()
+    cursor.execute("SELECT * FROM experiments;")
+    experiments = cursor.fetchall()
+
     for experiment in experiments:
         # load image for movie/static, num_frames, num_channels, num_slices
-        image_path = experiment["image_path"]
+        image_path = experiment[7]
         if not os.path.exists(image_path):
             print("! File {0} is not accessible, skipping it".format(
                 image_path
@@ -831,13 +855,18 @@ def _update1():
             else:
                 image_mode = 1
 
-        updateExperimentById(
-            experiment["experiment_id"],
-            image_mode=image_mode,
-            num_frames=num_frames,
-            num_channels=num_channels,
-            num_slices=num_slices,
-        )
+        query = """
+        UPDATE experiments
+        SET image_mode = ?,
+            num_frames = ?,
+            num_channels = ?,
+            num_slices = ?
+        WHERE experiment_id = ?;
+        """
+        args = (image_mode, num_frames, num_channels, num_slices, experiment[1])
+        cursor.execute(query, args)
+        conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":
