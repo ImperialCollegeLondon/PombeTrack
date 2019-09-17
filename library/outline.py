@@ -70,6 +70,7 @@ class Plotter(FigureCanvas):
         self.previous_id = None
         self.current_frame_idx = 0
         self.current_channel = 0
+        self.current_slice = 0
 
         self.mpl_connect("key_press_event", self._key_press_event)
         self.mpl_connect("button_press_event", self._button_press_event)
@@ -82,18 +83,22 @@ class Plotter(FigureCanvas):
     def load_metadata(self):
         self.num_frames = self.image_loader.num_frames
         self.num_channels = self.image_loader.num_channels
+        self.num_slices = self.image_loader.num_slices
 
-    def load_frame(self, frame_idx=None, channel_idx=None):
+    def load_frame(self, frame_idx=None, channel_idx=None, slice_idx=None):
         if frame_idx is None:
             frame_idx = self.current_frame_idx
 
         if channel_idx is None:
             channel_idx = self.current_channel
 
+        if slice_idx is None:
+            slice_idx = self.current_slice
+
         if frame_idx < 0 or frame_idx > (self.num_frames - 1):
             return np.zeros((100, 100))
 
-        return self.image_loader.load_frame(frame_idx, channel_idx)
+        return self.image_loader.load_frame(frame_idx, slice_idx, channel_idx)
 
     def refresh(self):
         self.draw()
@@ -114,7 +119,18 @@ class Plotter(FigureCanvas):
                 break
 
     def plot_existing_outlines(self):
-        self.main_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
+        if self._data.image_mode == "static":
+            title = "Image #{0}".format(self.current_frame_idx + 1)
+        else:
+            title = "F={0}".format(self.current_frame_idx + 1)
+
+        if self._data.num_slices > 1:
+            title += " Z={0}".format(self.current_slice + 1)
+
+        if self._data.num_channels > 1:
+            title += " C={0}".format(self.current_channel + 1)
+
+        self.main_ax.set_title(title)
         while True:
             try:
                 self.main_ax.lines.pop()
@@ -263,6 +279,20 @@ class Plotter(FigureCanvas):
 
         self.draw()
 
+    def _slice_change(self, delta):
+        if delta < 0 and self.current_slice <= 0:
+            return
+
+        if delta > 0 and self.current_slice >= self.num_slices - 1:
+            return
+
+        self.current_slice += delta
+        new_im = self.load_frame()
+        self.main_frame.set_data(new_im)
+        self.plot_existing_outlines()
+        self.main_frame.set_clim([new_im.min(), new_im.max()])
+        self.draw()
+
     def _channel_change(self, delta):
         if delta < 0 and self.current_channel <= 0:
             return
@@ -292,17 +322,23 @@ class Plotter(FigureCanvas):
         self.draw()
 
     def _key_press_event(self, evt):
-        if evt.key == "left":
+        if evt.key == "left" or evt.key == "a":
             self._channel_change(-1)
 
-        elif evt.key == "right":
+        elif evt.key == "right" or evt.key == "d":
             self._channel_change(1)
 
-        elif evt.key == "up":
+        elif evt.key == "up" or evt.key == "w":
             self._frame_change(1)
 
-        elif evt.key == "down":
+        elif evt.key == "down" or evt.key == "s":
             self._frame_change(-1)
+
+        elif evt.key == "q":
+            self._slice_change(-1)
+
+        elif evt.key == "e":
+            self._slice_change(1)
 
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
