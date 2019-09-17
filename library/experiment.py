@@ -107,15 +107,21 @@ class ExperimentView:
 
         row_num = 0
         col_num = 0
-        for elem_num, (label_str, kw) in enumerate([
+        detail_items = [
             ("Date", "date"),
             ("Strain", "strain"),
             ("Medium", "medium"),
             ("Image", "image_path"),
-        ]):
+            ("Mode", "image_mode"),
+            ("Files", "file_mode"),
+            ("Frames", "num_frames"),
+            ("Channels", "num_channels"),
+            # ("Slices", "num_slices"),
+        ]
+        for elem_num, (label_str, kw) in enumerate(detail_items):
             label = QtWidgets.QLabel(label_str)
             label.setFont(label_font)
-            val = QtWidgets.QLabel(self._data[kw])
+            val = QtWidgets.QLabel(str(self._data[kw]))
             layout.addWidget(label, row_num, col_num)
             layout.addWidget(val, row_num, col_num + 1)
             col_num += 2
