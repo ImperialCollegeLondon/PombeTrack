@@ -471,6 +471,17 @@ class Experiment:
             self.settings["num_frames"],
             self.settings["file_mode"],
         )
+        if self.settings["file_mode"] == "multi":
+            if not database.checkTable("imagepath"):
+                database.createImagePathTable()
+
+            for i, image_path in enumerate(self.image_files):
+                database.insertImagePath(
+                    i + 1,
+                    new_id,
+                    image_path,
+                )
+
         print("Experiment #{0} saved with ID={1}".format(new_num, new_id))
         self.window.close()
 

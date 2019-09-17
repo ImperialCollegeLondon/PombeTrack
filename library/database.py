@@ -37,6 +37,20 @@ class VersionRow(Row):
     ]
 
 
+class ImagePathRow(Row):
+    COLS = [
+        ("image_num", "INTEGER", int),
+        ("experiment_id", "TEXT", str),
+        ("image_path", "TEXT", str),
+    ]
+    def parseRow(self, r):
+        row = super().parseRow(r)
+        if "\\" in row["image_path"]:
+            row["image_path"] = pathlib.PureWindowsPath(row["image_path"]).as_posix()
+
+        return row
+
+
 class AssociationRow(Row):
     COLS = [
         ("association_num", "INTEGER PRIMARY KEY", int),
@@ -200,6 +214,48 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createImagePathTable():
+    query = "CREATE TABLE imagepath ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in ImagePathRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertImagePath(image_num, experiment_id, image_path):
+    query = """
+    INSERT INTO imagepath
+    (image_num, experiment_id, image_path)
+    VALUES (?, ?, ?);
+    """
+    args = (image_num, experiment_id, image_path)
+    executeQuery(query, args, commit=True)
+
+def getImagePaths(experiment_id):
+    query = """
+    SELECT *
+    FROM imagepath
+    WHERE experiment_id = ?;
+    """
+    args = (experiment_id,)
+    r = executeQuery(query, args, fetchmany=True)
+    paths = sorted(
+        [ImagePathRow(x) for x in r],
+        key=lambda x: x["image_num"],
+    )
+    return paths
+
+def getNextImageNum(experiment_id):
+    paths = getImagePaths(experiment_id)
+    last_path = paths[-1]
+    return last_path["image_num"] + 1
+
+def deleteImagePaths(experiment_id):
+    query = """
+    DELETE FROM imagepath
+    WHERE experiment = ?;
+    """
+    executeQuery(query, args, commit=True)
 
 def createVersionTable():
     query = """
