@@ -396,6 +396,7 @@ class Experiment:
             num_channels=self.settings["num_channels"],
             num_slices=self.settings["num_slices"],
             num_frames=self.settings["num_frames"],
+            file_mode=self.settings["file_mode"],
         )
         print("Experiment ID={0} overwritten".format(old_id))
         self.window.close()
@@ -410,6 +411,7 @@ class Experiment:
             self.settings["num_channels"],
             self.settings["num_slices"],
             self.settings["num_frames"],
+            self.settings["file_mode"],
         )
         print("Experiment saved with ID={0}".format(new_id))
         self.window.close()
@@ -438,6 +440,7 @@ class Experiment:
             "num_channels": 1,
             "num_slices": 1,
             "num_frames": 1,
+            "file_mode": "single",
         }
 
 
@@ -628,8 +631,24 @@ class Experiment:
                 widget.setStyleSheet("QLineEdit { color: rgb(157, 40, 20) }")
 
         label = QtWidgets.QLabel(label_text, *label_args, **label_kwargs)
+        centralpart = QtWidgets.QGridLayout()
+        centralpart.setColumnStretch(0, 5)
+        centralpart.setColumnStretch(1, 1)
+
         widget = QtWidgets.QLineEdit(*widget_args, **widget_kwargs)
         widget.textChanged[str].connect(_pathValidate)
+        checkbox = QtWidgets.QCheckBox("Image series?")
+        def checkbox_cb(state):
+            if state:
+                self.settings["file_mode"] = "multi"
+            else:
+                self.settings["file_mode"] = "single"
+            self._assignDimensions()
+
+        checkbox.clicked[bool].connect(checkbox_cb)
+
+        centralpart.addWidget(widget, 0, 0)
+        centralpart.addWidget(checkbox, 0, 1)
 
         if change_callback and type(change_callback) is list:
             for cb in change_callback:
@@ -649,7 +668,7 @@ class Experiment:
         btn.clicked.connect(callback)
 
         layout.addWidget(label, self.current_row, 0)
-        layout.addWidget(widget, self.current_row, 1)
+        layout.addLayout(centralpart, self.current_row, 1)
         layout.addWidget(btn, self.current_row, 2)
         self.current_row += 1
         return label, widget

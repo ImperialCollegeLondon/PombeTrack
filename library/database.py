@@ -134,6 +134,7 @@ class ExperimentRow(Row):
         ("num_channels", "INTEGER", int),
         ("num_slices", "INTEGER", int),
         ("num_frames", "INTEGER", int),
+        ("file_mode", "TEXT", str),
         ("outlined", "INTEGER DEFAULT 0", bool),
         ("verified", "INTEGER DEFAULT 0", bool),
         ("analysed", "INTEGER DEFAULT 0", bool),
@@ -670,18 +671,18 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, im
 
 def insertExperiment(date_year, date_month, date_day, medium, strain,
                      image_path, image_mode, num_channels, num_slices,
-                     num_frames):
+                     num_frames, file_mode):
     query = """
     INSERT INTO experiments
     (experiment_id, date_year, date_month, date_day, medium, strain,
-     image_path, image_mode, num_channels, num_slices, num_frames)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+     image_path, image_mode, num_channels, num_slices, num_frames, file_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     experiment_id = str(uuid.uuid4())
     args = (
         experiment_id,
         date_year, date_month, date_day, medium, strain, image_path,
-        image_mode, num_channels, num_slices, num_frames,
+        image_mode, num_channels, num_slices, num_frames, file_mode,
     )
     new_id = executeQuery(query, args, commit=True)
     return new_id
@@ -692,7 +693,7 @@ def updateExperimentById(experiment_id, **kwargs):
 
     permitted_columns = [
         "medium", "strain", "image_path", "image_mode", "num_channels",
-        "num_slices", "num_frames", "outlined", "verified", "analysed",
+        "num_slices", "num_frames", "file_mode", "outlined", "verified", "analysed",
     ]
     for kw, val in kwargs.items():
         if kw not in permitted_columns:
@@ -766,6 +767,7 @@ def run_database_updates(from_version, to_version):
     update_sequence = [
         ((0, 0), (0, 1), _update1),
         ((0, 1), (0, 2), _update2),
+        ((0, 2), (0, 3), _update3),
     ]
     for seq_prev, seq_next, update_func in update_sequence:
         if seq_prev == from_version and seq_prev != to_version:
@@ -949,6 +951,73 @@ def _update2():
     conn.commit()
     conn.close()
 
+def _update3():
+    print("Adding file_mode column to experiments table")
+    new_cols = [
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("image_mode", "TEXT", str),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("file_mode", "TEXT", str),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
+    ]
+    col_names = [x[0] for x in new_cols]
+    col_subset = [x[0] for x in new_cols if x[0] != "file_mode"]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    query = "CREATE TABLE _backup({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(query)
+    conn.commit()
+
+    query = "INSERT INTO _backup ({0}) SELECT {0} FROM experiments;".format(
+        ",".join(col_subset)
+    )
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE _backup SET file_mode = 'single';"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "DROP TABLE experiments;"
+    cursor.execute(query)
+    conn.commit()
+
+    create_query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(create_query)
+    conn.commit()
+
+    query = "INSERT INTO experiments ({0}) SELECT {0} from _backup;".format(
+        ",".join(col_names),
+    )
+    cursor.execute(query)
+
+    query = "DROP TABLE _backup;"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 3)
+    cursor.execute(query, args)
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
     print("This should be imported")
