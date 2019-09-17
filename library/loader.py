@@ -43,26 +43,26 @@ class ImageLoaderMulti:
         px_um = xres[1] / xres[0]
         return px_um
 
-    def load_frame(self, frame_idx, channel_num):
-        slice_idx = (frame_idx * self.num_channels) + channel_num
-        if slice_idx not in self.im_preload:
-            if channel_num == 1:
-                self.load_slice(frame_idx, channel_num, slice_idx, self.green_factor)
-            elif channel_num == 2:
-                self.load_slice(frame_idx, channel_num, slice_idx, self.red_factor)
+    def load_frame(self, frame_idx, slice_idx, channel_idx):
+        page_idx = (frame_idx * self.num_channels) + channel_idx
+        if page_idx not in self.im_preload:
+            if channel_idx == 1:
+                self.load_slice(frame_idx, channel_idx, page_idx, self.green_factor)
+            elif channel_idx == 2:
+                self.load_slice(frame_idx, channel_idx, page_idx, self.red_factor)
             else:
-                self.load_slice(frame_idx, channel_num, slice_idx)
+                self.load_slice(frame_idx, channel_idx, page_idx)
 
-        return self.im_preload[slice_idx]
+        return self.im_preload[page_idx]
 
-    def load_slice(self, frame_idx, channel_num, slice_idx, factor=None):
+    def load_slice(self, frame_idx, channel_idx, page_idx, factor=None):
         with tifffile.TiffFile(self.paths[frame_idx]) as im_frames:
-            page = im_frames.pages[channel_num]
+            page = im_frames.pages[channel_idx]
             im = page.asarray()
             if factor is not None:
                 im = im * factor
 
-            self.im_preload[slice_idx] = im
+            self.im_preload[page_idx] = im
 
 
 class ImageLoaderSingle:
@@ -99,23 +99,23 @@ class ImageLoaderSingle:
         px_um = xres[1] / xres[0]
         return px_um
 
-    def load_frame(self, frame_idx, channel_num):
-        slice_idx = (frame_idx * self.num_channels) + channel_num
-        if slice_idx not in self.im_preload:
-            if channel_num == 1:
-                self.load_slice(slice_idx, self.green_factor)
-            elif channel_num == 2:
-                self.load_slice(slice_idx, self.red_factor)
+    def load_frame(self, frame_idx, channel_idx):
+        page_idx = (frame_idx * self.num_channels) + channel_idx
+        if page_idx not in self.im_preload:
+            if channel_idx == 1:
+                self.load_slice(page_idx, self.green_factor)
+            elif channel_idx == 2:
+                self.load_slice(page_idx, self.red_factor)
             else:
-                self.load_slice(slice_idx)
+                self.load_slice(page_idx)
 
-        return self.im_preload[slice_idx]
+        return self.im_preload[page_idx]
 
-    def load_slice(self, slice_idx, factor=None):
+    def load_slice(self, page_idx, factor=None):
         with tifffile.TiffFile(self.path) as im_frames:
-            page = im_frames.pages[slice_idx]
+            page = im_frames.pages[page_idx]
             im = page.asarray()
             if factor is not None:
                 im = im * factor
 
-        self.im_preload[slice_idx] = im
+        self.im_preload[page_idx] = im
