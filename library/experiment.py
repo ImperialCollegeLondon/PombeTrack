@@ -460,7 +460,7 @@ class Experiment:
         self.window.close()
 
     def write_settings(self):
-        new_id = database.insertExperiment(
+        new_num, new_id = database.insertExperiment(
             *self.settings["date"],
             self.settings["medium"],
             self.settings["strain"],
@@ -471,7 +471,7 @@ class Experiment:
             self.settings["num_frames"],
             self.settings["file_mode"],
         )
-        print("Experiment saved with ID={0}".format(new_id))
+        print("Experiment #{0} saved with ID={1}".format(new_num, new_id))
         self.window.close()
 
     def reset_app(self):

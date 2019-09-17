@@ -685,7 +685,7 @@ def insertExperiment(date_year, date_month, date_day, medium, strain,
         image_mode, num_channels, num_slices, num_frames, file_mode,
     )
     new_id = executeQuery(query, args, commit=True)
-    return new_id
+    return new_id, experiment_id
 
 def updateExperimentById(experiment_id, **kwargs):
     args = []
