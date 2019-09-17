@@ -496,28 +496,6 @@ class Plotter(FigureCanvas):
             if add_confirm != QtWidgets.QMessageBox.Yes:
                 return
 
-        # check difference in total area is small
-        if self.previous_id:
-            previous_outline_entry = database.getOutlineById(self.previous_id)
-            previous_outline = np.load(previous_outline_entry.coords_path)
-            if previous_outline_entry.cell_id == self.cell_id:
-                previous_area = self.get_area(previous_outline)
-                current_area = self.get_area(np.array([(n.x, n.y) for n in self.balloon_obj.nodes]))
-                area_diff = abs(previous_area - current_area) / previous_area
-                if area_diff > 0.3:
-                    alert = QtWidgets.QMessageBox()
-                    message = ("The outline you are about to add has a large "
-                               "difference in cell area compared to its "
-                               "predecessor in the previous frame ({0:.0f}%).\n"
-                               "Are you sure you want to add it?")
-                    add_confirm = alert.question(
-                        self.parent(),
-                        "Add outline?",
-                        message.format(area_diff * 100),
-                    )
-                    if add_confirm != QtWidgets.QMessageBox.Yes:
-                        return
-
         # check overlap with other outlines?
         # objects already exist (red lines) so can compare perhaps?
         Ypoints, Xpoints = self.sub_ax.lines[0].get_data()
@@ -539,52 +517,95 @@ class Plotter(FigureCanvas):
                 if add_confirm != QtWidgets.QMessageBox.Yes:
                     return
 
-        # save outline
-        self.save_outline()
+        if self._data.image_mode == "movie":
+            area_diff = self._area_diff()
+            if area_diff > 0.3:
+                alert = QtWidgets.QMessageBox()
+                message = ("The outline you are about to add has a large "
+                            "difference in cell area compared to its "
+                            "predecessor in the previous frame ({0:.0f}%).\n"
+                            "Are you sure you want to add it?")
+                add_confirm = alert.question(
+                    self.parent(),
+                    "Add outline?",
+                    message.format(area_diff * 100),
+                )
+                if add_confirm != QtWidgets.QMessageBox.Yes:
+                    return
 
-        offset_centre = self.balloon_obj.get_centre()
+            self.save_outline()
 
-        # clear plot
-        self.balloon_obj = None
-        self.dragging = False
-        self.subfigure_patches = []
-        self.sub_ax.clear()
-        self.decorate_axis(self.sub_ax)
-        self.draw()
+            offset_centre = self.balloon_obj.get_centre()
 
-        # fit next
-        centre = [offset_centre[0] + self.offset_left,
-                  offset_centre[1] + self.offset_top]
-        (self.offset_left, self.offset_top,
-         centre_offset_left, centre_offset_top) = self.get_offsets(centre)
-
-        if self.current_frame_idx == self.num_frames - 1:
-            bf_frame = self.load_frame()
-            self.main_frame.set_data(bf_frame)
-            self.outline_id = None
+            # clear plot
             self.balloon_obj = None
             self.dragging = False
             self.subfigure_patches = []
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            self.draw()
+
+            # fit next
+            centre = [offset_centre[0] + self.offset_left,
+                    offset_centre[1] + self.offset_top]
+            (self.offset_left, self.offset_top,
+            centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
+            if self.current_frame_idx == self.num_frames - 1:
+                bf_frame = self.load_frame()
+                self.main_frame.set_data(bf_frame)
+                self.outline_id = None
+                self.balloon_obj = None
+                self.dragging = False
+                self.subfigure_patches = []
+                self.plot_existing_outlines()
+                self.clear_sub_outlines()
+                self.draw()
+                return
+            else:
+                self.current_frame_idx += 1
+                bf_frame = self.load_frame()
+                self.main_frame.set_data(bf_frame)
+                self.plot_existing_outlines()
+                self.clear_sub_outlines()
+
+            roi = self.load_frame(channel_idx=0)[
+                self.offset_left:self.offset_left + (self.region_width * 2),
+                self.offset_top:self.offset_top + (self.region_height * 2)
+            ]
+            self.fit_outline(
+                roi,
+                centre_offset_left=centre_offset_left,
+                centre_offset_top=centre_offset_top,
+            )
+
+        elif self._data.image_mode == "static":
+            self.save_outline()
+            # clear sub_ax
+            self.balloon_obj = None
+            self.dragging = False
+            self.subfigure_patches = []
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            # update existing outlines
             self.plot_existing_outlines()
             self.clear_sub_outlines()
             self.draw()
-            return
-        else:
-            self.current_frame_idx += 1
-            bf_frame = self.load_frame()
-            self.main_frame.set_data(bf_frame)
-            self.plot_existing_outlines()
-            self.clear_sub_outlines()
 
-        roi = self.load_frame(channel_idx=0)[
-            self.offset_left:self.offset_left + (self.region_width * 2),
-            self.offset_top:self.offset_top + (self.region_height * 2)
-        ]
-        self.fit_outline(
-            roi,
-            centre_offset_left=centre_offset_left,
-            centre_offset_top=centre_offset_top,
-        )
+    def _area_diff(self):
+        # check difference in total area is small
+        if self.previous_id:
+            previous_outline_entry = database.getOutlineById(self.previous_id)
+            previous_outline = np.load(previous_outline_entry.coords_path)
+            if previous_outline_entry.cell_id == self.cell_id:
+                previous_area = self.get_area(previous_outline)
+                current_area = self.get_area(np.array([(n.x, n.y) for n in self.balloon_obj.nodes]))
+                area_diff = abs(previous_area - current_area) / previous_area
+                return area_diff
+        return 0
+
+    def _accept_event_static(self):
+        pass
 
     def _delete_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
