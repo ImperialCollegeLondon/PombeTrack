@@ -31,9 +31,9 @@ class ExperimentView:
         self.window.setGeometry(0, 60, 800, 100)
         self.window.setWindowTitle("Experiment #{0}".format(self._data.experiment_num))
 
-        if os.path.exists(self._data.image_path):
-            self.image_loader = loader.ImageLoader(self._data.image_path)
-        else:
+        if self._data.file_mode == "single" and os.path.exists(self._data.image_path):
+            self.image_loader = loader.ImageLoaderSingle(self._data.image_path)
+        elif self._data.file_mode == "single":
             # get new image
             path = QtWidgets.QFileDialog.getOpenFileName(
                 self.window,
@@ -41,7 +41,7 @@ class ExperimentView:
                 os.getcwd(),
             )[0]
             try:
-                self.image_loader = loader.ImageLoader(path)
+                self.image_loader = loader.ImageLoaderSingle(path)
             except:
                 alert = QtWidgets.QMessageBox()
                 alert.warning(
@@ -57,7 +57,9 @@ class ExperimentView:
                     self._data.experiment_id,
                     image_path=path,
                 )
-
+        elif self._data.file_mode == "multi":
+            paths = database.getImagePaths(self._data.experiment_id)
+            self.image_loader = loader.ImageLoaderMulti(paths)
 
         self.main_layout = QtWidgets.QVBoxLayout()
         self.createLayout()
@@ -340,7 +342,7 @@ class Experiment:
                 return
 
             if os.path.exists(image_path):
-                meta = loader.ImageLoader(image_path).im_metadata
+                meta = loader.ImageLoaderSingle(image_path).im_metadata
                 if "frames" in meta:
                     self.setNumF(meta["frames"])
                 else:
@@ -368,7 +370,7 @@ class Experiment:
                 self.setNumF(0)
             else:
                 # use first image in set to define num_slices, num_channels
-                meta = loader.ImageLoader(self.image_files[0]).im_metadata
+                meta = loader.ImageLoaderSingle(self.image_files[0]).im_metadata
                 if "channels" in meta:
                     self.setNumC(meta["channels"])
                 else:

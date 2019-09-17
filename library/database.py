@@ -894,7 +894,7 @@ def _update1():
             ))
             num_frames, num_channels, num_slices = 1, 1, 1
         else:
-            meta = loader.ImageLoader(image_path).im_metadata
+            meta = loader.ImageLoaderSingle(image_path).im_metadata
             if "frames" in meta:
                 num_frames = meta["frames"]
             else:
