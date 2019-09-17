@@ -171,7 +171,7 @@ class ExperimentRow(Row):
             "medium": row["medium"],
             "strain": row["strain"],
             "image_path": row["image_path"],
-            "image_mode": row["image_mode"] == 1 and "movie" or "static",
+            "image_mode": row["image_mode"],
             "num_channels": row["num_channels"],
             "num_slices": row["num_slices"],
             "num_frames": row["num_frames"],
