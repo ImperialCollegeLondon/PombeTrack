@@ -194,7 +194,7 @@ class Balloon(object):
         return new_nodes
 
     def insert_nodes(self):
-        neighbour_max_distance = 10
+        neighbour_max_distance = 5
         new_nodes = []
         for n in self.nodes:
             left_distance = n._get_distance(n.neighbour1)

@@ -16,6 +16,7 @@ import seaborn as sns
 import os
 import tifffile
 import uuid
+import matplotlib.path
 
 from . import balloon
 from . import database
@@ -73,7 +74,7 @@ class Plotter(FigureCanvas):
         self.subfigure_patches = []
         self.dragging = False
         self.previous_id = None
-        self.current_frame_idx = 1
+        self.current_frame_idx = 0
         self.current_channel = 0
 
         self.mpl_connect("key_press_event", self._key_press_event)
@@ -90,7 +91,9 @@ class Plotter(FigureCanvas):
     def automatic_segmentation(self):
         im_mid=self.load_frame(int(np.floor(self.num_frames/2)),0)
         im_up=self.load_frame(int(np.floor(self.num_frames/2)-1),0)
-        im=np.maximum(im_mid,im_up)
+        #  im=np.maximum(im_mid,im_up)
+        im=self.load_frame(0,0)
+
 
         im_pp=segmentation.preprocessing(im)
         im_i=segmentation.find_cellinterior(im_pp)
@@ -98,6 +101,28 @@ class Plotter(FigureCanvas):
         bd=segmentation.find_bd(im_wat)
         for index in range(0, len(bd)):
             balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd[index][::5], im)
+            #  Test if the cell exists
+            overlap=False
+            outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
+            for i, outline in enumerate(outline_data):
+                if not os.path.exists(outline.coords_path):
+                    # database.deleteOutlineById(outline.outline_id)
+                    continue
+                if outline.centre_x not in range(origin_x,origin_x+2*halfwidth) or outline.centre_y not in range(origin_y,origin_y+2*halfwidth):
+                    continue
+
+                polygonpath=matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept=True),\
+                        balloon_obj.get_coordinates(accept=True)[1,:].reshape(1,2),axis=0),closed=True)
+                if polygonpath.contains_point([outline.centre_y-origin_y,outline.centre_x-origin_x]):
+                    overlap=True
+                    #  print(overlap)
+
+            if overlap:
+                continue
+
+
+
+
             # Evolve the contour
             try:
                 sensitivity=0.4
@@ -109,8 +134,9 @@ class Plotter(FigureCanvas):
                 self.full_coords=balloon_obj.get_coordinates(accept=True) + [origin_y, origin_x]
                 self.outline_id = str(uuid.uuid4())
                 self.cell_id = str(uuid.uuid4())
-                centre=[np.mean(self.full_coords[:,1]).astype(int),np.mean(self.full_coords[:,0]).astype(int)]
-                self.offset_top, self.offset_left,_,_ = self.get_offsets(centre)
+                centre=[np.mean(self.full_coords[:,0]).astype(int),np.mean(self.full_coords[:,1]).astype(int)]
+                self.centre_y,self.centre_x=centre
+                self.offset_left, self.offset_top,_,_ = self.get_offsets(centre)
                 self.auto_coords=self.full_coords-np.array([self.offset_left, self.offset_top])
                 self.save_outline(auto=True)
             except ValueError:
@@ -201,6 +227,15 @@ class Plotter(FigureCanvas):
             "{0}.npy".format(self.outline_id)
         )
 
+        if auto:
+            coords=self.auto_coords
+        else:
+            coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
+            # Determine cell centre
+            centre=coords + np.array([self.offset_left, self.offset_top])
+            self.centre_y,self.centre_x = centre.mean(axis=0)
+
+
         data = {
             "outline_id": self.outline_id,
             "cell_id": self.cell_id,
@@ -212,15 +247,14 @@ class Plotter(FigureCanvas):
             "offset_left": self.offset_left,
             "offset_top": self.offset_top,
             "parent_id": self.previous_id or "",
+            "centre_x":int(self.centre_x),
+            "centre_y":int(self.centre_y),
         }
         if os.path.exists(coords_path):
             os.remove(coords_path)
         else:
             database.insertOutline(**data)
-        if auto:
-            coords=self.auto_coords
-        else:
-            coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
+
         np.save(coords_path, coords)
 
         if self.previous_id:
@@ -676,9 +710,10 @@ class Toolbar(NavigationToolbar):
     def auto_segmentation(self):
         startt=time.time()
         self.canvas.automatic_segmentation()
-        print(time.time()-startt)
         self.canvas.plot_existing_outlines()
         self.canvas.refresh()
+
+        print(time.time()-startt)
 
 
     def delete(self):
