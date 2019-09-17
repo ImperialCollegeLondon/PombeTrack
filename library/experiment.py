@@ -270,9 +270,9 @@ class Experiment:
 
         self._assignDimensions()
         if self.settings["num_frames"] == 1:
-            self.setImageMode("static", True)
+            self.setImageMode("static", True, check=False)
         elif self.settings["num_frames"] > 1:
-            self.setImageMode("movie", True)
+            self.setImageMode("movie", True, check=False)
 
     def _getNum(self, value, widget=None):
         try:
@@ -381,7 +381,7 @@ class Experiment:
 
                 self.setNumF(len(self.image_files))
 
-    def setImageMode(self, imagemode, state):
+    def setImageMode(self, imagemode, state, check=True):
         static_test = (
             (imagemode == "static" and state == True) or
             (imagemode == "movie" and state == False)
@@ -396,7 +396,7 @@ class Experiment:
             self.dim_widgets["frames"][0].setVisible(False)
             self.dim_widgets["frames"][1].setVisible(False)
             self.image_mode_buttons[1].setChecked(True)
-            if self.settings["image_path"]:
+            if self.settings["image_path"] and check:
                 self._assignDimensions()
 
         elif movie_test and self.settings["image_mode"] != "movie":
@@ -404,7 +404,7 @@ class Experiment:
             self.dim_widgets["frames"][0].setVisible(True)
             self.dim_widgets["frames"][1].setVisible(True)
             self.image_mode_buttons[0].setChecked(True)
-            if self.settings["image_path"]:
+            if self.settings["image_path"] and check:
                 self._assignDimensions()
 
     def setChannelGreen(self, state):
