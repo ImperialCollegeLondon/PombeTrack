@@ -325,39 +325,61 @@ class Experiment:
                 if f.lower().endswith(".tif") or f.lower().endswith(".tiff")
             ])
 
-        # use first image in set to define num_slices, num_channels
-        meta = loader.ImageLoader(self.image_files[0]).im_metadata
-        if "channels" in meta:
-            self.setNumC(meta["channels"])
-        else:
-            self.setNumC(1)
-
-        if "slices" in meta:
-            self.setNumZ(meta["slices"])
-        else:
-            self.setNumZ(1)
-
-        # ensure each image only has a single frame?
-        # check num_slices/num_channels are the same?
-
     def _assignDimensions(self):
-        image_path = self.settings["image_path"]
-        if os.path.exists(image_path):
-            meta = loader.ImageLoader(image_path).im_metadata
-            if "frames" in meta:
-                self.setNumF(meta["frames"])
-            else:
-                self.setNumF(1)
+        if not self.settings["image_path"]:
+            return
 
-            if "channels" in meta:
-                self.setNumC(meta["channels"])
-            else:
-                self.setNumC(1)
+        if self.settings["file_mode"] == "single":
+            image_path = self.settings["image_path"]
+            if os.path.isdir(image_path):
+                if len(self.image_files) > 0:
+                    image_path = self.image_files[0]
+                else:
+                    image_path = ""
+                self.image_path_form[1].setText(image_path)
+                return
 
-            if "slices" in meta:
-                self.setNumZ(meta["slices"])
+            if os.path.exists(image_path):
+                meta = loader.ImageLoader(image_path).im_metadata
+                if "frames" in meta:
+                    self.setNumF(meta["frames"])
+                else:
+                    self.setNumF(1)
+
+                if "channels" in meta:
+                    self.setNumC(meta["channels"])
+                else:
+                    self.setNumC(1)
+
+                if "slices" in meta:
+                    self.setNumZ(meta["slices"])
+                else:
+                    self.setNumZ(1)
+        else:
+            image_dir = self.settings["image_path"]
+            if not os.path.isdir(image_dir):
+                image_dir = os.path.dirname(self.settings["image_path"])
+                self.image_path_form[1].setText(image_dir)
+                return
+
+            if len(self.image_files) == 0:
+                self.setNumC(0)
+                self.setNumZ(0)
+                self.setNumF(0)
             else:
-                self.setNumZ(1)
+                # use first image in set to define num_slices, num_channels
+                meta = loader.ImageLoader(self.image_files[0]).im_metadata
+                if "channels" in meta:
+                    self.setNumC(meta["channels"])
+                else:
+                    self.setNumC(1)
+
+                if "slices" in meta:
+                    self.setNumZ(meta["slices"])
+                else:
+                    self.setNumZ(1)
+
+                self.setNumF(len(self.image_files))
 
     def setImageMode(self, imagemode, state):
         static_test = (
@@ -394,7 +416,7 @@ class Experiment:
     def confirm_settings(self):
         alert_flag = False
         for k, v in self.settings.items():
-            if v is None:
+            if v is None or (k.startswith("num_") and v == 0):
                 alert_flag = True
                 form_elements = getattr(self, "{0}_form".format(k))
                 form_elements[1].setStyleSheet("QLineEdit { border: 1px solid red }")
