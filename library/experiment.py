@@ -258,6 +258,16 @@ class Experiment:
 
     def setImagePath(self, path):
         self.settings["image_path"] = path
+        if not os.path.exists(path):
+            self.settings["image_path"] = ""
+            self.settings["num_frames"] = 1
+            self.settings["num_channels"] = 1
+            self.settings["num_slices"] = 1
+            return
+
+        if self.settings["file_mode"] == "multi":
+            self._getPotentialFiles()
+
         self._assignDimensions()
         if self.settings["num_frames"] == 1:
             self.setImageMode("static", True)
@@ -303,6 +313,32 @@ class Experiment:
 
         widget.setText(str(num))
         self.settings["num_channels"] = num
+
+    def _getPotentialFiles(self):
+        # walk directory searching for TIFFs
+        self.image_files = []
+        image_dir = self.settings["image_path"]
+        for root, dirnames, filenames in os.walk(image_dir):
+            self.image_files.extend([
+                os.path.join(root, f)
+                for f in filenames
+                if f.lower().endswith(".tif") or f.lower().endswith(".tiff")
+            ])
+
+        # use first image in set to define num_slices, num_channels
+        meta = loader.ImageLoader(self.image_files[0]).im_metadata
+        if "channels" in meta:
+            self.setNumC(meta["channels"])
+        else:
+            self.setNumC(1)
+
+        if "slices" in meta:
+            self.setNumZ(meta["slices"])
+        else:
+            self.setNumZ(1)
+
+        # ensure each image only has a single frame?
+        # check num_slices/num_channels are the same?
 
     def _assignDimensions(self):
         image_path = self.settings["image_path"]
@@ -442,6 +478,7 @@ class Experiment:
             "num_frames": 1,
             "file_mode": "single",
         }
+        self.image_files = []
 
 
     def create_new_experiment(self, window=None):
@@ -657,12 +694,20 @@ class Experiment:
             widget.textChanged[str].connect(change_callback)
 
         def callback():
-            path = QtWidgets.QFileDialog.getOpenFileName(
-                self.window,
-                "Image file",
-                initial_path or os.getcwd(),
-            )[0]
-            widget.setText(path)
+            if self.settings["file_mode"] == "multi":
+                path = QtWidgets.QFileDialog.getExistingDirectory(
+                    self.window,
+                    "Image root directory",
+                    initial_path or os.getcwd(),
+                )
+                widget.setText(path)
+            else:
+                path = QtWidgets.QFileDialog.getOpenFileName(
+                    self.window,
+                    "Image file",
+                    initial_path or os.getcwd(),
+                )[0]
+                widget.setText(path)
 
         btn = QtWidgets.QPushButton("Browse")
         btn.clicked.connect(callback)
