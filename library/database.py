@@ -944,7 +944,7 @@ def _update2():
     conn.commit()
 
     query = "UPDATE version SET major_version = ?, minor_version = ?;"
-    args = (0, 1)
+    args = (0, 2)
     cursor.execute(query, args)
     conn.commit()
 
