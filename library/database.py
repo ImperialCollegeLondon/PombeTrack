@@ -947,7 +947,6 @@ def _update2():
     args = (0, 2)
     cursor.execute(query, args)
     conn.commit()
-
     conn.close()
 
 

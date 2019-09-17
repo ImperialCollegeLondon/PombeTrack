@@ -560,23 +560,6 @@ class Experiment:
         layout.addLayout(dim_layout, self.current_row, 1)
         self.current_row += 1
 
-        # label = QtWidgets.QLabel("Fluorescent channels")
-        # btngroup = QtWidgets.QHBoxLayout()
-        # green = QtWidgets.QPushButton("Green")
-        # green.setCheckable(True)
-        # green.setChecked(True)
-        # green.clicked[bool].connect(self.setChannelGreen)
-        # red = QtWidgets.QPushButton("Red")
-        # red.setCheckable(True)
-        # red.setChecked(True)
-        # red.clicked[bool].connect(self.setChannelRed)
-        # btngroup.addWidget(green)
-        # btngroup.addWidget(red)
-        # layout.addWidget(label, self.current_row, 0)
-        # layout.addLayout(btngroup, self.current_row, 1)
-        # self.channels_form = label, (green, red)
-        # self.current_row += 1
-
         confirm_btn = QtWidgets.QPushButton("OK")
         confirm_btn.clicked.connect(self.confirm_settings)
         layout.addWidget(confirm_btn, self.current_row, 2)
