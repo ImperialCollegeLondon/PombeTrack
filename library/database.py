@@ -175,6 +175,7 @@ class ExperimentRow(Row):
             "num_channels": row["num_channels"],
             "num_slices": row["num_slices"],
             "num_frames": row["num_frames"],
+            "file_mode": row["file_mode"],
             "outlined": bool(row["outlined"]),
             "verified": bool(row["verified"]),
             "analysed": bool(row["analysed"]),
