@@ -31,9 +31,9 @@ class ExperimentView:
         self.window.setGeometry(0, 60, 800, 100)
         self.window.setWindowTitle("Experiment #{0}".format(self._data.experiment_num))
 
-        if os.path.exists(self._data.image_path):
-            self.image_loader = loader.ImageLoader(self._data.image_path)
-        else:
+        if self._data.file_mode == "single" and os.path.exists(self._data.image_path):
+            self.image_loader = loader.ImageLoaderSingle(self._data.image_path)
+        elif self._data.file_mode == "single":
             # get new image
             path = QtWidgets.QFileDialog.getOpenFileName(
                 self.window,
@@ -41,7 +41,7 @@ class ExperimentView:
                 os.getcwd(),
             )[0]
             try:
-                self.image_loader = loader.ImageLoader(path)
+                self.image_loader = loader.ImageLoaderSingle(path)
             except:
                 alert = QtWidgets.QMessageBox()
                 alert.warning(
@@ -57,7 +57,9 @@ class ExperimentView:
                     self._data.experiment_id,
                     image_path=path,
                 )
-
+        elif self._data.file_mode == "multi":
+            paths = database.getImagePaths(self._data.experiment_id)
+            self.image_loader = loader.ImageLoaderMulti(paths)
 
         self.main_layout = QtWidgets.QVBoxLayout()
         self.createLayout()
@@ -105,15 +107,21 @@ class ExperimentView:
 
         row_num = 0
         col_num = 0
-        for elem_num, (label_str, kw) in enumerate([
+        detail_items = [
             ("Date", "date"),
             ("Strain", "strain"),
             ("Medium", "medium"),
             ("Image", "image_path"),
-        ]):
+            ("Mode", "image_mode"),
+            ("Files", "file_mode"),
+            ("Frames", "num_frames"),
+            ("Channels", "num_channels"),
+            # ("Slices", "num_slices"),
+        ]
+        for elem_num, (label_str, kw) in enumerate(detail_items):
             label = QtWidgets.QLabel(label_str)
             label.setFont(label_font)
-            val = QtWidgets.QLabel(self._data[kw])
+            val = QtWidgets.QLabel(str(self._data[kw]))
             layout.addWidget(label, row_num, col_num)
             layout.addWidget(val, row_num, col_num + 1)
             col_num += 2
@@ -258,6 +266,154 @@ class Experiment:
 
     def setImagePath(self, path):
         self.settings["image_path"] = path
+        if not os.path.exists(path):
+            self.settings["image_path"] = ""
+            self.settings["num_frames"] = 1
+            self.settings["num_channels"] = 1
+            self.settings["num_slices"] = 1
+            return
+
+        if self.settings["file_mode"] == "multi":
+            self._getPotentialFiles()
+
+        self._assignDimensions()
+        if self.settings["num_frames"] == 1:
+            self.setImageMode("static", True, check=False)
+        elif self.settings["num_frames"] > 1:
+            self.setImageMode("movie", True, check=False)
+
+    def _getNum(self, value, widget=None):
+        try:
+            num = int(value)
+            assert num > 0
+        except (ValueError, AssertionError):
+            if widget:
+                widget.setStyleSheet("QLineEdit { border: 1px solid red }")
+            return
+        else:
+            if widget:
+                widget.setStyleSheet("QLineEdit { }")
+            return num
+
+    def setNumF(self, value):
+        widget = self.dim_widgets["frames"][1]
+        num = self._getNum(value, widget)
+        if not num:
+            return
+
+        widget.setText(str(num))
+        self.settings["num_frames"] = num
+
+    def setNumZ(self, value):
+        widget = self.dim_widgets["zslices"][1]
+        num = self._getNum(value, widget)
+        if not num:
+            return
+
+        widget.setText(str(num))
+        self.settings["num_slices"] = num
+
+    def setNumC(self, value):
+        widget = self.dim_widgets["channels"][1]
+        num = self._getNum(value, widget)
+        if not num:
+            return
+
+        widget.setText(str(num))
+        self.settings["num_channels"] = num
+
+    def _getPotentialFiles(self):
+        # walk directory searching for TIFFs
+        self.image_files = []
+        image_dir = self.settings["image_path"]
+        for root, dirnames, filenames in os.walk(image_dir):
+            self.image_files.extend([
+                os.path.join(root, f)
+                for f in filenames
+                if f.lower().endswith(".tif") or f.lower().endswith(".tiff")
+            ])
+
+    def _assignDimensions(self):
+        if not self.settings["image_path"]:
+            return
+
+        if self.settings["file_mode"] == "single":
+            image_path = self.settings["image_path"]
+            if os.path.isdir(image_path):
+                if len(self.image_files) > 0:
+                    image_path = self.image_files[0]
+                else:
+                    image_path = ""
+                self.image_path_form[1].setText(image_path)
+                return
+
+            if os.path.exists(image_path):
+                meta = loader.ImageLoaderSingle(image_path).im_metadata
+                if "frames" in meta:
+                    self.setNumF(meta["frames"])
+                else:
+                    self.setNumF(1)
+
+                if "channels" in meta:
+                    self.setNumC(meta["channels"])
+                else:
+                    self.setNumC(1)
+
+                if "slices" in meta:
+                    self.setNumZ(meta["slices"])
+                else:
+                    self.setNumZ(1)
+        else:
+            image_dir = self.settings["image_path"]
+            if not os.path.isdir(image_dir):
+                image_dir = os.path.dirname(self.settings["image_path"])
+                self.image_path_form[1].setText(image_dir)
+                return
+
+            if len(self.image_files) == 0:
+                self.setNumC(0)
+                self.setNumZ(0)
+                self.setNumF(0)
+            else:
+                # use first image in set to define num_slices, num_channels
+                meta = loader.ImageLoaderSingle(self.image_files[0]).im_metadata
+                if "channels" in meta:
+                    self.setNumC(meta["channels"])
+                else:
+                    self.setNumC(1)
+
+                if "slices" in meta:
+                    self.setNumZ(meta["slices"])
+                else:
+                    self.setNumZ(1)
+
+                self.setNumF(len(self.image_files))
+
+    def setImageMode(self, imagemode, state, check=True):
+        static_test = (
+            (imagemode == "static" and state == True) or
+            (imagemode == "movie" and state == False)
+        )
+        movie_test = (
+            (imagemode == "movie" and state == True) or
+            (imagemode == "static" and state == False)
+        )
+        if static_test and self.settings["image_mode"] != "static":
+            self.settings["image_mode"] = "static"
+            # hide num frames input box
+            self.dim_widgets["frames"][0].setVisible(False)
+            self.dim_widgets["frames"][1].setVisible(False)
+            self.image_mode_buttons[1].setChecked(True)
+            if self.settings["image_path"] and check:
+                self._assignDimensions()
+
+        elif movie_test and self.settings["image_mode"] != "movie":
+            self.settings["image_mode"] = "movie"
+            self.dim_widgets["frames"][0].setVisible(True)
+            self.dim_widgets["frames"][1].setVisible(True)
+            self.image_mode_buttons[0].setChecked(True)
+            if self.settings["image_path"] and check:
+                self._assignDimensions()
 
     def setChannelGreen(self, state):
         self.settings["channels"]["green"] = state
@@ -268,7 +424,7 @@ class Experiment:
     def confirm_settings(self):
         alert_flag = False
         for k, v in self.settings.items():
-            if v is None:
+            if v is None or (k.startswith("num_") and v == 0):
                 alert_flag = True
                 form_elements = getattr(self, "{0}_form".format(k))
                 form_elements[1].setStyleSheet("QLineEdit { border: 1px solid red }")
@@ -302,22 +458,39 @@ class Experiment:
         database.updateExperimentById(
             old_id,
             image_path=self.settings["image_path"],
-            channel_green=self.settings["channels"]["green"],
-            channel_red=self.settings["channels"]["red"],
+            image_mode=self.settings["image_mode"],
+            num_channels=self.settings["num_channels"],
+            num_slices=self.settings["num_slices"],
+            num_frames=self.settings["num_frames"],
+            file_mode=self.settings["file_mode"],
         )
         print("Experiment ID={0} overwritten".format(old_id))
         self.window.close()
 
     def write_settings(self):
-        new_id = database.insertExperiment(
+        new_num, new_id = database.insertExperiment(
             *self.settings["date"],
             self.settings["medium"],
             self.settings["strain"],
             self.settings["image_path"],
-            self.settings["channels"]["green"],
-            self.settings["channels"]["red"],
+            self.settings["image_mode"],
+            self.settings["num_channels"],
+            self.settings["num_slices"],
+            self.settings["num_frames"],
+            self.settings["file_mode"],
         )
-        print("Experiment saved with ID={0}".format(new_id))
+        if self.settings["file_mode"] == "multi":
+            if not database.checkTable("imagepath"):
+                database.createImagePathTable()
+
+            for i, image_path in enumerate(self.image_files):
+                database.insertImagePath(
+                    i + 1,
+                    new_id,
+                    image_path,
+                )
+
+        print("Experiment #{0} saved with ID={1}".format(new_num, new_id))
         self.window.close()
 
     def reset_app(self):
@@ -329,8 +502,9 @@ class Experiment:
             self.medium_form[2].setCurrentIndex(0)
             self.strain_form[1].setText("")
             self.strain_form[2].setCurrentIndex(0)
-            self.channels_form[1][0].setChecked(True)
-            self.channels_form[1][1].setChecked(True)
+            self.setImageMode("movie", True)
+            # self.channels_form[1][0].setChecked(True)
+            # self.channels_form[1][1].setChecked(True)
 
         self.settings = {
             "date": (datetime.datetime.today().year,
@@ -339,8 +513,13 @@ class Experiment:
             "medium": None,
             "strain": None,
             "image_path": None,
-            "channels": {"red": True, "green": True},
+            "image_mode": "movie",
+            "num_channels": 1,
+            "num_slices": 1,
+            "num_frames": 1,
+            "file_mode": "single",
         }
+        self.image_files = []
 
 
     def create_new_experiment(self, window=None):
@@ -350,7 +529,8 @@ class Experiment:
             medium
             strain
             image file location
-            channels
+            image mode (static or movie)
+            image dimensions (frames, slices, channels)
 
         Note, needs a ANALYSED boolean flag somewhere, or possibly a date stamp specifying when
         """
@@ -424,21 +604,41 @@ class Experiment:
             initial_path="/mnt/d",
         )
 
-        label = QtWidgets.QLabel("Fluorescent channels")
+        label = QtWidgets.QLabel("Image mode")
         btngroup = QtWidgets.QHBoxLayout()
-        green = QtWidgets.QPushButton("Green")
-        green.setCheckable(True)
-        green.setChecked(True)
-        green.clicked[bool].connect(self.setChannelGreen)
-        red = QtWidgets.QPushButton("Red")
-        red.setCheckable(True)
-        red.setChecked(True)
-        red.clicked[bool].connect(self.setChannelRed)
-        btngroup.addWidget(green)
-        btngroup.addWidget(red)
+        movie = QtWidgets.QRadioButton("Movie")
+        movie.setChecked(True)
+        movie.clicked[bool].connect(lambda state: self.setImageMode("movie", state))
+        static = QtWidgets.QRadioButton("Static")
+        static.setChecked(False)
+        static.clicked[bool].connect(lambda state: self.setImageMode("static", state))
+        self.image_mode_buttons = [movie, static]
+        btngroup.addWidget(movie)
+        btngroup.addWidget(static)
         layout.addWidget(label, self.current_row, 0)
         layout.addLayout(btngroup, self.current_row, 1)
-        self.channels_form = label, (green, red)
+        self.current_row += 1
+
+        label = QtWidgets.QLabel("Dimensionality")
+        dim_layout = QtWidgets.QHBoxLayout()
+        dim_frames = QtWidgets.QLabel("Frames")
+        dim_frames_widget = QtWidgets.QLineEdit("1")
+        dim_zslices = QtWidgets.QLabel("Z-slices")
+        dim_zslices_widget = QtWidgets.QLineEdit("1")
+        dim_channels = QtWidgets.QLabel("Channels")
+        dim_channels_widget = QtWidgets.QLineEdit("1")
+        self.dim_widgets = {
+            "frames": (dim_frames, dim_frames_widget, self.setNumF),
+            "zslices": (dim_zslices, dim_zslices_widget, self.setNumZ),
+            "channels": (dim_channels, dim_channels_widget, self.setNumC),
+        }
+        for k, (wlabel, wwidg, wcb) in self.dim_widgets.items():
+            wwidg.textChanged[str].connect(wcb)
+            dim_layout.addWidget(wlabel)
+            dim_layout.addWidget(wwidg)
+
+        layout.addWidget(label, self.current_row, 0)
+        layout.addLayout(dim_layout, self.current_row, 1)
         self.current_row += 1
 
         confirm_btn = QtWidgets.QPushButton("OK")
@@ -509,8 +709,24 @@ class Experiment:
                 widget.setStyleSheet("QLineEdit { color: rgb(157, 40, 20) }")
 
         label = QtWidgets.QLabel(label_text, *label_args, **label_kwargs)
+        centralpart = QtWidgets.QGridLayout()
+        centralpart.setColumnStretch(0, 5)
+        centralpart.setColumnStretch(1, 1)
+
         widget = QtWidgets.QLineEdit(*widget_args, **widget_kwargs)
         widget.textChanged[str].connect(_pathValidate)
+        checkbox = QtWidgets.QCheckBox("Image series?")
+        def checkbox_cb(state):
+            if state:
+                self.settings["file_mode"] = "multi"
+            else:
+                self.settings["file_mode"] = "single"
+            self._assignDimensions()
+
+        checkbox.clicked[bool].connect(checkbox_cb)
+
+        centralpart.addWidget(widget, 0, 0)
+        centralpart.addWidget(checkbox, 0, 1)
 
         if change_callback and type(change_callback) is list:
             for cb in change_callback:
@@ -519,18 +735,26 @@ class Experiment:
             widget.textChanged[str].connect(change_callback)
 
         def callback():
-            path = QtWidgets.QFileDialog.getOpenFileName(
-                self.window,
-                "Image file",
-                initial_path or os.getcwd(),
-            )[0]
-            widget.setText(path)
+            if self.settings["file_mode"] == "multi":
+                path = QtWidgets.QFileDialog.getExistingDirectory(
+                    self.window,
+                    "Image root directory",
+                    initial_path or os.getcwd(),
+                )
+                widget.setText(path)
+            else:
+                path = QtWidgets.QFileDialog.getOpenFileName(
+                    self.window,
+                    "Image file",
+                    initial_path or os.getcwd(),
+                )[0]
+                widget.setText(path)
 
         btn = QtWidgets.QPushButton("Browse")
         btn.clicked.connect(callback)
 
         layout.addWidget(label, self.current_row, 0)
-        layout.addWidget(widget, self.current_row, 1)
+        layout.addLayout(centralpart, self.current_row, 1)
         layout.addWidget(btn, self.current_row, 2)
         self.current_row += 1
         return label, widget

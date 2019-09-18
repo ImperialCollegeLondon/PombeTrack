@@ -76,6 +76,7 @@ class Plotter(FigureCanvas):
         self.previous_id = None
         self.current_frame_idx = 0
         self.current_channel = 0
+        self.current_slice = 0
 
         self.mpl_connect("key_press_event", self._key_press_event)
         self.mpl_connect("button_press_event", self._button_press_event)
@@ -147,18 +148,22 @@ class Plotter(FigureCanvas):
     def load_metadata(self):
         self.num_frames = self.image_loader.num_frames
         self.num_channels = self.image_loader.num_channels
+        self.num_slices = self.image_loader.num_slices
 
-    def load_frame(self, frame_idx=None, channel_idx=None):
+    def load_frame(self, frame_idx=None, channel_idx=None, slice_idx=None):
         if frame_idx is None:
             frame_idx = self.current_frame_idx
 
         if channel_idx is None:
             channel_idx = self.current_channel
 
+        if slice_idx is None:
+            slice_idx = self.current_slice
+
         if frame_idx < 0 or frame_idx > (self.num_frames - 1):
             return np.zeros((100, 100))
 
-        return self.image_loader.load_frame(frame_idx, channel_idx)
+        return self.image_loader.load_frame(frame_idx, slice_idx, channel_idx)
 
     def refresh(self):
         self.draw()
@@ -179,7 +184,18 @@ class Plotter(FigureCanvas):
                 break
 
     def plot_existing_outlines(self):
-        self.main_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
+        if self._data.image_mode == "static":
+            title = "Image #{0}".format(self.current_frame_idx + 1)
+        else:
+            title = "F={0}".format(self.current_frame_idx + 1)
+
+        if self._data.num_slices > 1:
+            title += " Z={0}".format(self.current_slice + 1)
+
+        if self._data.num_channels > 1:
+            title += " C={0}".format(self.current_channel + 1)
+
+        self.main_ax.set_title(title)
         while True:
             try:
                 self.main_ax.lines.pop()
@@ -338,6 +354,20 @@ class Plotter(FigureCanvas):
 
         self.draw()
 
+    def _slice_change(self, delta):
+        if delta < 0 and self.current_slice <= 0:
+            return
+
+        if delta > 0 and self.current_slice >= self.num_slices - 1:
+            return
+
+        self.current_slice += delta
+        new_im = self.load_frame()
+        self.main_frame.set_data(new_im)
+        self.plot_existing_outlines()
+        self.main_frame.set_clim([new_im.min(), new_im.max()])
+        self.draw()
+
     def _channel_change(self, delta):
         if delta < 0 and self.current_channel <= 0:
             return
@@ -367,17 +397,23 @@ class Plotter(FigureCanvas):
         self.draw()
 
     def _key_press_event(self, evt):
-        if evt.key == "left":
+        if evt.key == "left" or evt.key == "a":
             self._channel_change(-1)
 
-        elif evt.key == "right":
+        elif evt.key == "right" or evt.key == "d":
             self._channel_change(1)
 
-        elif evt.key == "up":
+        elif evt.key == "up" or evt.key == "w":
             self._frame_change(1)
 
-        elif evt.key == "down":
+        elif evt.key == "down" or evt.key == "s":
             self._frame_change(-1)
+
+        elif evt.key == "q":
+            self._slice_change(-1)
+
+        elif evt.key == "e":
+            self._slice_change(1)
 
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
@@ -535,28 +571,6 @@ class Plotter(FigureCanvas):
             if add_confirm != QtWidgets.QMessageBox.Yes:
                 return
 
-        # check difference in total area is small
-        if self.previous_id:
-            previous_outline_entry = database.getOutlineById(self.previous_id)
-            previous_outline = np.load(previous_outline_entry.coords_path)
-            if previous_outline_entry.cell_id == self.cell_id:
-                previous_area = self.get_area(previous_outline)
-                current_area = self.get_area(np.array([(n.x, n.y) for n in self.balloon_obj.nodes]))
-                area_diff = abs(previous_area - current_area) / previous_area
-                if area_diff > 0.3:
-                    alert = QtWidgets.QMessageBox()
-                    message = ("The outline you are about to add has a large "
-                               "difference in cell area compared to its "
-                               "predecessor in the previous frame ({0:.0f}%).\n"
-                               "Are you sure you want to add it?")
-                    add_confirm = alert.question(
-                        self.parent(),
-                        "Add outline?",
-                        message.format(area_diff * 100),
-                    )
-                    if add_confirm != QtWidgets.QMessageBox.Yes:
-                        return
-
         # check overlap with other outlines?
         # objects already exist (red lines) so can compare perhaps?
         Ypoints, Xpoints = self.sub_ax.lines[0].get_data()
@@ -578,52 +592,95 @@ class Plotter(FigureCanvas):
                 if add_confirm != QtWidgets.QMessageBox.Yes:
                     return
 
-        # save outline
-        self.save_outline()
+        if self._data.image_mode == "movie":
+            area_diff = self._area_diff()
+            if area_diff > 0.3:
+                alert = QtWidgets.QMessageBox()
+                message = ("The outline you are about to add has a large "
+                            "difference in cell area compared to its "
+                            "predecessor in the previous frame ({0:.0f}%).\n"
+                            "Are you sure you want to add it?")
+                add_confirm = alert.question(
+                    self.parent(),
+                    "Add outline?",
+                    message.format(area_diff * 100),
+                )
+                if add_confirm != QtWidgets.QMessageBox.Yes:
+                    return
 
-        offset_centre = self.balloon_obj.get_centre()
+            self.save_outline()
 
-        # clear plot
-        self.balloon_obj = None
-        self.dragging = False
-        self.subfigure_patches = []
-        self.sub_ax.clear()
-        self.decorate_axis(self.sub_ax)
-        self.draw()
+            offset_centre = self.balloon_obj.get_centre()
 
-        # fit next
-        centre = [offset_centre[0] + self.offset_left,
-                  offset_centre[1] + self.offset_top]
-        (self.offset_left, self.offset_top,
-         centre_offset_left, centre_offset_top) = self.get_offsets(centre)
-
-        if self.current_frame_idx == self.num_frames - 1:
-            bf_frame = self.load_frame()
-            self.main_frame.set_data(bf_frame)
-            self.outline_id = None
+            # clear plot
             self.balloon_obj = None
             self.dragging = False
             self.subfigure_patches = []
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            self.draw()
+
+            # fit next
+            centre = [offset_centre[0] + self.offset_left,
+                    offset_centre[1] + self.offset_top]
+            (self.offset_left, self.offset_top,
+            centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
+            if self.current_frame_idx == self.num_frames - 1:
+                bf_frame = self.load_frame()
+                self.main_frame.set_data(bf_frame)
+                self.outline_id = None
+                self.balloon_obj = None
+                self.dragging = False
+                self.subfigure_patches = []
+                self.plot_existing_outlines()
+                self.clear_sub_outlines()
+                self.draw()
+                return
+            else:
+                self.current_frame_idx += 1
+                bf_frame = self.load_frame()
+                self.main_frame.set_data(bf_frame)
+                self.plot_existing_outlines()
+                self.clear_sub_outlines()
+
+            roi = self.load_frame(channel_idx=0)[
+                self.offset_left:self.offset_left + (self.region_width * 2),
+                self.offset_top:self.offset_top + (self.region_height * 2)
+            ]
+            self.fit_outline(
+                roi,
+                centre_offset_left=centre_offset_left,
+                centre_offset_top=centre_offset_top,
+            )
+
+        elif self._data.image_mode == "static":
+            self.save_outline()
+            # clear sub_ax
+            self.balloon_obj = None
+            self.dragging = False
+            self.subfigure_patches = []
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            # update existing outlines
             self.plot_existing_outlines()
             self.clear_sub_outlines()
             self.draw()
-            return
-        else:
-            self.current_frame_idx += 1
-            bf_frame = self.load_frame()
-            self.main_frame.set_data(bf_frame)
-            self.plot_existing_outlines()
-            self.clear_sub_outlines()
 
-        roi = self.load_frame(channel_idx=0)[
-            self.offset_left:self.offset_left + (self.region_width * 2),
-            self.offset_top:self.offset_top + (self.region_height * 2)
-        ]
-        self.fit_outline(
-            roi,
-            centre_offset_left=centre_offset_left,
-            centre_offset_top=centre_offset_top,
-        )
+    def _area_diff(self):
+        # check difference in total area is small
+        if self.previous_id:
+            previous_outline_entry = database.getOutlineById(self.previous_id)
+            previous_outline = np.load(previous_outline_entry.coords_path)
+            if previous_outline_entry.cell_id == self.cell_id:
+                previous_area = self.get_area(previous_outline)
+                current_area = self.get_area(np.array([(n.x, n.y) for n in self.balloon_obj.nodes]))
+                area_diff = abs(previous_area - current_area) / previous_area
+                return area_diff
+        return 0
+
+    def _accept_event_static(self):
+        pass
 
     def _delete_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
@@ -670,7 +727,7 @@ class Plotter(FigureCanvas):
 
 
 class Toolbar(NavigationToolbar):
-    def __init__(self, figure_canvas, parent=None):
+    def __init__(self, figure_canvas, experiment_data, parent=None):
         self.toolitems = [
             ("Home", "Home", "home_large", "home_event"),
             (None, None, None, None),
@@ -681,16 +738,36 @@ class Toolbar(NavigationToolbar):
             (None, None, None, None),
             ("Save", "Save view", "filesave_large", "save_figure"),
             (None, None, None, None),
-            ("Accept", "Accept outline", "accept", "accept"),
-            ("Delete", "Delete outline", "delete", "delete"),
-            ("Refine", "Refine outline", "recycle", "refine"),
-            ("Refine1", "Refine one step", "recycle_single", "refine_single"),
+            ("Accept", "Accept outline (enter)", "accept", "accept"),
+            ("Delete", "Delete outline (d or delete)", "delete", "delete"),
+            ("Refine", "Refine outline (r)", "recycle", "refine"),
+            ("Refine1", "Refine one step (.)", "recycle_single", "refine_single"),
             (None, None, None, None),
-            ("ChannelLeft", "Previous channel", "channel_prev", "channel_prev"),
-            ("ChannelRight", "Next channel", "channel_next", "channel_next"),
-            ("FrameUp", "Next frame", "frame_next", "frame_next"),
-            ("FrameDown", "Previous frame", "frame_prev", "frame_prev"),
         ]
+        if experiment_data.num_channels > 1:
+            self.toolitems.extend([
+                ("ChannelLeft", "Previous channel (left or a)", "channel_prev", "channel_prev"),
+                ("ChannelRight", "Next channel (right or d)", "channel_next", "channel_next"),
+            ])
+
+        if experiment_data.num_slices > 1:
+            self.toolitems.extend([
+                ("SlicePrev", "Previous slice (q)", "slice_prev", "slice_prev"),
+                ("SliceNext", "Next slice (e)", "slice_next", "slice_next"),
+            ])
+
+        if experiment_data.image_mode == "movie":
+            self.toolitems.extend([
+                ("FrameUp", "Next frame (up or w)", "frame_next", "frame_next"),
+                ("FrameDown", "Previous frame (down or s)", "frame_prev", "frame_prev"),
+            ])
+        elif experiment_data.image_mode == "static":
+            if experiment_data.num_frames > 1:
+                self.toolitems.extend([
+                    ("ImageUp", "Next image (up or w)", "image_next", "frame_next"),
+                    ("ImageDown", "Previous image (down or s)", "image_prev", "frame_prev"),
+                ])
+
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
     def _icon(self, name):
@@ -739,6 +816,12 @@ class Toolbar(NavigationToolbar):
 
     def frame_prev(self):
         self.canvas._frame_change(-1)
+
+    def slice_next(self):
+        self.canvas._slice_change(1)
+
+    def slice_prev(self):
+        self.canvas._slice_change(-1)
 
 
 class Outliner:
@@ -791,7 +874,7 @@ class Outliner:
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.plot.setFocus()
 
-        self.window.toolbar = Toolbar(self.plot, self.window)
+        self.window.toolbar = Toolbar(self.plot, self.experiment_data, self.window)
 
         tool_layout = QtWidgets.QVBoxLayout()
         tool_layout.addWidget(self.window.toolbar)

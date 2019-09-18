@@ -2,8 +2,13 @@
 
 import os
 import pathlib
+import shutil
 import sqlite3
+import sys
+import time
 import uuid
+
+from . import loader
 
 
 class Row(dict):
@@ -21,6 +26,27 @@ class Row(dict):
             if caster is str and (not casted or casted == "None"):
                 casted = None
             row[col_name] = casted
+
+        return row
+
+
+class VersionRow(Row):
+    COLS = [
+        ("major_version", "INTEGER", int),
+        ("minor_version", "INTEGER", int),
+    ]
+
+
+class ImagePathRow(Row):
+    COLS = [
+        ("image_num", "INTEGER", int),
+        ("experiment_id", "TEXT", str),
+        ("image_path", "TEXT", str),
+    ]
+    def parseRow(self, r):
+        row = super().parseRow(r)
+        if "\\" in row["image_path"]:
+            row["image_path"] = pathlib.PureWindowsPath(row["image_path"]).as_posix()
 
         return row
 
@@ -120,8 +146,11 @@ class ExperimentRow(Row):
         ("medium", "TEXT", str),
         ("strain", "TEXT", str),
         ("image_path", "TEXT", str),
-        ("channel_green", "INTEGER", bool),
-        ("channel_red", "INTEGER", bool),
+        ("image_mode", "TEXT", str),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("file_mode", "TEXT", str),
         ("outlined", "INTEGER DEFAULT 0", bool),
         ("verified", "INTEGER DEFAULT 0", bool),
         ("analysed", "INTEGER DEFAULT 0", bool),
@@ -129,7 +158,10 @@ class ExperimentRow(Row):
     def parseRow(self, r):
         row = {}
         for (col_name, _, caster), r in zip(self.COLS, r):
-            row[col_name] = caster(r)
+            if r is None:
+                row[col_name] = None
+            else:
+                row[col_name] = caster(r)
 
         if "\\" in row["image_path"]:
             row["image_path"] = pathlib.PureWindowsPath(row["image_path"]).as_posix()
@@ -141,8 +173,11 @@ class ExperimentRow(Row):
             "medium": row["medium"],
             "strain": row["strain"],
             "image_path": row["image_path"],
-            "channels": {"green": bool(row["channel_green"]),
-                         "red": bool(row["channel_red"])},
+            "image_mode": row["image_mode"],
+            "num_channels": row["num_channels"],
+            "num_slices": row["num_slices"],
+            "num_frames": row["num_frames"],
+            "file_mode": row["file_mode"],
             "outlined": bool(row["outlined"]),
             "verified": bool(row["verified"]),
             "analysed": bool(row["analysed"]),
@@ -182,6 +217,90 @@ def checkTable(table_name):
     """
     args = (table_name,)
     return executeQuery(query, args, fetchone=True)
+
+def createImagePathTable():
+    query = "CREATE TABLE imagepath ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in ImagePathRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertImagePath(image_num, experiment_id, image_path):
+    query = """
+    INSERT INTO imagepath
+    (image_num, experiment_id, image_path)
+    VALUES (?, ?, ?);
+    """
+    args = (image_num, experiment_id, image_path)
+    executeQuery(query, args, commit=True)
+
+def getImagePaths(experiment_id):
+    query = """
+    SELECT *
+    FROM imagepath
+    WHERE experiment_id = ?;
+    """
+    args = (experiment_id,)
+    r = executeQuery(query, args, fetchmany=True)
+    paths = sorted(
+        [ImagePathRow(x) for x in r],
+        key=lambda x: x["image_num"],
+    )
+    return paths
+
+def getNextImageNum(experiment_id):
+    paths = getImagePaths(experiment_id)
+    last_path = paths[-1]
+    return last_path["image_num"] + 1
+
+def deleteImagePaths(experiment_id):
+    query = """
+    DELETE FROM imagepath
+    WHERE experiment = ?;
+    """
+    executeQuery(query, args, commit=True)
+
+def createVersionTable():
+    query = """
+    CREATE TABLE version
+    (major_version INTEGER, minor_version INTEGER);
+    """
+    query = """
+    CREATE TABLE version
+    ({0});
+    """.format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in VersionRow.COLS
+    ]))
+    executeQuery(query, commit=True)
+
+def insertVersion(major, minor):
+    query = """
+    INSERT INTO version
+    (major_version, minor_version)
+    VALUES
+    (?, ?);
+    """
+    args = (major, minor)
+    executeQuery(query, args, commit=True)
+
+def updateVersion(major, minor):
+    query = """
+    UPDATE version
+    SET major_version = ?,
+        minor_version = ?;
+    """
+    args = (major, minor)
+    executeQuery(query, args, commit=True)
+
+def getVersion():
+    query = """
+    SELECT *
+    From version
+    """
+    result = executeQuery(query, fetchone=True)
+    version = VersionRow(result)
+    return (version["major_version"], version["minor_version"])
 
 def createSignalsTable():
     query = """
@@ -610,29 +729,30 @@ def checkExperimentDuplicate(date_year, date_month, date_day, medium, strain, im
         return False
 
 def insertExperiment(date_year, date_month, date_day, medium, strain,
-                     image_path, channel_green, channel_red):
+                     image_path, image_mode, num_channels, num_slices,
+                     num_frames, file_mode):
     query = """
     INSERT INTO experiments
-    (experiment_id, date_year, date_month, date_day, medium, strain, image_path, channel_green, channel_red)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    (experiment_id, date_year, date_month, date_day, medium, strain,
+     image_path, image_mode, num_channels, num_slices, num_frames, file_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     experiment_id = str(uuid.uuid4())
     args = (
         experiment_id,
-        date_year, date_month, date_day,
-        medium, strain, image_path,
-        channel_green, channel_red,
+        date_year, date_month, date_day, medium, strain, image_path,
+        image_mode, num_channels, num_slices, num_frames, file_mode,
     )
     new_id = executeQuery(query, args, commit=True)
-    return new_id
+    return new_id, experiment_id
 
 def updateExperimentById(experiment_id, **kwargs):
     args = []
     set_statement = []
 
     permitted_columns = [
-        "medium", "strain", "image_path", "channel_green", "channel_red",
-        "outlined", "verified", "analysed",
+        "medium", "strain", "image_path", "image_mode", "num_channels",
+        "num_slices", "num_frames", "file_mode", "outlined", "verified", "analysed",
     ]
     for kw, val in kwargs.items():
         if kw not in permitted_columns:
@@ -682,6 +802,281 @@ def deleteExperimentById(experiment_id):
     """
     args = (experiment_id,)
     executeQuery(query, args, commit=True)
+
+
+def backup_tables():
+    backup_str = "{0}-pombetrack.db.backup".format(time.strftime("%Y-%m-%d"))
+    backup_path = os.path.join("data", "backups", backup_str)
+    backup_num = 1
+    while os.path.exists(backup_path):
+        backup_path = os.path.join("data", "backups", "{0}-{1}".format(
+            backup_str, backup_num
+        ))
+        backup_num += 1
+
+    db_path = os.path.join("data", "pombetrack.db")
+    if not os.path.exists(os.path.dirname(backup_path)):
+        os.makedirs(os.path.dirname(backup_path))
+
+    shutil.copyfile(db_path, backup_path)
+    print("Backed up database to {0}".format(backup_path))
+
+
+def run_database_updates(from_version, to_version):
+    update_sequence = [
+        ((0, 0), (0, 1), _update1),
+        ((0, 1), (0, 2), _update2),
+        ((0, 2), (0, 3), _update3),
+    ]
+    for seq_prev, seq_next, update_func in update_sequence:
+        if seq_prev == from_version and seq_prev != to_version:
+            print("Updating from version {0} to {1}".format(seq_prev, seq_next))
+            backup_tables()
+            update_func()
+            from_version = seq_next
+
+def _update1():
+    print("Adding image_mode, num_frames, num_channels, num_slices columns to "
+          "experiments table and removing channels column")
+    old_columns = ",".join([
+        "experiment_num", "experiment_id", "date_year", "date_month",
+        "date_day", "medium", "strain", "image_path", "outlined", "verified",
+        "analysed",
+    ])
+    new_cols = [
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("image_mode", "INTEGER DEFAULT 1", int),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
+    ]
+
+    create_query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    queries = [
+        "CREATE TABLE _backup({0});".format(old_columns),
+        """
+        INSERT INTO _backup
+        SELECT {0} FROM experiments;
+        """.format(old_columns),
+        "DROP TABLE experiments;",
+        create_query,
+        "INSERT INTO experiments ({0}) SELECT {0} FROM _backup;".format(old_columns),
+        "DROP TABLE _backup;",
+    ]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    for query in queries:
+        cursor.execute(query)
+        conn.commit()
+
+    print("Inspecting image files for channel information")
+    cursor.execute("SELECT * FROM experiments;")
+    experiments = cursor.fetchall()
+
+    for experiment in experiments:
+        # load image for movie/static, num_frames, num_channels, num_slices
+        image_path = experiment[7]
+        if not os.path.exists(image_path):
+            print("! File {0} is not accessible, skipping it".format(
+                image_path
+            ))
+            num_frames, num_channels, num_slices = 1, 1, 1
+        else:
+            meta = loader.ImageLoaderSingle(image_path).im_metadata
+            if "frames" in meta:
+                num_frames = meta["frames"]
+            else:
+                num_frames = 1
+
+            if "channels" in meta:
+                num_channels = meta["channels"]
+            else:
+                num_channels = 1
+
+            if "slices" in meta:
+                num_slices = meta["slices"]
+            else:
+                num_slices = 1
+
+            if num_frames == 1:
+                image_mode = 2
+            else:
+                image_mode = 1
+
+        query = """
+        UPDATE experiments
+        SET image_mode = ?,
+            num_frames = ?,
+            num_channels = ?,
+            num_slices = ?
+        WHERE experiment_id = ?;
+        """
+        args = (image_mode, num_frames, num_channels, num_slices, experiment[1])
+        cursor.execute(query, args)
+        conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 1)
+    cursor.execute(query, args)
+    conn.commit()
+    conn.close()
+
+def _update2():
+    print("Changing image_mode column to TEXT")
+    new_cols = [
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("image_mode", "TEXT", str),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
+    ]
+    col_names = [x[0] for x in new_cols]
+    col_subset = [x[0] for x in new_cols if x[0] != "image_mode"]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    query = "CREATE TABLE _backup({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(query)
+    conn.commit()
+
+    query = "INSERT INTO _backup ({0}) SELECT {0} FROM experiments;".format(
+        ",".join(col_subset)
+    )
+    cursor.execute(query)
+    conn.commit()
+
+    query = "SELECT experiment_id, image_mode FROM experiments;"
+    cursor.execute(query)
+    for experiment in cursor.fetchall():
+        query = "UPDATE _backup SET image_mode = ? WHERE experiment_id = ?"
+        if experiment[1] == 1:
+            args = ("movie", experiment[0])
+        if experiment[1] == 2:
+            args = ("static", experiment[0])
+
+        cursor.execute(query, args)
+    conn.commit()
+
+    query = "DROP TABLE experiments;"
+    cursor.execute(query)
+    conn.commit()
+
+    create_query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(create_query)
+    conn.commit()
+
+    query = "INSERT INTO experiments ({0}) SELECT {0} from _backup;".format(
+        ",".join(col_names),
+    )
+    cursor.execute(query)
+
+    query = "DROP TABLE _backup;"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 2)
+    cursor.execute(query, args)
+    conn.commit()
+    conn.close()
+
+def _update3():
+    print("Adding file_mode column to experiments table")
+    new_cols = [
+        ("experiment_num", "INTEGER PRIMARY KEY", int),
+        ("experiment_id", "TEXT", str),
+        ("date_year", "INTEGER", int),
+        ("date_month", "INTEGER", int),
+        ("date_day", "INTEGER", int),
+        ("medium", "TEXT", str),
+        ("strain", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("image_mode", "TEXT", str),
+        ("num_channels", "INTEGER", int),
+        ("num_slices", "INTEGER", int),
+        ("num_frames", "INTEGER", int),
+        ("file_mode", "TEXT", str),
+        ("outlined", "INTEGER DEFAULT 0", bool),
+        ("verified", "INTEGER DEFAULT 0", bool),
+        ("analysed", "INTEGER DEFAULT 0", bool),
+    ]
+    col_names = [x[0] for x in new_cols]
+    col_subset = [x[0] for x in new_cols if x[0] != "file_mode"]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    query = "CREATE TABLE _backup({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(query)
+    conn.commit()
+
+    query = "INSERT INTO _backup ({0}) SELECT {0} FROM experiments;".format(
+        ",".join(col_subset)
+    )
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE _backup SET file_mode = 'single';"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "DROP TABLE experiments;"
+    cursor.execute(query)
+    conn.commit()
+
+    create_query = "CREATE TABLE experiments ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(create_query)
+    conn.commit()
+
+    query = "INSERT INTO experiments ({0}) SELECT {0} from _backup;".format(
+        ",".join(col_names),
+    )
+    cursor.execute(query)
+
+    query = "DROP TABLE _backup;"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 3)
+    cursor.execute(query, args)
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
     print("This should be imported")
