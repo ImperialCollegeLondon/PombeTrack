@@ -92,8 +92,8 @@ class Plotter(FigureCanvas):
     def automatic_segmentation(self):
         im_mid=self.load_frame(int(np.floor(self.num_frames/2)),0)
         im_up=self.load_frame(int(np.floor(self.num_frames/2)-1),0)
-        #  im=np.maximum(im_mid,im_up)
-        im=self.load_frame(0,0)
+        im=np.maximum(im_mid,im_up)
+        #  im=self.load_frame(0,0)
 
 
         im_pp=segmentation.preprocessing(im)
