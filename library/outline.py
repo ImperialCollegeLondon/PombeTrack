@@ -90,10 +90,11 @@ class Plotter(FigureCanvas):
 
 
     def automatic_segmentation(self):
-        im_mid=self.load_frame(int(np.floor(self.num_frames/2)),0)
-        im_up=self.load_frame(int(np.floor(self.num_frames/2)-1),0)
+        # load_frame: frame, z-slice, channel
+        im_mid=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)),0)
+        im_up=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)-1),0)
         im=np.maximum(im_mid,im_up)
-        #  im=self.load_frame(0,0)
+        print(im)
 
 
         im_pp=segmentation.preprocessing(im)
@@ -150,7 +151,7 @@ class Plotter(FigureCanvas):
         self.num_channels = self.image_loader.num_channels
         self.num_slices = self.image_loader.num_slices
 
-    def load_frame(self, frame_idx=None, channel_idx=None, slice_idx=None):
+    def load_frame(self, frame_idx=None, slice_idx=None, channel_idx=None):
         if frame_idx is None:
             frame_idx = self.current_frame_idx
 
