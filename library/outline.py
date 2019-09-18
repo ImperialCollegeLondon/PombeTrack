@@ -434,6 +434,9 @@ class Plotter(FigureCanvas):
         elif evt.key == "e":
             self._slice_change(1)
 
+        elif evt.key == "r" and len(self.selected_outlines) > 1:
+            self._refine_multi()
+
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
 
@@ -443,11 +446,15 @@ class Plotter(FigureCanvas):
         elif (evt.key == "d" or evt.key == "delete") and self.subfigure_patches:
             self._delete_event()
 
+        elif evt.key == "." and len(self.selected_outlines) > 1:
+            self._refine_multi(1)
+
         elif evt.key == "." and self.subfigure_patches:
             self._refine_event(1)
 
         elif evt.key == "enter" and self.subfigure_patches:
             self._accept_event()
+
         else:
             print("Unknown key:", evt.key)
 
@@ -865,6 +872,41 @@ class Plotter(FigureCanvas):
                 )
                 break
         self._plot_nodes()
+
+    def _refine_multi(self, num_ref=10):
+        if len(self.selected_outlines) < 2:
+            return
+
+        self.clear_sub_outlines()
+        self.outline_id = None
+        self.draw()
+        for outline in self.selected_outlines:
+            outline_info = database.getOutlineById(outline._outline_id)
+            centre = [outline_info.offset_left + self.region_width,
+                      outline_info.offset_top + self.region_height]
+            _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
+            roi = self.load_frame(channel_idx=0)[
+                outline_info.offset_left:outline_info.offset_left + (self.region_width * 2),
+                outline_info.offset_top:outline_info.offset_top + (self.region_height * 2),
+            ]
+            current_nodes = np.load(outline_info.coords_path)
+            balloon_centre = [self.region_width - centre_offset_left,
+                              self.region_height - centre_offset_top]
+
+            balloon_obj = balloon.Balloon(current_nodes, roi)
+            balloon_obj.refining_cycles = 1
+            for i in range(num_ref):
+                try:
+                    balloon_obj.evolve(image_percentile=self.image_percentile)
+                except ValueError:
+                    break
+            coords = np.array([(n.y, n.x) for n in balloon_obj.nodes]) + np.array([
+                outline_info.offset_top,
+                outline_info.offset_left,
+            ])
+            outline.set_xy(coords)
+
+        self.draw()
 
 
 class Toolbar(NavigationToolbar):
