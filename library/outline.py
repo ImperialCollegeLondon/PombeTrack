@@ -30,15 +30,14 @@ sns.set_style("white")
 
 class Plotter(FigureCanvas):
     def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader):
-        fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
-        self.fig = fig
-        self.main_ax = fig.add_subplot(121)
-        self.sub_ax = fig.add_subplot(122)
+        self.fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
+        self.main_ax = self.fig.add_subplot(121)
+        self.sub_ax = self.fig.add_subplot(122)
 
         self.decorate_axis(self.main_ax)
         self.decorate_axis(self.sub_ax)
 
-        FigureCanvas.__init__(self, fig)
+        FigureCanvas.__init__(self, self.fig)
         self.setParent(parent_window)
 
         FigureCanvas.setSizePolicy(
@@ -72,6 +71,8 @@ class Plotter(FigureCanvas):
         #  self.cell_outline_text = []
         self.sub_outlines = []
         self.subfigure_patches = []
+        self.main_dragging = False
+        self.selected_outlines = []
         self.dragging = False
         self.previous_id = None
         self.current_frame_idx = 0
@@ -472,53 +473,18 @@ class Plotter(FigureCanvas):
             return
 
         if evt.inaxes == self.main_ax:
-            # check is not in an existing outline
-            hit = False
-            for outline in self.cell_outlines:
-                hit, _ = outline.contains(evt)
-                if hit:
-                    break
-
-            if hit:
-                outline_info = database.getOutlineById(outline._outline_id)
-                self.previous_id = outline_info.parent_id
-                self.cell_id = outline_info.cell_id
-                self.offset_left = outline_info.offset_left
-                self.offset_top = outline_info.offset_top
-                centre = [self.offset_left + self.region_width,
-                          self.offset_top + self.region_height]
-                _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
-                roi = self.load_frame(channel_idx=0)[
-                    self.offset_left:self.offset_left + (self.region_width * 2),
-                    self.offset_top:self.offset_top + (self.region_height * 2)
-                ]
-                self.outline_id = outline_info.outline_id
-                current_nodes = np.load(outline_info.coords_path)
-                self.fit_outline(
-                    roi,
-                    init_nodes=current_nodes,
-                    centre_offset_left=centre_offset_left,
-                    centre_offset_top=centre_offset_top,
-                )
-                self.balloon_obj.refining_cycles = 1
-
-            else:
-                self.previous_id = None
-                self.cell_id = str(uuid.uuid4())
-                centre = [evt.ydata, evt.xdata]
-                (self.offset_left, self.offset_top,
-                 centre_offset_left, centre_offset_top) = self.get_offsets(centre)
-
-                roi = self.load_frame(channel_idx=0)[
-                    self.offset_left:self.offset_left + (self.region_width * 2),
-                    self.offset_top:self.offset_top + (self.region_height * 2)
-                ]
-
-                self.fit_outline(
-                    roi,
-                    centre_offset_left=centre_offset_left,
-                    centre_offset_top=centre_offset_top,
-                )
+            self.main_dragging = [evt.xdata, evt.ydata]
+            self.main_dragging_rect = matplotlib.patches.Rectangle(
+                self.main_dragging,
+                0, 0,
+                edgecolor="yellow",
+                facecolor=(0.9, 0.9, 0.7, 0.3),
+            )
+            self.main_ax.add_patch(self.main_dragging_rect)
+            self.main_dragging_background = self.fig.canvas.copy_from_bbox(
+                self.main_ax.bbox
+            )
+            self.draw()
 
         elif evt.inaxes == self.sub_ax:
             if evt.button == 1:
@@ -535,22 +501,147 @@ class Plotter(FigureCanvas):
                         self._plot_nodes()
                         self.draw()
 
+    def deselect_outlines(self):
+        for outline in self.selected_outlines:
+            outline.set_edgecolor("red")
+
+        self.selected_outlines = []
+
     def _button_release_event(self, evt):
-        if not self.dragging:
+        if self.parent().toolbar.mode:
             return
 
-        self.dragging.set_facecolor("y")
-        self.dragging.this_node.set_position((evt.ydata, evt.xdata))
-        self.dragging.this_node.apply_changes()
-        self._plot_nodes()
-        self.dragging = False
+        elif self.main_dragging and not evt.inaxes == self.main_ax:
+            self.main_dragging = False
+            self.main_dragging_rect.remove()
+            del self.main_dragging_rect
+            self.deselect_outlines()
+            self.draw()
+            return
+
+        elif self.main_dragging and evt.inaxes == self.main_ax:
+            if not evt.xdata or not evt.ydata:
+                self.main_dragging = False
+                self.main_dragging_rect.remove()
+                del self.main_dragging_rect
+                self.draw()
+                return
+
+            rect_width = evt.xdata - self.main_dragging[0]
+            rect_height = evt.ydata - self.main_dragging[1]
+
+            # determine whether any outline within the bounds
+            self.deselect_outlines()
+            if abs(rect_width) > 10 and abs(rect_height) > 10:
+                rect_path = self.main_dragging_rect.get_path()
+                rect_transform = self.main_dragging_rect.get_transform()
+                true_rect = rect_transform.transform_path(rect_path)
+                for outline in self.cell_outlines:
+                    out_transform = outline.get_transform()
+                    out_path = outline.get_path()
+                    true_outline = out_transform.transform_path(out_path)
+                    contains = true_rect.contains_points(
+                        true_outline.vertices
+                    )
+                    if sum(contains) > 0:
+                        outline.set_edgecolor("yellow")
+                        self.selected_outlines.append(outline)
+
+            self.main_dragging = False
+            self.main_dragging_rect.remove()
+            del self.main_dragging_rect
+
+            if len(self.selected_outlines) > 1:
+                self.sub_ax.clear()
+                self.decorate_axis(self.sub_ax)
+                self.outline_id = None
+                self.balloon_obj = None
+                self.main_dragging = False
+                self.dragging = False
+                self.subfigure_patches = []
+
+            elif len(self.selected_outlines) == 1:
+                self._select_hit(self.selected_outlines[0])
+
+            elif len(self.selected_outlines) == 0:
+                # check is not in an existing outline
+                hit = False
+                for outline in self.cell_outlines:
+                    hit, _ = outline.contains(evt)
+                    if hit:
+                        break
+
+                if hit:
+                    self.selected_outlines.append(outline)
+                    self._select_hit(outline)
+                else:
+                    self.previous_id = None
+                    self.cell_id = str(uuid.uuid4())
+                    centre = [evt.ydata, evt.xdata]
+                    (self.offset_left, self.offset_top,
+                    centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
+                    roi = self.load_frame(channel_idx=0)[
+                        self.offset_left:self.offset_left + (self.region_width * 2),
+                        self.offset_top:self.offset_top + (self.region_height * 2)
+                    ]
+
+                    self.fit_outline(
+                        roi,
+                        centre_offset_left=centre_offset_left,
+                        centre_offset_top=centre_offset_top,
+                    )
+            self.draw()
+
+        elif evt.inaxes == self.sub_ax:
+            if not self.dragging:
+                return
+
+            self.dragging.set_facecolor("y")
+            self.dragging.this_node.set_position((evt.ydata, evt.xdata))
+            self.dragging.this_node.apply_changes()
+            self._plot_nodes()
+            self.dragging = False
+
+    def _select_hit(self, outline):
+        outline_info = database.getOutlineById(outline._outline_id)
+        self.previous_id = outline_info.parent_id
+        self.cell_id = outline_info.cell_id
+        self.offset_left = outline_info.offset_left
+        self.offset_top = outline_info.offset_top
+        centre = [self.offset_left + self.region_width,
+                self.offset_top + self.region_height]
+        _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
+        roi = self.load_frame(channel_idx=0)[
+            self.offset_left:self.offset_left + (self.region_width * 2),
+            self.offset_top:self.offset_top + (self.region_height * 2)
+        ]
+        self.outline_id = outline_info.outline_id
+        current_nodes = np.load(outline_info.coords_path)
+        self.fit_outline(
+            roi,
+            init_nodes=current_nodes,
+            centre_offset_left=centre_offset_left,
+            centre_offset_top=centre_offset_top,
+        )
+        self.balloon_obj.refining_cycles = 1
 
     def _motion_notify_event(self, evt):
-        if not self.dragging:
+        if self.parent().toolbar.mode:
             return
 
-        self.dragging.center = evt.xdata, evt.ydata
-        self.draw()
+        if self.main_dragging and evt.inaxes == self.main_ax:
+            self.fig.canvas.restore_region(self.main_dragging_background)
+            new_width = evt.xdata - self.main_dragging[0]
+            new_height = evt.ydata - self.main_dragging[1]
+            self.main_dragging_rect.set_width(new_width)
+            self.main_dragging_rect.set_height(new_height)
+            self.main_ax.draw_artist(self.main_dragging_rect)
+            self.fig.canvas.blit(self.main_ax.bbox)
+
+        elif self.dragging and evt.inaxes == self.sub_ax:
+            self.dragging.center = evt.xdata, evt.ydata
+            self.draw()
 
     def _home_event(self):
         f = self.load_frame()
@@ -630,6 +721,7 @@ class Plotter(FigureCanvas):
 
             # clear plot
             self.balloon_obj = None
+            self.main_dragging = False
             self.dragging = False
             self.subfigure_patches = []
             self.sub_ax.clear()
@@ -646,9 +738,6 @@ class Plotter(FigureCanvas):
                 bf_frame = self.load_frame()
                 self.main_frame.set_data(bf_frame)
                 self.outline_id = None
-                self.balloon_obj = None
-                self.dragging = False
-                self.subfigure_patches = []
                 self.plot_existing_outlines()
                 self.clear_sub_outlines()
                 self.draw()
@@ -674,6 +763,7 @@ class Plotter(FigureCanvas):
             self.save_outline()
             # clear sub_ax
             self.balloon_obj = None
+            self.main_dragging = False
             self.dragging = False
             self.subfigure_patches = []
             self.sub_ax.clear()
@@ -720,6 +810,7 @@ class Plotter(FigureCanvas):
             self.decorate_axis(self.sub_ax)
             self.outline_id = None
             self.balloon_obj = None
+            self.main_dragging = False
             self.dragging = False
             self.subfigure_patches = []
             self.plot_existing_outlines()
