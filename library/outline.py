@@ -148,6 +148,7 @@ class Plotter(FigureCanvas):
                 c = self.full_coords
                 p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
                 p._outline_id = self.outline_id
+                p._cell_id = self.cell_id
                 self.main_ax.add_patch(p)
                 self.cell_outlines.append(p)
                 centre = c.mean(axis=0)
@@ -242,6 +243,7 @@ class Plotter(FigureCanvas):
             c = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
             p._outline_id = outline.outline_id
+            p._cell_id = outline.cell_id
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
@@ -434,6 +436,9 @@ class Plotter(FigureCanvas):
 
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
+
+        elif (evt.key == "d" or evt.key == "delete") and len(self.selected_outlines) > 1:
+            self._delete_multi()
 
         elif (evt.key == "d" or evt.key == "delete") and self.subfigure_patches:
             self._delete_event()
@@ -805,6 +810,35 @@ class Plotter(FigureCanvas):
                 verified=False,
             )
             database.deleteCellById(self.cell_id)
+
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            self.outline_id = None
+            self.balloon_obj = None
+            self.main_dragging = False
+            self.dragging = False
+            self.subfigure_patches = []
+            self.plot_existing_outlines()
+            self.draw()
+
+    def _delete_multi(self):
+        if len(self.selected_outlines) < 2:
+            return
+
+        alert = QtWidgets.QMessageBox()
+        delete_confirm = alert.question(
+            self.parent(),
+            "Delete selected {0} outlines?".format(len(self.selected_outlines)),
+            "Are you really sure you want to delete these outlines permanently?"
+        )
+        if delete_confirm == QtWidgets.QMessageBox.Yes:
+            for outline in self.selected_outlines:
+                database.deleteOutlineById(outline._outline_id)
+                database.updateExperimentById(
+                    self._data.experiment_id,
+                    verified=False,
+                )
+                database.deleteCellById(outline._cell_id)
 
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
