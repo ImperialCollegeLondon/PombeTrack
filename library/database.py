@@ -827,6 +827,7 @@ def run_database_updates(from_version, to_version):
         ((0, 0), (0, 1), _update1),
         ((0, 1), (0, 2), _update2),
         ((0, 2), (0, 3), _update3),
+        ((0, 3), (0, 4), _update4),
     ]
     for seq_prev, seq_next, update_func in update_sequence:
         if seq_prev == from_version and seq_prev != to_version:
@@ -1077,6 +1078,74 @@ def _update3():
     cursor.execute(query, args)
     conn.commit()
     conn.close()
+
+def _update4():
+    print("Adding centre_x and centre_y columns to outlines table")
+    new_cols = [
+        ("outline_num", "INTEGER PRIMARY KEY", int),
+        ("outline_id", "TEXT", str),
+        ("cell_id", "TEXT", str),
+        ("experiment_num", "INTEGER", int),
+        ("experiment_id", "TEXT", str),
+        ("image_path", "TEXT", str),
+        ("frame_idx", "INTEGER", int),
+        ("coords_path", "TEXT", str),
+        ("offset_left", "INTEGER", int),
+        ("offset_top", "INTEGER", int),
+        ("parent_id", "TEXT", str),
+        ("child_id1", "TEXT DEFAULT ''", str),
+        ("child_id2", "TEXT DEFAULT ''", str),
+        ("centre_x", "INTEGER", int),
+        ("centre_y", "INTEGER", int),
+    ]
+    col_names = [x[0] for x in new_cols]
+    col_subset = [x[0] for x in new_cols if not x[0].startswith("centre")]
+    db_path = os.path.join("data", "pombetrack.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    query = "CREATE TABLE _backup({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(query)
+    conn.commit()
+
+    query = "INSERT INTO _backup ({0}) SELECT {0} FROM outlines;".format(
+        ",".join(col_subset)
+    )
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE _backup SET centre_x = 0, centre_y = 0;"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "DROP TABLE outlines;"
+    cursor.execute(query)
+    conn.commit()
+
+    create_query = "CREATE TABLE outlines ({0});".format(",".join([
+        "{0} {1}".format(x[0], x[1])
+        for x in new_cols
+    ]))
+    cursor.execute(create_query)
+    conn.commit()
+
+    query = "INSERT INTO outlines ({0}) SELECT {0} from _backup;".format(
+        ",".join(col_names),
+    )
+    cursor.execute(query)
+
+    query = "DROP TABLE _backup;"
+    cursor.execute(query)
+    conn.commit()
+
+    query = "UPDATE version SET major_version = ?, minor_version = ?;"
+    args = (0, 4)
+    cursor.execute(query, args)
+    conn.commit()
+    conn.close()
+
 
 if __name__ == "__main__":
     print("This should be imported")
