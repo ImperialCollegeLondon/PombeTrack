@@ -10,7 +10,7 @@ class ImageLoaderMulti:
         self.paths = [x["image_path"] for x in imagepaths]
         self.im_preload = {}
         self.load_metadata()
-        self.load_frame(0, 0)
+        self.load_frame(0, 0, 0)
         self.green_factor = np.load(os.path.join("resources", "green_correction.npy"))
         self.red_factor = np.load(os.path.join("resources", "red_correction.npy"))
 
@@ -76,7 +76,7 @@ class ImageLoaderSingle:
         self.path = image_path
         self.im_preload = {}
         self.load_metadata()
-        self.load_frame(0, 0)
+        self.load_frame(0, 0, 0)
         self.green_factor = np.load(os.path.join("resources", "green_correction.npy"))
         self.red_factor = np.load(os.path.join("resources", "red_correction.npy"))
 
