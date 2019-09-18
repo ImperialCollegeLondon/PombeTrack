@@ -256,21 +256,29 @@ class Plotter(FigureCanvas):
             #  )
             #  self.cell_outline_text.append(t)
 
-    def save_outline(self,auto=False):
-        coords_path = os.path.join(
-            self.outline_store,
-            "{0}.npy".format(self.outline_id)
-        )
-
+    def save_outline(self, auto=False, explicit=None):
         if auto:
             coords=self.auto_coords
+        elif explicit:
+            self.outline_id = explicit._outline_id
+            outline_info = database.getOutlineById(self.outline_id)
+            xy = explicit.get_xy()
+            self.offset_left = outline_info.offset_left
+            self.offset_top = outline_info.offset_top
+            coords = np.array([xy[:, 1], xy[:, 0]]).T - [self.offset_left, self.offset_top]
+            self.cell_id = explicit._cell_id
+            self.previous_id = outline_info.parent_id
+            self.centre_y, self.centre_x = coords.mean(axis=0)
         else:
             coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
             # Determine cell centre
             centre=coords + np.array([self.offset_left, self.offset_top])
-            self.centre_y,self.centre_x = centre.mean(axis=0)
+            self.centre_y, self.centre_x = centre.mean(axis=0)
 
-
+        coords_path = os.path.join(
+            self.outline_store,
+            "{0}.npy".format(self.outline_id)
+        )
         data = {
             "outline_id": self.outline_id,
             "cell_id": self.cell_id,
@@ -287,6 +295,11 @@ class Plotter(FigureCanvas):
         }
         if os.path.exists(coords_path):
             os.remove(coords_path)
+            database.updateOutlineById(
+                self.outline_id,
+                centre_x=int(self.centre_x),
+                centre_y=int(self.centre_y),
+            )
         else:
             database.insertOutline(**data)
 
@@ -485,6 +498,32 @@ class Plotter(FigureCanvas):
             return
 
         if evt.inaxes == self.main_ax:
+            if sum([hasattr(x, "_modified") for x in self.selected_outlines]) > 0:
+                alert = QtWidgets.QMessageBox()
+                message = ("The selected outlines have been modified"
+                            "\nWould you like to save them?")
+                add_confirm = alert.question(
+                    self.parent(),
+                    "Save changes?",
+                    message,
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel,
+                    QtWidgets.QMessageBox.Cancel,
+                )
+                if add_confirm == QtWidgets.QMessageBox.Yes:
+                    for outline in self.selected_outlines:
+                        self.save_outline(auto=False, explicit=outline)
+                    self.deselect_outlines()
+                    self.plot_existing_outlines()
+                    self.draw()
+                    return
+                elif add_confirm == QtWidgets.QMessageBox.No:
+                    self.deselect_outlines()
+                    self.plot_existing_outlines()
+                    self.draw()
+                    return
+                elif add_confirm == QtWidgets.QMessageBox.Cancel:
+                    return
+
             self.main_dragging = [evt.xdata, evt.ydata]
             self.main_dragging_rect = matplotlib.patches.Rectangle(
                 self.main_dragging,
@@ -905,6 +944,7 @@ class Plotter(FigureCanvas):
                 outline_info.offset_left,
             ])
             outline.set_xy(coords)
+            outline._modified = True
 
         self.draw()
 
