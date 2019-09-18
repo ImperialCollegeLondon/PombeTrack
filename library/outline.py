@@ -661,15 +661,15 @@ class Toolbar(NavigationToolbar):
             (None, None, None, None),
             ("Save", "Save view", "filesave_large", "save_figure"),
             (None, None, None, None),
-            ("Accept", "Accept outline", "accept", "accept"),
-            ("Delete", "Delete outline", "delete", "delete"),
-            ("Refine", "Refine outline", "recycle", "refine"),
-            ("Refine1", "Refine one step", "recycle_single", "refine_single"),
+            ("Accept", "Accept outline (enter)", "accept", "accept"),
+            ("Delete", "Delete outline (d or delete)", "delete", "delete"),
+            ("Refine", "Refine outline (r)", "recycle", "refine"),
+            ("Refine1", "Refine one step (.)", "recycle_single", "refine_single"),
             (None, None, None, None),
-            ("ChannelLeft", "Previous channel", "channel_prev", "channel_prev"),
-            ("ChannelRight", "Next channel", "channel_next", "channel_next"),
-            ("FrameUp", "Next frame", "frame_next", "frame_next"),
-            ("FrameDown", "Previous frame", "frame_prev", "frame_prev"),
+            ("ChannelLeft", "Previous channel (left or a)", "channel_prev", "channel_prev"),
+            ("ChannelRight", "Next channel (right or d)", "channel_next", "channel_next"),
+            ("FrameUp", "Next frame (up or w)", "frame_next", "frame_next"),
+            ("FrameDown", "Previous frame (down or s)", "frame_prev", "frame_prev"),
         ]
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
