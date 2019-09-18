@@ -99,10 +99,22 @@ class Plotter(FigureCanvas):
         im_pp=segmentation.preprocessing(im)
         im_i=segmentation.find_cellinterior(im_pp)
         im_wat=segmentation.find_watershed(im_i)
-        bd=segmentation.find_bd(im_wat)
+        #  bd=segmentation.find_bd(im_wat)
         background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
-        for index in range(0, len(bd)):
-            balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd[index][::5], im)
+
+
+        for index in range(1,im_wat.max()+1):
+            im_ii=im_wat==index
+            if (np.any(np.asarray(im_ii.nonzero())==0) or
+                    np.any(np.asarray(im_ii.nonzero())==2047)):
+                continue
+
+            im_ii_bd=segmentation.find_boundaries(im_ii,mode='inner')
+            # Sort in radial
+            bd_ii_sorted=segmentation.sort_in_order(im_ii_bd)
+
+                # Define the balloon object
+            balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd_ii_sorted.astype(int)[::5], im)
             #  Test if the cell exists
             overlap=False
             outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
