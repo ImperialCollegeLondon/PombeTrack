@@ -652,7 +652,7 @@ class Plotter(FigureCanvas):
 
 
 class Toolbar(NavigationToolbar):
-    def __init__(self, figure_canvas, parent=None):
+    def __init__(self, figure_canvas, experiment_data, parent=None):
         self.toolitems = [
             ("Home", "Home", "home_large", "home_event"),
             (None, None, None, None),
@@ -666,11 +666,31 @@ class Toolbar(NavigationToolbar):
             ("Refine", "Refine outline (r)", "recycle", "refine"),
             ("Refine1", "Refine one step (.)", "recycle_single", "refine_single"),
             (None, None, None, None),
-            ("ChannelLeft", "Previous channel (left or a)", "channel_prev", "channel_prev"),
-            ("ChannelRight", "Next channel (right or d)", "channel_next", "channel_next"),
-            ("FrameUp", "Next frame (up or w)", "frame_next", "frame_next"),
-            ("FrameDown", "Previous frame (down or s)", "frame_prev", "frame_prev"),
         ]
+        if experiment_data.num_channels > 1:
+            self.toolitems.extend([
+                ("ChannelLeft", "Previous channel (left or a)", "channel_prev", "channel_prev"),
+                ("ChannelRight", "Next channel (right or d)", "channel_next", "channel_next"),
+            ])
+
+        if experiment_data.num_slices > 1:
+            self.toolitems.extend([
+                ("SlicePrev", "Previous slice (q)", "slice_prev", "slice_prev"),
+                ("SliceNext", "Next slice (e)", "slice_next", "slice_next"),
+            ])
+
+        if experiment_data.image_mode == "movie":
+            self.toolitems.extend([
+                ("FrameUp", "Next frame (up or w)", "frame_next", "frame_next"),
+                ("FrameDown", "Previous frame (down or s)", "frame_prev", "frame_prev"),
+            ])
+        elif experiment_data.image_mode == "static":
+            if experiment_data.num_frames > 1:
+                self.toolitems.extend([
+                    ("ImageUp", "Next image (up or w)", "image_next", "frame_next"),
+                    ("ImageDown", "Previous image (down or s)", "image_prev", "frame_prev"),
+                ])
+
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
     def _icon(self, name):
@@ -710,6 +730,12 @@ class Toolbar(NavigationToolbar):
 
     def frame_prev(self):
         self.canvas._frame_change(-1)
+
+    def slice_next(self):
+        self.canvas._slice_change(1)
+
+    def slice_prev(self):
+        self.canvas._slice_change(-1)
 
 
 class Outliner:
@@ -762,7 +788,7 @@ class Outliner:
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.plot.setFocus()
 
-        self.window.toolbar = Toolbar(self.plot, self.window)
+        self.window.toolbar = Toolbar(self.plot, self.experiment_data, self.window)
 
         tool_layout = QtWidgets.QVBoxLayout()
         tool_layout.addWidget(self.window.toolbar)
