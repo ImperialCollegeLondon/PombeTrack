@@ -465,6 +465,9 @@ class Plotter(FigureCanvas):
         elif evt.key == "." and self.subfigure_patches:
             self._refine_event(1)
 
+        elif evt.key == "enter" and len(self.selected_outlines) > 1:
+            self._accept_multi()
+
         elif evt.key == "enter" and self.subfigure_patches:
             self._accept_event()
 
@@ -824,6 +827,13 @@ class Plotter(FigureCanvas):
             self.clear_sub_outlines()
             self.draw()
 
+    def _accept_multi(self):
+        for outline in self.selected_outlines:
+            self.save_outline(auto=False, explicit=outline)
+
+        self.deselect_outlines()
+        self.draw()
+
     def _area_diff(self):
         # check difference in total area is small
         if self.previous_id:
@@ -835,9 +845,6 @@ class Plotter(FigureCanvas):
                 area_diff = abs(previous_area - current_area) / previous_area
                 return area_diff
         return 0
-
-    def _accept_event_static(self):
-        pass
 
     def _delete_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
