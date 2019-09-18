@@ -111,6 +111,8 @@ class OutlineRow(Row):
         ("parent_id", "TEXT", str),
         ("child_id1", "TEXT DEFAULT ''", str),
         ("child_id2", "TEXT DEFAULT ''", str),
+        ("centre_x", "INTEGER", int),
+        ("centre_y", "INTEGER", int),
     ]
     def parseRow(self, r):
         row = super().parseRow(r)
@@ -599,16 +601,16 @@ def getOutlinesByExperimentId(experiment_id):
     return [OutlineRow(x) for x in results]
 
 def insertOutline(outline_id, cell_id, experiment_num, experiment_id, image_path,
-               frame_idx, coords_path, offset_left, offset_top, parent_id):
+               frame_idx, coords_path, offset_left, offset_top, parent_id, centre_x, centre_y):
     query = """
     INSERT INTO outlines
     (outline_id, cell_id, experiment_num, experiment_id, image_path,
-     frame_idx, coords_path, offset_left, offset_top, parent_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+     frame_idx, coords_path, offset_left, offset_top, parent_id, centre_x, centre_y)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
     args = (
         outline_id, cell_id, experiment_num, experiment_id, image_path,
-        frame_idx, coords_path, offset_left, offset_top, parent_id,
+        frame_idx, coords_path, offset_left, offset_top, parent_id, centre_x, centre_y,
     )
     new_id = executeQuery(query, args, commit=True)
     return new_id
@@ -618,7 +620,7 @@ def updateOutlineById(outline_id, **kwargs):
     set_statement = []
 
     permitted_columns = [
-        "cell_id", "parent_id", "child_id1", "child_id2",
+        "cell_id", "parent_id", "child_id1", "child_id2", "centre_x", "centre_y",
     ]
     for kw, val in kwargs.items():
         if kw not in permitted_columns:
