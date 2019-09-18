@@ -2,21 +2,22 @@
 
 import matplotlib
 matplotlib.use('Qt5Agg')
-import matplotlib.widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.figure
+import matplotlib.path
 import matplotlib.pyplot as plt
+import matplotlib.widgets
 import numpy as np
-import PyQt5.QtWidgets as QtWidgets
-import PyQt5.QtGui as QtGui
-import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
+import PyQt5.QtCore as QtCore
+import PyQt5.QtGui as QtGui
+import PyQt5.QtWidgets as QtWidgets
 import seaborn as sns
 import os
 import tifffile
+import time
 import uuid
-import matplotlib.path
 
 from . import balloon
 from . import database
@@ -24,14 +25,13 @@ from . import database
 from . import segmentation
 
 
-import time
-
 sns.set_context("talk")
 sns.set_style("white")
 
 class Plotter(FigureCanvas):
     def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader):
         fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
+        self.fig = fig
         self.main_ax = fig.add_subplot(121)
         self.sub_ax = fig.add_subplot(122)
 
@@ -69,7 +69,7 @@ class Plotter(FigureCanvas):
         # self.region_width, self.region_height = 100, 100
 
         self.cell_outlines = []
-        self.cell_outline_text = []
+        #  self.cell_outline_text = []
         self.sub_outlines = []
         self.subfigure_patches = []
         self.dragging = False
@@ -94,13 +94,13 @@ class Plotter(FigureCanvas):
         im_mid=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)),0)
         im_up=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)-1),0)
         im=np.maximum(im_mid,im_up)
-        print(im)
 
 
         im_pp=segmentation.preprocessing(im)
         im_i=segmentation.find_cellinterior(im_pp)
         im_wat=segmentation.find_watershed(im_i)
         bd=segmentation.find_bd(im_wat)
+        background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
         for index in range(0, len(bd)):
             balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd[index][::5], im)
             #  Test if the cell exists
@@ -141,8 +141,23 @@ class Plotter(FigureCanvas):
                 self.offset_left, self.offset_top,_,_ = self.get_offsets(centre)
                 self.auto_coords=self.full_coords-np.array([self.offset_left, self.offset_top])
                 self.save_outline(auto=True)
+
+                # Draw the cell
+                self.fig.canvas.restore_region(background)
+                c = self.full_coords
+                p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
+                p._outline_id = self.outline_id
+                self.main_ax.add_patch(p)
+                self.cell_outlines.append(p)
+                centre = c.mean(axis=0)
+                self.main_ax.draw_artist(p)
+                self.fig.canvas.blit(self.main_ax.bbox)
+                background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
+                #  print("There is no ValueError")
             except ValueError:
-                pass 
+                #  print("There is a ValueError")
+                continue
+            self.draw()
 
 
 
@@ -210,12 +225,12 @@ class Plotter(FigureCanvas):
             except IndexError:
                 break
 
-        while True:
-            try:
-                t = self.cell_outline_text.pop()
-                t.remove()
-            except IndexError:
-                break
+        #  while True:
+            #  try:
+                #  t = self.cell_outline_text.pop()
+                #  t.remove()
+            #  except IndexError:
+                #  break
 
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
         for i, outline in enumerate(outline_data):
@@ -229,14 +244,14 @@ class Plotter(FigureCanvas):
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
-            t = self.main_ax.text(
-                centre[1], centre[0],
-                "{0}".format(i + 1),
-                verticalalignment="center",
-                horizontalalignment="center",
-                color="w",
-            )
-            self.cell_outline_text.append(t)
+            #  t = self.main_ax.text(
+                #  centre[1], centre[0],
+                #  "{0}".format(i + 1),
+                #  verticalalignment="center",
+                #  horizontalalignment="center",
+                #  color="w",
+            #  )
+            #  self.cell_outline_text.append(t)
 
     def save_outline(self,auto=False):
         coords_path = os.path.join(
@@ -788,8 +803,8 @@ class Toolbar(NavigationToolbar):
     def auto_segmentation(self):
         startt=time.time()
         self.canvas.automatic_segmentation()
-        self.canvas.plot_existing_outlines()
-        self.canvas.refresh()
+        #  self.canvas.plot_existing_outlines()
+        #  self.canvas.refresh()
 
         print(time.time()-startt)
 
