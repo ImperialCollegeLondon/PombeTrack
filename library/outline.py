@@ -940,7 +940,6 @@ class Plotter(FigureCanvas):
         if len(self.selected_outlines) < 2:
             return
 
-        self.clear_sub_outlines()
         self.outline_id = None
         self.draw()
         for outline in self.selected_outlines:
