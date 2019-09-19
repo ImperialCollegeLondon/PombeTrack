@@ -1022,9 +1022,13 @@ class Plotter(FigureCanvas):
                 self.set_status(
                     "Refinement failed after {0} cycles".format(i + 1)
                 )
+                self._plot_nodes()
+                self.draw()
                 return
 
         self.set_status("Refinement complete ({0} cycles)".format(num_ref))
+        self._plot_nodes()
+        self.draw()
 
     def _refine_multi(self, num_ref=10):
         if len(self.selected_outlines) < 2:
