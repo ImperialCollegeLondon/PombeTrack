@@ -294,6 +294,9 @@ class Plotter(FigureCanvas):
             "centre_x":int(self.centre_x),
             "centre_y":int(self.centre_y),
         }
+        if self._data.image_mode == "static":
+            data["parent_id"] = ""
+
         if os.path.exists(coords_path):
             os.remove(coords_path)
             database.updateOutlineById(
@@ -314,8 +317,6 @@ class Plotter(FigureCanvas):
             verified=False,
         )
         database.deleteCellById(self.cell_id)
-
-        self.previous_id = str(self.outline_id)
 
     def fit_outline(self, roi, init_nodes=None, centre_offset_left=0, centre_offset_top=0):
         centre = [self.region_width - centre_offset_left,
@@ -801,6 +802,7 @@ class Plotter(FigureCanvas):
                 self.draw()
                 return
             else:
+                self.previous_id = str(self.outline_id)
                 self.current_frame_idx += 1
                 bf_frame = self.load_frame()
                 self.main_frame.set_data(bf_frame)
