@@ -803,6 +803,7 @@ class Plotter(FigureCanvas):
                     return
 
             self.save_outline()
+            self.deselect_outlines()
 
             offset_centre = self.balloon_obj.get_centre()
 
@@ -856,8 +857,9 @@ class Plotter(FigureCanvas):
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
             # update existing outlines
-            self.plot_existing_outlines()
             self.clear_sub_outlines()
+            self.deselect_outlines()
+            self.plot_existing_outlines()
             self.draw()
 
     def _accept_multi(self):
