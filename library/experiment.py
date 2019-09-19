@@ -81,6 +81,7 @@ class ExperimentView:
         self.main_layout.setMenuBar(menubar)
 
         self._addDetails()
+        self._addBatchAuto()
         self._addOutline()
         self._addLineageVerification()
         self._addAnalysis()
@@ -131,6 +132,18 @@ class ExperimentView:
 
         details_box.setLayout(layout)
         self.main_layout.addWidget(details_box)
+
+    def _addBatchAuto(self):
+        outline_box = QtWidgets.QGroupBox("Automatic segmentation for all")
+        layout = QtWidgets.QVBoxLayout()
+
+
+        outline_btn = QtWidgets.QPushButton("Start Auto")
+        outline_btn.clicked.connect(lambda: self.outline_cells())
+        layout.addWidget(outline_btn)
+
+        outline_box.setLayout(layout)
+        self.main_layout.addWidget(outline_box)
 
     def _addOutline(self):
         outline_box = QtWidgets.QGroupBox("Outlines")
@@ -434,11 +447,13 @@ class Experiment:
 
     def save_settings(self):
         dupl = database.checkExperimentDuplicate(
-            *self.settings["date"],
+            self.settings["date"][0],
+            self.settings["date"][1],
+            self.settings["date"][2],
             self.settings["medium"],
             self.settings["strain"],
             self.settings["image_path"],
-        )
+            )
         if dupl:
             alert = QtWidgets.QMessageBox()
             overwrite_confirm = alert.question(
