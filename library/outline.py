@@ -951,7 +951,16 @@ class Plotter(FigureCanvas):
                 outline_info.offset_left:outline_info.offset_left + (self.region_width * 2),
                 outline_info.offset_top:outline_info.offset_top + (self.region_height * 2),
             ]
-            current_nodes = np.load(outline_info.coords_path)
+            if hasattr(outline, "_modified") and outline._modified:
+                xy = outline.get_xy()
+                xy_inv = np.array([xy[:, 1], xy[:, 0]]).T
+                current_nodes = xy_inv - np.array([
+                    outline_info.offset_left,
+                    outline_info.offset_top,
+                ])
+            else:
+                current_nodes = np.load(outline_info.coords_path)
+
             balloon_centre = [self.region_width - centre_offset_left,
                               self.region_height - centre_offset_top]
 
@@ -968,6 +977,7 @@ class Plotter(FigureCanvas):
             ])
             outline.set_xy(coords)
             outline._modified = True
+            self.main_ax.draw_artist(outline)
 
         self.draw()
 
