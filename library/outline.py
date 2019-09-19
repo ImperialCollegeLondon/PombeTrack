@@ -90,7 +90,7 @@ class Plotter(FigureCanvas):
         self.plot_existing_outlines()
 
 
-    def automatic_segmentation(self):
+    def automatic_segmentation(self,display=True):
         # load_frame: frame, z-slice, channel
         im_mid=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)),0)
         im_up=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)-1),0)
@@ -100,10 +100,24 @@ class Plotter(FigureCanvas):
         im_pp=segmentation.preprocessing(im)
         im_i=segmentation.find_cellinterior(im_pp)
         im_wat=segmentation.find_watershed(im_i)
-        bd=segmentation.find_bd(im_wat)
-        background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
-        for index in range(0, len(bd)):
-            balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd[index][::5], im)
+        #  bd=segmentation.find_bd(im_wat)
+
+        if display:
+            background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
+
+
+        for index in range(1,im_wat.max()+1):
+            im_ii=im_wat==index
+            if (np.any(np.asarray(im_ii.nonzero())==0) or
+                    np.any(np.asarray(im_ii.nonzero())==2047)):
+                continue
+
+            im_ii_bd=segmentation.find_boundaries(im_ii,mode='inner')
+            # Sort in radial
+            bd_ii_sorted=segmentation.sort_in_order(im_ii_bd)
+
+                # Define the balloon object
+            balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd_ii_sorted.astype(int)[::5], im)
             #  Test if the cell exists
             overlap=False
             outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
@@ -144,20 +158,18 @@ class Plotter(FigureCanvas):
                 self.save_outline(auto=True)
 
                 # Draw the cell
-                self.fig.canvas.restore_region(background)
-                c = self.full_coords
-                p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
-                p._outline_id = self.outline_id
-                p._cell_id = self.cell_id
-                self.main_ax.add_patch(p)
-                self.cell_outlines.append(p)
-                centre = c.mean(axis=0)
-                self.main_ax.draw_artist(p)
-                self.fig.canvas.blit(self.main_ax.bbox)
-                background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
-                #  print("There is no ValueError")
+                if display:
+                    self.fig.canvas.restore_region(background)
+                    c = self.full_coords
+                    p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
+                    p._outline_id = self.outline_id
+                    self.main_ax.add_patch(p)
+                    self.cell_outlines.append(p)
+                    centre = c.mean(axis=0)
+                    self.main_ax.draw_artist(p)
+                    self.fig.canvas.blit(self.main_ax.bbox)
+                    background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
             except ValueError:
-                #  print("There is a ValueError")
                 continue
             self.draw()
 
@@ -966,7 +978,7 @@ class Toolbar(NavigationToolbar):
         self.toolitems = [
             ("Home", "Home", "home_large", "home_event"),
             (None, None, None, None),
-            ("Auto", "Automatic segmentation", "auto_segmentation", "auto_segmentation"),
+            ("Auto", "Automatic segmentation", "auto_segmentation_1", "auto_segmentation"),
             (None, None, None, None),
             ("Pan", "Pan", "move_large", "pan"),
             ("Zoom", "Zoom", "zoom_to_rect_large", "zoom"),
