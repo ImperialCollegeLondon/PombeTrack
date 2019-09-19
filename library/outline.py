@@ -265,10 +265,11 @@ class Plotter(FigureCanvas):
             xy = explicit.get_xy()
             self.offset_left = outline_info.offset_left
             self.offset_top = outline_info.offset_top
-            coords = np.array([xy[:, 1], xy[:, 0]]).T - [self.offset_left, self.offset_top]
+            xy_inv = np.array([xy[:, 1], xy[:, 0]]).T
+            coords = xy_inv - [self.offset_left, self.offset_top]
             self.cell_id = explicit._cell_id
             self.previous_id = outline_info.parent_id
-            self.centre_y, self.centre_x = coords.mean(axis=0)
+            self.centre_y, self.centre_x = xy_inv.mean(axis=0)
         else:
             coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
             # Determine cell centre
