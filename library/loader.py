@@ -98,9 +98,6 @@ class ImageLoaderSingle:
             if "slices" in self.im_metadata:
                 self.num_slices = int(self.im_metadata["slices"])
 
-            if "slices" in self.im_metadata:
-                self.num_frames = int(self.im_metadata["slices"])
-
     def get_pixel_conversion(self):
         with tifffile.TiffFile(self.path) as im_frames:
             try:
