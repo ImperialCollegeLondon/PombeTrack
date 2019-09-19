@@ -785,7 +785,6 @@ class Plotter(FigureCanvas):
             self.subfigure_patches = []
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
-            self.draw()
 
             # fit next
             centre = [offset_centre[0] + self.offset_left,
