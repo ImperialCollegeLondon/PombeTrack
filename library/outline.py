@@ -416,6 +416,9 @@ class Plotter(FigureCanvas):
         self.draw()
 
     def _frame_change(self, delta):
+        if not self.check_selected_outlines():
+            return
+
         if delta < 0 and self.current_frame_idx <= 0:
             return
 
@@ -502,32 +505,6 @@ class Plotter(FigureCanvas):
             return
 
         if evt.inaxes == self.main_ax:
-            if sum([hasattr(x, "_modified") for x in self.selected_outlines]) > 0:
-                alert = QtWidgets.QMessageBox()
-                message = ("The selected outlines have been modified"
-                            "\nWould you like to save them?")
-                add_confirm = alert.question(
-                    self.parent(),
-                    "Save changes?",
-                    message,
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel,
-                    QtWidgets.QMessageBox.Cancel,
-                )
-                if add_confirm == QtWidgets.QMessageBox.Yes:
-                    for outline in self.selected_outlines:
-                        self.save_outline(auto=False, explicit=outline)
-                    self.deselect_outlines()
-                    self.plot_existing_outlines()
-                    self.draw()
-                    return
-                elif add_confirm == QtWidgets.QMessageBox.No:
-                    self.deselect_outlines()
-                    self.plot_existing_outlines()
-                    self.draw()
-                    return
-                elif add_confirm == QtWidgets.QMessageBox.Cancel:
-                    return
-
             self.main_dragging = [evt.xdata, evt.ydata]
             self.main_dragging_rect = matplotlib.patches.Rectangle(
                 self.main_dragging,
@@ -556,6 +533,35 @@ class Plotter(FigureCanvas):
                         self._plot_nodes()
                         self.draw()
 
+    def check_selected_outlines(self):
+        if sum([hasattr(x, "_modified") for x in self.selected_outlines]) > 0:
+            alert = QtWidgets.QMessageBox()
+            message = ("The selected outlines have been modified"
+                        "\nWould you like to save them?")
+            add_confirm = alert.question(
+                self.parent(),
+                "Save changes?",
+                message,
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Cancel,
+            )
+            if add_confirm == QtWidgets.QMessageBox.Yes:
+                for outline in self.selected_outlines:
+                    self.save_outline(auto=False, explicit=outline)
+                self.deselect_outlines()
+                self.plot_existing_outlines()
+                self.draw()
+                return True
+            elif add_confirm == QtWidgets.QMessageBox.No:
+                self.deselect_outlines()
+                self.plot_existing_outlines()
+                self.draw()
+                return True
+            elif add_confirm == QtWidgets.QMessageBox.Cancel:
+                return False
+
+        return True
+
     def deselect_outlines(self):
         for outline in self.selected_outlines:
             outline.set_edgecolor("red")
@@ -566,24 +572,20 @@ class Plotter(FigureCanvas):
         if self.parent().toolbar.mode:
             return
 
-        elif self.main_dragging and not evt.inaxes == self.main_ax:
-            self.main_dragging = False
-            self.main_dragging_rect.remove()
-            del self.main_dragging_rect
-            self.deselect_outlines()
-            self.draw()
-            return
+        elif self.main_dragging:
+            if not evt.xdata or not evt.ydata or evt.inaxes != self.main_ax:
+                rect_width = self.main_dragging_rect.get_width()
+                rect_height = self.main_dragging_rect.get_height()
+            else:
+                rect_width = evt.xdata - self.main_dragging[0]
+                rect_height = evt.ydata - self.main_dragging[1]
 
-        elif self.main_dragging and evt.inaxes == self.main_ax:
-            if not evt.xdata or not evt.ydata:
+            if not self.check_selected_outlines():
                 self.main_dragging = False
                 self.main_dragging_rect.remove()
                 del self.main_dragging_rect
                 self.draw()
                 return
-
-            rect_width = evt.xdata - self.main_dragging[0]
-            rect_height = evt.ydata - self.main_dragging[1]
 
             # determine whether any outline within the bounds
             self.deselect_outlines()
