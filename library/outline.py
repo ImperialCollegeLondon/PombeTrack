@@ -246,6 +246,8 @@ class Plotter(FigureCanvas):
             #  except IndexError:
                 #  break
 
+        selected_ids = [x._outline_id for x in self.selected_outlines]
+        fresh_selections = []
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
         for i, outline in enumerate(outline_data):
             if not os.path.exists(outline.coords_path):
@@ -256,6 +258,17 @@ class Plotter(FigureCanvas):
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
             p._outline_id = outline.outline_id
             p._cell_id = outline.cell_id
+
+            if outline.outline_id in selected_ids:
+                prev_outline = self.selected_outlines[
+                    selected_ids.index(outline.outline_id)
+                ]
+                if hasattr(prev_outline, "_modified") and prev_outline._modified:
+                    p.set_xy(prev_outline.get_xy())
+                    p._modified = True
+                p.set_edgecolor("yellow")
+                fresh_selections.append(p)
+
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
@@ -267,6 +280,8 @@ class Plotter(FigureCanvas):
                 #  color="w",
             #  )
             #  self.cell_outline_text.append(t)
+
+        self.selected_outlines = fresh_selections
 
     def save_outline(self, auto=False, explicit=None):
         if auto:
@@ -941,7 +956,6 @@ class Plotter(FigureCanvas):
             return
 
         self.outline_id = None
-        self.draw()
         for outline in self.selected_outlines:
             outline_info = database.getOutlineById(outline._outline_id)
             centre = [outline_info.offset_left + self.region_width,
