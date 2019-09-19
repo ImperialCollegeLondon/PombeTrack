@@ -378,6 +378,7 @@ class Plotter(FigureCanvas):
                 fill=False,
                 lw=1,
             )
+            p._outline_id = outline.outline_id
             self.sub_ax.add_patch(p)
             self.sub_outlines.append(p)
 
@@ -766,7 +767,7 @@ class Plotter(FigureCanvas):
 
         # check overlap with other outlines?
         # objects already exist (red lines) so can compare perhaps?
-        Ypoints, Xpoints = self.sub_ax.lines[0].get_data()
+        Xpoints, Ypoints = self.sub_ax.lines[0].get_data()
         existing_points = np.row_stack([Xpoints, Ypoints]).T
         for outline in self.sub_outlines:
             contains_new = sum(outline.get_path().contains_points(
