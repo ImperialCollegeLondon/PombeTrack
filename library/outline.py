@@ -661,6 +661,7 @@ class Plotter(FigureCanvas):
             self.dragging = False
 
     def _select_hit(self, outline):
+        outline.set_edgecolor("yellow")
         outline_info = database.getOutlineById(outline._outline_id)
         self.previous_id = outline_info.parent_id
         self.cell_id = outline_info.cell_id
