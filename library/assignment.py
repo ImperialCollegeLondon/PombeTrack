@@ -177,6 +177,23 @@ class Assigner:
         self.window.toolbar.hide()
         self.plot.hide()
 
+    def get_offsets(self, centre):
+        offset_left = int(round(centre[0] - self.region_halfwidth))
+        offset_top = int(round(centre[1] - self.region_halfheight))
+        im = self.image_loader.load_frame(0)
+        if offset_left < 0:
+            offset_left = 0
+        elif offset_left >= im.shape[0] - (self.region_halfwidth * 2):
+            offset_left = im.shape[0] - (self.region_halfwidth * 2)
+
+        if offset_top < 0:
+            offset_top = 0
+        elif offset_top >= im.shape[1] - (self.region_halfheight * 2):
+            offset_top = im.shape[1] - (self.region_halfheight * 2)
+        del im
+
+        return offset_left, offset_top
+
     def create_layout(self):
         self.get_outlines()
         unique_cells = self.outlines.cell_id.unique()
@@ -225,13 +242,17 @@ class Assigner:
                 cell_plot.setMinimumWidth(width)
                 cell_plot.setMaximumWidth(width)
                 cell_plot.setMinimumHeight(width)
+                centre = outline.centre_y, outline.centre_x
+                outline.offset_left, outline.offset_top = self.get_offsets(centre)
                 roi = self.image_loader.load_frame(outline.frame_idx, 0)[
                     outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
                     outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
                 ]
                 cell_plot.axes[0].imshow(roi, cmap="gray")
                 cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
-                c = np.load(outline.coords_path)
+                c = np.load(outline.coords_path) - np.array(
+                    [outline.offset_left, outline.offset_top]
+                )
                 outline_poly = matplotlib.patches.Polygon(
                     np.array([c[:, 1], c[:, 0]]).T,
                     edgecolor="r",
