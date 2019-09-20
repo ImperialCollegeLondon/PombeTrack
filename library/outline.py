@@ -331,13 +331,7 @@ class Plotter(FigureCanvas):
             coords_offset = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
             # Determine cell centre
             coords = coords_offset + np.array([self.offset_left, self.offset_top])
-            self.centre_y, self.centre_x = centre.mean(axis=0)
-
-
-        self.offset_left=0
-        self.offset_top=0
-
-
+            self.centre_y, self.centre_x = coords.mean(axis=0)
 
         coords_path = os.path.join(
             self.outline_store,
@@ -351,8 +345,6 @@ class Plotter(FigureCanvas):
             "image_path": self._data.image_path,
             "frame_idx": self.current_frame_idx,
             "coords_path": coords_path,
-            "offset_left": self.offset_left,
-            "offset_top": self.offset_top,
             "parent_id": self.previous_id or "",
             "centre_x":int(self.centre_x),
             "centre_y":int(self.centre_y),
@@ -392,9 +384,9 @@ class Plotter(FigureCanvas):
             init_nodes = balloon.initial_nodes(centre, radius, num_nodes)
 
         self.balloon_obj = balloon.Balloon(init_nodes, roi)
-        self.sub_ax.imshow(roi, cmap="gray")
-        self.sub_ax.set_xlim([0, self.region_halfheight * 2])
-        self.sub_ax.set_ylim([self.region_halfwidth * 2, 0])
+        self.sub_ax.imshow(self.load_frame(), cmap="gray")
+        self.sub_ax.set_ylim([self.offset_left, self.offset_left + self.region_halfwidth * 2])
+        self.sub_ax.set_xlim([self.region_halfheight * 2 + self.offset_top, self.offset_top])
         self.sub_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
         self._plot_nodes()
 
@@ -404,10 +396,7 @@ class Plotter(FigureCanvas):
             if not os.path.exists(outline.coords_path) or outline.outline_id == self.outline_id:
                 continue
 
-            c = np.load(outline.coords_path) + np.array([
-                outline.offset_left - self.offset_left,
-                outline.offset_top - self.offset_top
-            ])
+            c = np.load(outline.coords_path)
             p = matplotlib.patches.Polygon(
                 np.array([c[:, 1], c[:, 0]]).T,
                 edgecolor="r",
@@ -427,7 +416,11 @@ class Plotter(FigureCanvas):
                 self.sub_ax.lines.pop(0)
             except IndexError:
                 pass
-            coords = np.array([(n.x, n.y) for n in nodes])
+            coords = np.array([
+                (n.x + self.offset_left,
+                 n.y + self.offset_top)
+                for n in nodes
+            ])
             self.sub_ax.plot(
                 coords[:, 1],
                 coords[:, 0],
@@ -442,7 +435,8 @@ class Plotter(FigureCanvas):
 
             for node_idx, n in enumerate(nodes):
                 patch = matplotlib.patches.Circle(
-                    (n.y, n.x),
+                    (n.y + self.offset_top,
+                     n.x + self.offset_left),
                     1.5,
                     fc="y",
                 )
@@ -788,7 +782,10 @@ class Plotter(FigureCanvas):
                 return
 
             self.dragging.set_facecolor("y")
-            self.dragging.this_node.set_position((evt.ydata, evt.xdata))
+            self.dragging.this_node.set_position((
+                evt.ydata - self.offset_left,
+                evt.xdata - self.offset_top,
+            ))
             self.dragging.this_node.apply_changes()
             self._plot_nodes()
             self.dragging = False
@@ -806,11 +803,9 @@ class Plotter(FigureCanvas):
         outline_info = database.getOutlineById(outline._outline_id)
         self.previous_id = outline_info.parent_id
         self.cell_id = outline_info.cell_id
-        self.offset_left = outline_info.offset_left
-        self.offset_top = outline_info.offset_top
-        centre = [self.offset_left + self.region_halfwidth,
-                self.offset_top + self.region_halfheight]
-        _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
+        centre = outline_info.centre_y, outline_info.centre_x
+        (self.offset_left, self.offset_top,
+         centre_offset_left, centre_offset_top) = self.get_offsets(centre)
         roi = self.load_frame(channel_idx=0)[
             self.offset_left:self.offset_left + (self.region_halfwidth * 2),
             self.offset_top:self.offset_top + (self.region_halfheight * 2),
@@ -819,7 +814,7 @@ class Plotter(FigureCanvas):
         current_nodes = np.load(outline_info.coords_path)
         self.fit_outline(
             roi,
-            init_nodes=current_nodes,
+            init_nodes=current_nodes - np.array([self.offset_left, self.offset_top]),
             centre_offset_left=centre_offset_left,
             centre_offset_top=centre_offset_top,
         )
