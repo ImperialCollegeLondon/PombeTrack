@@ -111,6 +111,25 @@ class Analyser:
 
         self.main_layout.addLayout(self.grid_layout)
 
+    def get_offsets(self, centre):
+        region_halfwidth = self.region_width / 2
+        region_halfheight = self.region_height / 2
+        offset_left = int(round(centre[0] - region_halfwidth))
+        offset_top = int(round(centre[1] - region_halfheight))
+        im = self.image_loader.load_frame(0)
+        if offset_left < 0:
+            offset_left = 0
+        elif offset_left >= im.shape[0] - self.region_width:
+            offset_left = im.shape[0] - self.region_width
+
+        if offset_top < 0:
+            offset_top = 0
+        elif offset_top >= im.shape[1] - self.region_height:
+            offset_top = im.shape[1] - self.region_height
+        del im
+
+        return offset_left, offset_top
+
     def get_outline_objects(self):
         self.cells = pd.DataFrame(database.getCellsByExperimentId(
             self._data.experiment_id,
@@ -260,8 +279,7 @@ class Analyser:
 
             out_data = outline.to_dict()
             for unwanted_col in [
-                "coords_path", "experiment_num", "frame_idx", "offset_left",
-                "offset_top", "outline_num",
+                "coords_path", "experiment_num", "frame_idx", "outline_num",
             ]:
                 del out_data[unwanted_col]
             out_data["frame"] = outline.frame_idx + 1
@@ -307,10 +325,7 @@ class Analyser:
 
             c2 = self.image_loader.load_frame(outline.frame_idx, 1) - self.c2_background
             c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.c3_background
-            outline_coords = np.load(outline.coords_path) + np.array([
-                outline.offset_left,
-                outline.offset_top,
-            ])
+            outline_coords = np.load(outline.coords_path)
             c2_signal = self.get_signal_from_coords(outline_coords, c2)[0]
             c3_signal = self.get_signal_from_coords(outline_coords, c3)[0]
             total_cell_c2 = c2_signal
@@ -464,10 +479,7 @@ class Analyser:
             i = 0
             for _, outline in outlines.iterrows():
                 img = self.image_loader.load_frame(outline.frame_idx, channel)
-                c = np.load(outline.coords_path) + np.array([
-                    outline.offset_left,
-                    outline.offset_top,
-                ])
+                c = np.load(outline.coords_path)
                 signal, num_pixels = self.get_signal_from_coords(c, img)
                 signals[i] = signal / num_pixels
                 signal_id = str(uuid.uuid4())
@@ -555,10 +567,7 @@ class Analyser:
 
     def define_nucleus(self, outline):
         c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
-        c = np.load(outline.coords_path) + np.array([
-            outline.offset_left,
-            outline.offset_top,
-        ])
+        c = np.load(outline.coords_path)
         cell_rr, cell_cc = skimage.draw.polygon(
             c[:, 0], c[:, 1]
         )
@@ -768,6 +777,8 @@ class NuclearVerifier:
         self.screen_dpi = screen_dpi
         self.image_loader = image_loader
         self.background = background
+        self.region_width = 150
+        self.region_height = 150
 
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
@@ -862,9 +873,10 @@ class NuclearVerifier:
         self.brightness_slider.axes[0].axis("off")
         self.brightness_slider.axes[0].set_ylabel("Intensity")
         c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
+        offset_left, offset_top = self.get_offsets(outline.centre_y, outline.centre_x)
         im = c3[
-            outline.offset_left:outline.offset_left + 150,
-            outline.offset_top:outline.offset_top + 150,
+            offset_left:offset_left + self.region_width,
+            offset_top:offset_top + self.region_height,
         ]
         sns.distplot(im.ravel(), vertical=True, ax=self.brightness_slider.axes[0])
 
@@ -981,10 +993,7 @@ class NuclearVerifier:
                 ].xy[:-1]
                 new_coords = np.array([
                     nodes[:, 1], nodes[:, 0]
-                ]).T + np.array([
-                    outline.offset_left,
-                    outline.offset_top,
-                ])
+                ]).T
                 np.save(record_path, new_coords)
 
         previous_nucleus_ids = list(previous_nuclei.nucleus_id)
@@ -1007,10 +1016,7 @@ class NuclearVerifier:
             ].xy[:-1]
             new_coords = np.array([
                 nodes[:, 1], nodes[:, 0]
-            ]).T + np.array([
-                outline.offset_left,
-                outline.offset_top,
-            ])
+            ]).T
             np.save(record_path, new_coords)
             database.insertNucleus(
                 posterior,
@@ -1293,9 +1299,13 @@ class NuclearVerifier:
 
     def plot_outline(self, ax, outline, hooks=False):
         c3 = self.image_loader.load_frame(outline.frame_idx, 2) - self.background
+        offset_left, offset_top = self.get_offsets((
+            outline.centre_y,
+            outline.centre_x,
+        ))
         im = c3[
-            outline.offset_left:outline.offset_left + 150,
-            outline.offset_top:outline.offset_top + 150,
+            offset_left:offset_left + self.region_width,
+            offset_top:offset_top + self.region_height,
         ]
         ax.imshow(im, cmap="binary")
         c = np.load(outline.coords_path)
@@ -1318,9 +1328,13 @@ class NuclearVerifier:
             c = "m"
 
         for _, nucleus in outline_nuclei.iterrows():
+            offset_left, offset_top = self.get_offsets((
+                outline.centre_y,
+                outline.centre_x
+            ))
             n = np.load(nucleus.coords_path) - np.array([
-                outline.offset_left,
-                outline.offset_top,
+                offset_left,
+                offset_top,
             ])
             if hooks:
                 for i, (n_x, n_y) in enumerate(n):
