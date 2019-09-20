@@ -1199,25 +1199,25 @@ class Toolbar(NavigationToolbar):
 
 
     def delete(self):
-        if len(self.canvas.selected_outlines) > 0:
+        if len(self.canvas.selected_outlines) > 1:
             self.canvas._delete_multi()
         else:
             self.canvas._delete_event()
 
     def refine(self):
-        if len(self.canvas.selected_outlines) > 0:
+        if len(self.canvas.selected_outlines) > 1:
             self.canvas._refine_multi()
         else:
             self.canvas._refine_event()
 
     def refine_single(self):
-        if len(self.canvas.selected_outlines) > 0:
+        if len(self.canvas.selected_outlines) > 1:
             self.canvas._refine_multi(1)
         else:
             self.canvas._refine_event(1)
 
     def accept(self):
-        if len(self.canvas.selected_outlines) > 0:
+        if len(self.canvas.selected_outlines) > 1:
             self.canvas._accept_multi()
         else:
             self.canvas._accept_event()
