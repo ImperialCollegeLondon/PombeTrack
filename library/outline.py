@@ -434,13 +434,14 @@ class Plotter(FigureCanvas):
                 p = self.subfigure_patches.pop()
                 p.remove()
 
-            for n in nodes:
+            for node_idx, n in enumerate(nodes):
                 patch = matplotlib.patches.Circle(
                     (n.y, n.x),
                     1.5,
                     fc="y",
                 )
                 patch.this_node = n
+                patch.node_idx = node_idx
                 self.subfigure_patches.append(patch)
                 self.sub_ax.add_artist(patch)
 
@@ -585,9 +586,16 @@ class Plotter(FigureCanvas):
             if evt.button == 1:
                 for p in self.subfigure_patches:
                     if p.contains_point((evt.x, evt.y)):
-                        p.set_facecolor("r")
-                        self.dragging = p
+                        p.set_visible(False)
                         self.draw()
+                        self.sub_dragging_background = self.fig.canvas.copy_from_bbox(
+                            self.sub_ax.bbox
+                        )
+                        self.sub_ax.lines[0].set_color("red")
+                        p.set_visible(True)
+                        self.dragging = p
+                        p.set_facecolor("r")
+                        # self.draw()
                         break
             elif evt.button == 3:
                 for p in self.subfigure_patches:
@@ -825,8 +833,15 @@ class Plotter(FigureCanvas):
             self.fig.canvas.blit(self.main_ax.bbox)
 
         elif self.dragging and evt.inaxes == self.sub_ax:
+            self.fig.canvas.restore_region(self.sub_dragging_background)
             self.dragging.center = evt.xdata, evt.ydata
-            self.draw()
+            xdata, ydata = self.sub_ax.lines[0].get_data()
+            xdata[self.dragging.node_idx] = evt.xdata
+            ydata[self.dragging.node_idx] = evt.ydata
+            self.sub_ax.lines[0].set_data(xdata, ydata)
+            self.sub_ax.draw_artist(self.sub_ax.lines[0])
+            self.sub_ax.draw_artist(self.dragging)
+            self.fig.canvas.blit(self.sub_ax.bbox)
 
     def _home_event(self):
         f = self.load_frame()
