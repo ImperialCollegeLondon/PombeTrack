@@ -145,6 +145,9 @@ class ExperimentView:
         outline_box.setLayout(layout)
         self.main_layout.addWidget(outline_box)
 
+    #  def batch_auto(self):
+
+
     def _addOutline(self):
         outline_box = QtWidgets.QGroupBox("Outlines")
         layout = QtWidgets.QVBoxLayout()
