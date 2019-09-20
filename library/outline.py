@@ -222,6 +222,16 @@ class Plotter(FigureCanvas):
         ax.set_aspect("equal")
         ax.autoscale("off")
 
+    def clear_sub_ax(self):
+        self.sub_ax.clear()
+        self.decorate_axis(self.sub_ax)
+        self.outline_id = None
+        self.balloon_obj = None
+        self.main_dragging = False
+        self.dragging = False
+        self.subfigure_patches = []
+        self.sub_outline = []
+
     def clear_sub_outlines(self):
         while True:
             try:
@@ -661,13 +671,7 @@ class Plotter(FigureCanvas):
         del self.main_dragging_rect
 
         if len(self.selected_outlines) > 1:
-            self.sub_ax.clear()
-            self.decorate_axis(self.sub_ax)
-            self.outline_id = None
-            self.balloon_obj = None
-            self.main_dragging = False
-            self.dragging = False
-            self.subfigure_patches = []
+            self.clear_sub_ax()
 
         elif len(self.selected_outlines) == 1:
             self._select_hit(self.selected_outlines[0])
@@ -856,12 +860,7 @@ class Plotter(FigureCanvas):
             offset_centre = self.balloon_obj.get_centre()
 
             # clear plot
-            self.balloon_obj = None
-            self.main_dragging = False
-            self.dragging = False
-            self.subfigure_patches = []
-            self.sub_ax.clear()
-            self.decorate_axis(self.sub_ax)
+            self.clear_sub_ax()
 
             # fit next
             centre = [offset_centre[0] + self.offset_left,
@@ -898,15 +897,9 @@ class Plotter(FigureCanvas):
 
         elif self._data.image_mode == "static":
             self.save_outline()
-            # clear sub_ax
-            self.balloon_obj = None
-            self.main_dragging = False
-            self.dragging = False
-            self.subfigure_patches = []
-            self.sub_ax.clear()
-            self.decorate_axis(self.sub_ax)
+            self.clear_sub_ax()
+
             # update existing outlines
-            self.clear_sub_outlines()
             self.deselect_outlines()
             self.plot_existing_outlines()
             self.draw()
@@ -963,13 +956,7 @@ class Plotter(FigureCanvas):
             )
             database.deleteCellById(self.cell_id)
 
-            self.sub_ax.clear()
-            self.decorate_axis(self.sub_ax)
-            self.outline_id = None
-            self.balloon_obj = None
-            self.main_dragging = False
-            self.dragging = False
-            self.subfigure_patches = []
+            self.clear_sub_ax()
             self.plot_existing_outlines()
             self.draw()
             self.set_status("Outline deleted")
@@ -1003,13 +990,7 @@ class Plotter(FigureCanvas):
             self.set_status("Outlines deleted ({0} outlines)".format(
                 len(self.selected_outlines)
             ))
-            self.sub_ax.clear()
-            self.decorate_axis(self.sub_ax)
-            self.outline_id = None
-            self.balloon_obj = None
-            self.main_dragging = False
-            self.dragging = False
-            self.subfigure_patches = []
+            self.clear_sub_ax()
             self.plot_existing_outlines()
             self.draw()
 
