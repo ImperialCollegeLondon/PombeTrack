@@ -52,8 +52,8 @@ class Toolbar(NavigationToolbar):
 
     def home_event(self, *args, **kwargs):
         for ax, lims in zip(self.canvas.axes, self.canvas.offsets):
-            ax.set_xlim(lims[3], lims[1])
-            ax.set_ylim(lims[0], lims[2])
+            ax.set_xlim(lims[0], lims[2])
+            ax.set_ylim(lims[1], lims[3])
         self.canvas.draw()
 
     def previous_frame(self, *args, **kwargs):
@@ -499,17 +499,28 @@ class Assigner:
         self.plot.axes[2].set_title("Frame {0}".format(first_outline.frame_idx + 2))
 
         im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
-        offset_left, offset_right = (first_outline.offset_top,
-                                     first_outline.offset_top + (self.region_halfheight * 2))
-        offset_top, offset_bottom = (first_outline.offset_left + (self.region_halfwidth * 2),
-                                     first_outline.offset_left)
-        self.plot.offsets[1] = (offset_top, offset_right, offset_bottom, offset_left)
+        first_offset_left, first_offset_top = self.get_offsets((
+            first_outline.centre_y,
+            first_outline.centre_x,
+        ))
+
+        # y0, x1, y1, x0
+        self.plot.offsets[1] = (
+            first_offset_top,
+            first_offset_left + self.region_halfwidth * 2,
+            first_offset_top + self.region_halfheight * 2,
+            first_offset_left,
+        )
         self.plot.axes[1].imshow(im1, cmap="gray")
-        self.plot.axes[1].set_xlim([offset_left, offset_right])
-        self.plot.axes[1].set_ylim([offset_top, offset_bottom])
-        c = np.load(first_outline.coords_path) + np.array([
-            first_outline.offset_left, first_outline.offset_top
+        self.plot.axes[1].set_xlim([
+            self.plot.offsets[1][0],
+            self.plot.offsets[1][2],
         ])
+        self.plot.axes[1].set_ylim([
+            self.plot.offsets[1][1],
+            self.plot.offsets[1][3],
+        ])
+        c = np.load(first_outline.coords_path)
         p = matplotlib.patches.Polygon(
             np.array([c[:, 1], c[:, 0]]).T,
             edgecolor="r",
@@ -524,16 +535,21 @@ class Assigner:
             ].iloc[0]
             self.selected_outlines.append(selected_outline)
             fidx = selected_outline.frame_idx
-            offt = selected_outline.offset_top
-            offl = selected_outline.offset_left
+            offl, offt = self.get_offsets((
+                selected_outline.centre_y,
+                selected_outline.centre_x,
+            ))
+            print("offl:", offl, "offt:", offt)
 
             if first_outline.child_id2 is not None and first_outline.child_id1 != first_outline.child_id2:
                 selected_outline = self.outlines[
                     self.outlines.outline_id == first_outline.child_id2
                 ].iloc[0]
                 self.selected_outlines.append(selected_outline)
-                offt2 = selected_outline.offset_top
-                offl2 = selected_outline.offset_left
+                offl2, offt2 = self.get_offsets((
+                    selected_outline.centre_y,
+                    selected_outline.centre_x,
+                ))
                 offt = (offt + offt2) / 2
                 offl = (offl + offl2) / 2
 
@@ -541,8 +557,7 @@ class Assigner:
 
         elif first_outline.frame_idx + 1 < self.image_loader.num_frames:
             fidx = first_outline.frame_idx + 1
-            offt = first_outline.offset_top
-            offl = first_outline.offset_left
+            offl, offt = first_offset_left, first_offset_top
             im2 = self.image_loader.load_frame(fidx, 0)
         else:
             fidx = first_outline.frame_idx + 1
@@ -552,10 +567,10 @@ class Assigner:
 
         self.plot.axes[2].imshow(im2, cmap="gray")
         self.plot.offsets[2] = (
+            offt,
             offl + (self.region_halfwidth * 2),
             offt + (self.region_halfheight * 2),
             offl,
-            offt
         )
         self.plot.axes[2].set_xlim([
             offt, offt + (self.region_halfheight * 2)
@@ -565,9 +580,7 @@ class Assigner:
         ])
 
         for outline in database.getOutlinesByFrameIdx(fidx, self.experiment_data.experiment_id):
-            c = np.load(outline.coords_path) + np.array([
-                outline.offset_left, outline.offset_top
-            ])
+            c = np.load(outline.coords_path)
             kws = dict(
                 edgecolor="k",
                 lw=1,
@@ -596,17 +609,19 @@ class Assigner:
 
         if first_outline.parent_id:
             prev_outline = database.getOutlineById(first_outline.parent_id)
+            prev_offset_left, prev_offset_top = self.get_offsets((
+                prev_outline.centre_y,
+                prev_outline.centre_x,
+            ))
             im3 = self.image_loader.load_frame(prev_outline.frame_idx, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
             self.plot.offsets[0] = (
-                prev_outline.offset_left + (self.region_halfwidth * 2),
-                prev_outline.offset_top + (self.region_halfheight * 2),
-                prev_outline.offset_left,
-                prev_outline.offset_top,
+                prev_offset_top,
+                prev_offset_left + self.region_halfwidth * 2,
+                prev_offset_top + self.region_halfheight * 2,
+                prev_offset_left,
             )
-            c = np.load(prev_outline.coords_path) + np.array([
-                prev_outline.offset_left, prev_outline.offset_top
-            ])
+            c = np.load(prev_outline.coords_path)
             p = matplotlib.patches.Polygon(
                 np.array([c[:, 1], c[:, 0]]).T,
                 edgecolor="y",
@@ -620,10 +635,10 @@ class Assigner:
             im3 = self.image_loader.load_frame(first_outline.frame_idx - 1, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
             self.plot.offsets[0] = (
-                first_outline.offset_left + (self.region_halfwidth * 2),
-                first_outline.offset_top + (self.region_halfheight * 2),
-                first_outline.offset_left,
-                first_outline.offset_top,
+                first_offset_top,
+                first_offset_left + self.region_halfwidth * 2,
+                first_offset_top + self.region_halfheight * 2,
+                first_offset_top,
             )
         else:
             prev_outline = None
@@ -631,14 +646,13 @@ class Assigner:
             self.plot.axes[0].imshow(im3, cmap="gray")
 
         self.plot.axes[0].set_xlim([
-            self.plot.offsets[0][3],
-            self.plot.offsets[0][1]
-        ])
-        self.plot.axes[0].set_ylim([
             self.plot.offsets[0][0],
             self.plot.offsets[0][2]
         ])
-
+        self.plot.axes[0].set_ylim([
+            self.plot.offsets[0][1],
+            self.plot.offsets[0][3]
+        ])
 
         status_message = "Defining cell lineage {0}: frame {1} ".format(
             self.lineage[0].cell_id,
