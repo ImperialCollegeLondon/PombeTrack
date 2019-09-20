@@ -475,18 +475,19 @@ class Plotter(FigureCanvas):
         self.draw()
 
     def _frame_change(self, delta):
-        if not self.check_selected_outlines():
-            return
-
         if delta < 0 and self.current_frame_idx <= 0:
             return
 
         if delta > 0 and self.current_frame_idx >= self.num_frames - 1:
             return
 
+        if not self.check_selected_outlines():
+            return
+
         self.current_frame_idx += delta
         new_im = self.load_frame()
         self.main_frame.set_data(new_im)
+        self.deselect_outlines()
         self.plot_existing_outlines()
         self.main_frame.set_clim([new_im.min(), new_im.max()])
         self.draw()
@@ -622,7 +623,6 @@ class Plotter(FigureCanvas):
                         len(self.selected_outlines),
                     )
                 )
-                self.deselect_outlines()
                 self.plot_existing_outlines()
                 self.draw()
                 return True
@@ -632,7 +632,10 @@ class Plotter(FigureCanvas):
                         len(self.selected_outlines),
                     )
                 )
-                self.deselect_outlines()
+
+                for outline in self.selected_outlines:
+                    outline._modified = False
+
                 self.plot_existing_outlines()
                 self.draw()
                 return True
