@@ -1123,7 +1123,7 @@ def _update4():
         # calculate centre_x, centre_y
         coords = np.load(coords_path)
         true_coords = coords + np.array([offset_left, offset_top])
-        centre_x, centre_y = true_coords.mean(axis=0)
+        centre_y, centre_x = true_coords.mean(axis=0)
         query = "UPDATE _backup SET centre_x = ?, centre_y = ? WHERE outline_id = ?;"
         args = (centre_x, centre_y, outline_id)
         cursor.execute(query, args)
