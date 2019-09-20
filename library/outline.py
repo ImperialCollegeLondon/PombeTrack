@@ -109,48 +109,48 @@ class Plotter(FigureCanvas):
         self.current_status = status
         self.status_bar.repaint()
 
-    def automatic_segmentation(self,display=True):
+    def automatic_segmentation(self, display = True):
         # load_frame: frame, z-slice, channel
-        im_mid=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)),0)
-        im_up=self.load_frame(self.current_frame_idx,int(np.floor(self.num_slices/2)-1),0)
-        im=np.maximum(im_mid,im_up)
+        im_mid = self.load_frame(self.current_frame_idx, int(np.floor(self.num_slices / 2)), 0)
+        im_up = self.load_frame(self.current_frame_idx, int(np.floor(self.num_slices / 2) - 1), 0)
+        im = np.maximum(im_mid, im_up)
 
 
-        im_pp=segmentation.preprocessing(im)
-        im_i=segmentation.find_cellinterior(im_pp)
-        im_wat=segmentation.find_watershed(im_i)
-        #  bd=segmentation.find_bd(im_wat)
+        im_pp = segmentation.preprocessing(im)
+        im_i = segmentation.find_cellinterior(im_pp)
+        im_wat = segmentation.find_watershed(im_i)
+        #  bd = segmentation.find_bd(im_wat)
 
         if display:
-            background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
+            background  =  self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
 
 
-        for index in range(1,im_wat.max()+1):
-            im_ii=im_wat==index
-            if (np.any(np.asarray(im_ii.nonzero())==0) or
-                    np.any(np.asarray(im_ii.nonzero())==2047)):
+        for index in range(1, im_wat.max()+1):
+            im_ii = im_wat == index
+            if (np.any(np.asarray(im_ii.nonzero()) == 0) or
+                    np.any(np.asarray(im_ii.nonzero()) == 2047)):
                 continue
 
-            im_ii_bd=segmentation.find_boundaries(im_ii,mode='inner')
+            im_ii_bd = segmentation.find_boundaries(im_ii, mode = 'inner')
             # Sort in radial
-            bd_ii_sorted=segmentation.sort_in_order(im_ii_bd)
+            bd_ii_sorted = segmentation.sort_in_order(im_ii_bd)
 
                 # Define the balloon object
-            balloon_obj, origin_y, origin_x, halfwidth=segmentation.find_balloon_obj(bd_ii_sorted.astype(int)[::5], im)
+            balloon_obj, origin_y, origin_x, halfwidth = segmentation.find_balloon_obj(bd_ii_sorted.astype(int)[::5], im)
             #  Test if the cell exists
-            overlap=False
+            overlap = False
             outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
             for i, outline in enumerate(outline_data):
                 if not os.path.exists(outline.coords_path):
                     # database.deleteOutlineById(outline.outline_id)
                     continue
-                if outline.centre_x not in range(origin_x,origin_x+2*halfwidth) or outline.centre_y not in range(origin_y,origin_y+2*halfwidth):
+                if outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth):
                     continue
 
-                polygonpath=matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept=True),\
-                        balloon_obj.get_coordinates(accept=True)[1,:].reshape(1,2),axis=0),closed=True)
-                if polygonpath.contains_point([outline.centre_y-origin_y,outline.centre_x-origin_x]):
-                    overlap=True
+                polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept = True),\
+                        balloon_obj.get_coordinates(accept = True)[1, :].reshape(1, 2), axis = 0), closed = True)
+                if polygonpath.contains_point([outline.centre_y-origin_y, outline.centre_x - origin_x]):
+                    overlap = True
                     #  print(overlap)
 
             if overlap:
@@ -161,33 +161,33 @@ class Plotter(FigureCanvas):
 
             # Evolve the contour
             try:
-                sensitivity=0.4
-                area_init=balloon_obj.get_area()
+                sensitivity = self.image_percentile
+                area_init = balloon_obj.get_area()
                 for i in range(20):
-                    balloon_obj.evolve(display=False,image_percentile=sensitivity)
-                    if balloon_obj.get_area()>1.5*area_init or balloon_obj.get_area()<0.5*area_init:
+                    balloon_obj.evolve(display = False, image_percentile = sensitivity)
+                    if balloon_obj.get_area() > 1.5 * area_init or balloon_obj.get_area() < 0.5 * area_init:
                         raise ValueError()
-                self.full_coords=balloon_obj.get_coordinates(accept=True) + [origin_y, origin_x]
-                self.outline_id = str(uuid.uuid4())
-                self.cell_id = str(uuid.uuid4())
-                centre=[np.mean(self.full_coords[:,0]).astype(int),np.mean(self.full_coords[:,1]).astype(int)]
-                self.centre_y,self.centre_x=centre
-                self.offset_left, self.offset_top,_,_ = self.get_offsets(centre)
-                self.auto_coords=self.full_coords-np.array([self.offset_left, self.offset_top])
-                self.save_outline(auto=True)
+                self.full_coords = balloon_obj.get_coordinates(accept = True) + [origin_y, origin_x]
+                self.outline_id  =  str(uuid.uuid4())
+                self.cell_id  =  str(uuid.uuid4())
+                centre = [np.mean(self.full_coords[:, 0]).astype(int), np.mean(self.full_coords[:, 1]).astype(int)]
+                self.centre_y, self.centre_x = centre
+                #  self.offset_left, self.offset_top, _, _  =  self.get_offsets(centre)
+                #  self.auto_coords = self.full_coords-np.array([self.offset_left, self.offset_top])
+                self.save_outline(auto = True)
 
                 # Draw the cell
                 if display:
                     self.fig.canvas.restore_region(background)
-                    c = self.full_coords
-                    p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
-                    p._outline_id = self.outline_id
+                    c  =  self.full_coords
+                    p  =  matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor = "r", fill = False, lw = 1)
+                    p._outline_id  =  self.outline_id
                     self.main_ax.add_patch(p)
                     self.cell_outlines.append(p)
-                    centre = c.mean(axis=0)
+                    centre  =  c.mean(axis = 0)
                     self.main_ax.draw_artist(p)
                     self.fig.canvas.blit(self.main_ax.bbox)
-                    background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
+                    background  =  self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
             except ValueError:
                 continue
             self.draw()
@@ -283,7 +283,7 @@ class Plotter(FigureCanvas):
                 # database.deleteOutlineById(outline.outline_id)
                 continue
 
-            c = np.load(outline.coords_path) + np.array([outline.offset_left, outline.offset_top])
+            c = np.load(outline.coords_path)# + np.array([outline.offset_left, outline.offset_top])
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
             p._outline_id = outline.outline_id
             p._cell_id = outline.cell_id
@@ -315,7 +315,7 @@ class Plotter(FigureCanvas):
 
     def save_outline(self, auto=False, explicit=None):
         if auto:
-            coords=self.auto_coords
+            coords = self.full_coords
         elif explicit:
             self.outline_id = explicit._outline_id
             outline_info = database.getOutlineById(self.outline_id)
@@ -323,15 +323,21 @@ class Plotter(FigureCanvas):
             self.offset_left = outline_info.offset_left
             self.offset_top = outline_info.offset_top
             xy_inv = np.array([xy[:, 1], xy[:, 0]]).T
-            coords = xy_inv - [self.offset_left, self.offset_top]
+            coords = xy_inv
             self.cell_id = explicit._cell_id
             self.previous_id = outline_info.parent_id
             self.centre_y, self.centre_x = xy_inv.mean(axis=0)
         else:
-            coords = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
+            coords_offset = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
             # Determine cell centre
-            centre=coords + np.array([self.offset_left, self.offset_top])
+            coords = coords_offset + np.array([self.offset_left, self.offset_top])
             self.centre_y, self.centre_x = centre.mean(axis=0)
+
+
+        self.offset_left=0
+        self.offset_top=0
+
+
 
         coords_path = os.path.join(
             self.outline_store,
