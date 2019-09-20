@@ -320,13 +320,10 @@ class Plotter(FigureCanvas):
             self.outline_id = explicit._outline_id
             outline_info = database.getOutlineById(self.outline_id)
             xy = explicit.get_xy()
-            self.offset_left = outline_info.offset_left
-            self.offset_top = outline_info.offset_top
-            xy_inv = np.array([xy[:, 1], xy[:, 0]]).T
-            coords = xy_inv
+            coords = np.array([xy[:, 1], xy[:, 0]]).T
             self.cell_id = explicit._cell_id
             self.previous_id = outline_info.parent_id
-            self.centre_y, self.centre_x = xy_inv.mean(axis=0)
+            self.centre_y, self.centre_x = coords.mean(axis=0)
         else:
             coords_offset = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
             # Determine cell centre
@@ -1104,36 +1101,36 @@ class Plotter(FigureCanvas):
             )
 
             outline_info = database.getOutlineById(outline._outline_id)
-            centre = [outline_info.offset_left + self.region_halfwidth,
-                      outline_info.offset_top + self.region_halfheight]
-            _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
+            centre = outline_info.centre_y, outline_info.centre_x
+            (offset_left, offset_top,
+             centre_offset_left, centre_offset_top) = self.get_offsets(centre)
             roi = self.load_frame(channel_idx=0)[
-                outline_info.offset_left:outline_info.offset_left + (self.region_halfwidth * 2),
-                outline_info.offset_top:outline_info.offset_top + (self.region_halfheight * 2),
+                offset_left:offset_left + (self.region_halfwidth * 2),
+                offset_top:offset_top + (self.region_halfheight * 2),
             ]
             if hasattr(outline, "_modified") and outline._modified:
                 xy = outline.get_xy()
-                xy_inv = np.array([xy[:, 1], xy[:, 0]]).T
-                current_nodes = xy_inv - np.array([
-                    outline_info.offset_left,
-                    outline_info.offset_top,
-                ])
+                current_nodes = np.array([xy[:, 1], xy[:, 0]]).T
             else:
                 current_nodes = np.load(outline_info.coords_path)
 
             balloon_centre = [self.region_halfwidth - centre_offset_left,
                               self.region_halfheight - centre_offset_top]
 
-            balloon_obj = balloon.Balloon(current_nodes, roi)
+            balloon_obj = balloon.Balloon(
+                current_nodes - np.array([offset_left, offset_top]),
+                roi
+            )
             balloon_obj.refining_cycles = 1
             for i in range(num_ref):
                 try:
                     balloon_obj.evolve(image_percentile=self.image_percentile)
                 except ValueError:
                     break
+
             coords = np.array([(n.y, n.x) for n in balloon_obj.nodes]) + np.array([
-                outline_info.offset_top,
-                outline_info.offset_left,
+                offset_top,
+                offset_left,
             ])
             outline.set_xy(coords)
             outline._modified = True
