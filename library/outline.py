@@ -29,7 +29,7 @@ sns.set_context("talk")
 sns.set_style("white")
 
 class Plotter(FigureCanvas):
-    def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader):
+    def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader, status_bar):
         self.fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
         self.main_ax = self.fig.add_subplot(121)
         self.sub_ax = self.fig.add_subplot(122)
@@ -39,6 +39,8 @@ class Plotter(FigureCanvas):
 
         FigureCanvas.__init__(self, self.fig)
         self.setParent(parent_window)
+        self.parent_window = parent_window
+        self.status_bar = status_bar
 
         FigureCanvas.setSizePolicy(
             self,
@@ -84,11 +86,28 @@ class Plotter(FigureCanvas):
         self.mpl_connect("button_release_event", self._button_release_event)
         self.mpl_connect("motion_notify_event", self._motion_notify_event)
 
+        self.current_status = None
         self.main_frame = self.main_ax.imshow(self.load_frame(), cmap="gray")
-
-
         self.plot_existing_outlines()
 
+    def set_status(self, text=None, clear=False, status=None):
+        if not clear and text is not None:
+            self.status_bar.showMessage(text)
+        else:
+            self.status_bar.clearMessage()
+
+        if not status and self.current_status:
+            QtGui.QGuiApplication.restoreOverrideCursor()
+            # QtGui.QGuiApplication.setOverrideCursor(QtGui.QCursor(
+            #     QtCore.Qt.ArrowCursor
+            # ))
+        elif status == "working" and self.current_status != status:
+            QtGui.QGuiApplication.setOverrideCursor(QtGui.QCursor(
+                QtCore.Qt.WaitCursor
+            ))
+
+        self.current_status = status
+        self.status_bar.repaint()
 
     def automatic_segmentation(self,display=True):
         # load_frame: frame, z-slice, channel
@@ -246,6 +265,8 @@ class Plotter(FigureCanvas):
             #  except IndexError:
                 #  break
 
+        selected_ids = [x._outline_id for x in self.selected_outlines]
+        fresh_selections = []
         outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
         for i, outline in enumerate(outline_data):
             if not os.path.exists(outline.coords_path):
@@ -256,6 +277,17 @@ class Plotter(FigureCanvas):
             p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
             p._outline_id = outline.outline_id
             p._cell_id = outline.cell_id
+
+            if outline.outline_id in selected_ids:
+                prev_outline = self.selected_outlines[
+                    selected_ids.index(outline.outline_id)
+                ]
+                if hasattr(prev_outline, "_modified") and prev_outline._modified:
+                    p.set_xy(prev_outline.get_xy())
+                    p._modified = True
+                p.set_edgecolor("yellow")
+                fresh_selections.append(p)
+
             self.main_ax.add_patch(p)
             self.cell_outlines.append(p)
             centre = c.mean(axis=0)
@@ -267,6 +299,8 @@ class Plotter(FigureCanvas):
                 #  color="w",
             #  )
             #  self.cell_outline_text.append(t)
+
+        self.selected_outlines = fresh_selections
 
     def save_outline(self, auto=False, explicit=None):
         if auto:
@@ -363,6 +397,7 @@ class Plotter(FigureCanvas):
                 fill=False,
                 lw=1,
             )
+            p._outline_id = outline.outline_id
             self.sub_ax.add_patch(p)
             self.sub_outlines.append(p)
 
@@ -559,18 +594,35 @@ class Plotter(FigureCanvas):
                 QtWidgets.QMessageBox.Cancel,
             )
             if add_confirm == QtWidgets.QMessageBox.Yes:
-                for outline in self.selected_outlines:
+                for outline_num, outline in enumerate(self.selected_outlines):
+                    self.set_status(
+                        "Saving {0} of {1} outlines".format(
+                            outline_num + 1,
+                            len(self.selected_outlines),
+                        )
+                    )
                     self.save_outline(auto=False, explicit=outline)
+                self.set_status(
+                    "Modified outlines saved ({0} outlines)".format(
+                        len(self.selected_outlines),
+                    )
+                )
                 self.deselect_outlines()
                 self.plot_existing_outlines()
                 self.draw()
                 return True
             elif add_confirm == QtWidgets.QMessageBox.No:
+                self.set_status(
+                    "Modified outlines discarded ({0} outlines)".format(
+                        len(self.selected_outlines),
+                    )
+                )
                 self.deselect_outlines()
                 self.plot_existing_outlines()
                 self.draw()
                 return True
             elif add_confirm == QtWidgets.QMessageBox.Cancel:
+                self.set_status(clear=True)
                 return False
 
         return True
@@ -736,6 +788,7 @@ class Plotter(FigureCanvas):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
+        self.set_status("Saving outline", status="working")
         # check balloon object has been refined at least once
         if self.balloon_obj.refining_cycles == 0:
             alert = QtWidgets.QMessageBox()
@@ -747,11 +800,12 @@ class Plotter(FigureCanvas):
                 message,
             )
             if add_confirm != QtWidgets.QMessageBox.Yes:
+                self.set_status("Save aborted")
                 return
 
         # check overlap with other outlines?
         # objects already exist (red lines) so can compare perhaps?
-        Ypoints, Xpoints = self.sub_ax.lines[0].get_data()
+        Xpoints, Ypoints = self.sub_ax.lines[0].get_data()
         existing_points = np.row_stack([Xpoints, Ypoints]).T
         for outline in self.sub_outlines:
             contains_new = sum(outline.get_path().contains_points(
@@ -768,6 +822,7 @@ class Plotter(FigureCanvas):
                     message,
                 )
                 if add_confirm != QtWidgets.QMessageBox.Yes:
+                    self.set_status("Save aborted")
                     return
 
         if self._data.image_mode == "movie":
@@ -784,9 +839,11 @@ class Plotter(FigureCanvas):
                     message.format(area_diff * 100),
                 )
                 if add_confirm != QtWidgets.QMessageBox.Yes:
+                    self.set_status("Save aborted")
                     return
 
             self.save_outline()
+            self.deselect_outlines()
 
             offset_centre = self.balloon_obj.get_centre()
 
@@ -829,6 +886,7 @@ class Plotter(FigureCanvas):
                 centre_offset_left=centre_offset_left,
                 centre_offset_top=centre_offset_top,
             )
+            self.set_status(clear=True)
 
         elif self._data.image_mode == "static":
             self.save_outline()
@@ -840,13 +898,28 @@ class Plotter(FigureCanvas):
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
             # update existing outlines
-            self.plot_existing_outlines()
             self.clear_sub_outlines()
+            self.deselect_outlines()
+            self.plot_existing_outlines()
             self.draw()
+            self.set_status("Outline saved")
 
     def _accept_multi(self):
-        for outline in self.selected_outlines:
+        for outline_num, outline in enumerate(self.selected_outlines):
+            self.set_status(
+                "Saving {0: 2d} of {1} outlines".format(
+                    outline_num + 1,
+                    len(self.selected_outlines),
+                ),
+                status="working"
+            )
             self.save_outline(auto=False, explicit=outline)
+
+        self.set_status(
+            "Outlines saved ({0} outlines)".format(
+                len(self.selected_outlines)
+            )
+        )
 
         self.deselect_outlines()
         self.draw()
@@ -874,6 +947,7 @@ class Plotter(FigureCanvas):
             "Are you really sure you want to delete this outline permanently?"
         )
         if delete_confirm == QtWidgets.QMessageBox.Yes:
+            self.set_status("Deleting outline", status="working")
             database.deleteOutlineById(self.outline_id)
             database.updateExperimentById(
                 self._data.experiment_id,
@@ -890,6 +964,7 @@ class Plotter(FigureCanvas):
             self.subfigure_patches = []
             self.plot_existing_outlines()
             self.draw()
+            self.set_status("Outline deleted")
 
     def _delete_multi(self):
         if len(self.selected_outlines) < 2:
@@ -902,7 +977,14 @@ class Plotter(FigureCanvas):
             "Are you really sure you want to delete these outlines permanently?"
         )
         if delete_confirm == QtWidgets.QMessageBox.Yes:
-            for outline in self.selected_outlines:
+            for outline_num, outline in enumerate(self.selected_outlines):
+                self.set_status(
+                    "Deleting {0: 2d} of {1} outlines".format(
+                        outline_num + 1,
+                        len(self.selected_outlines),
+                    ),
+                    status="working",
+                )
                 database.deleteOutlineById(outline._outline_id)
                 database.updateExperimentById(
                     self._data.experiment_id,
@@ -910,6 +992,9 @@ class Plotter(FigureCanvas):
                 )
                 database.deleteCellById(outline._cell_id)
 
+            self.set_status("Outlines deleted ({0} outlines)".format(
+                len(self.selected_outlines)
+            ))
             self.sub_ax.clear()
             self.decorate_axis(self.sub_ax)
             self.outline_id = None
@@ -924,6 +1009,7 @@ class Plotter(FigureCanvas):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
+        self.set_status("Refining outline", status="working")
         for i in range(num_ref):
             try:
                 self.balloon_obj.evolve(image_percentile=self.image_percentile)
@@ -933,16 +1019,31 @@ class Plotter(FigureCanvas):
                     "I'm sorry, I'm afraid I can't do that",
                     "The outline has shrunk too much, try reducing the tolerance",
                 )
-                break
+                self.set_status(
+                    "Refinement failed after {0} cycles".format(i + 1)
+                )
+                self._plot_nodes()
+                self.draw()
+                return
+
+        self.set_status("Refinement complete ({0} cycles)".format(num_ref))
         self._plot_nodes()
+        self.draw()
 
     def _refine_multi(self, num_ref=10):
         if len(self.selected_outlines) < 2:
             return
 
         self.outline_id = None
-        self.draw()
-        for outline in self.selected_outlines:
+        for outline_num, outline in enumerate(self.selected_outlines):
+            self.set_status(
+                "Refining {0: 2d} of {1} outlines".format(
+                    outline_num + 1,
+                    len(self.selected_outlines),
+                ),
+                status="working"
+            )
+
             outline_info = database.getOutlineById(outline._outline_id)
             centre = [outline_info.offset_left + self.region_width,
                       outline_info.offset_top + self.region_height]
@@ -951,7 +1052,16 @@ class Plotter(FigureCanvas):
                 outline_info.offset_left:outline_info.offset_left + (self.region_width * 2),
                 outline_info.offset_top:outline_info.offset_top + (self.region_height * 2),
             ]
-            current_nodes = np.load(outline_info.coords_path)
+            if hasattr(outline, "_modified") and outline._modified:
+                xy = outline.get_xy()
+                xy_inv = np.array([xy[:, 1], xy[:, 0]]).T
+                current_nodes = xy_inv - np.array([
+                    outline_info.offset_left,
+                    outline_info.offset_top,
+                ])
+            else:
+                current_nodes = np.load(outline_info.coords_path)
+
             balloon_centre = [self.region_width - centre_offset_left,
                               self.region_height - centre_offset_top]
 
@@ -968,7 +1078,13 @@ class Plotter(FigureCanvas):
             ])
             outline.set_xy(coords)
             outline._modified = True
+            self.main_ax.draw_artist(outline)
 
+        self.set_status(
+            "Refinement complete ({0} outlines)".format(
+                len(self.selected_outlines)
+            )
+        )
         self.draw()
 
 
@@ -1109,6 +1225,22 @@ class Outliner:
         file_menu.addAction(quit_action)
         main_layout.setMenuBar(menubar)
 
+        # add tolerance box thing
+        label = QtWidgets.QLabel("Tolerance:")
+        self.tolerance_widget = QtWidgets.QLineEdit()
+        self.tolerance_widget.setText("1.0")
+        self.tolerance_widget.textChanged[str].connect(lambda text: self._submit_tolerance(text))
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(label)
+        layout.addWidget(self.tolerance_widget)
+
+        status_label = QtWidgets.QLabel("Status:")
+        status_bar = QtWidgets.QStatusBar()
+        status_layout = QtWidgets.QHBoxLayout()
+        status_layout.setAlignment(QtCore.Qt.AlignLeft)
+        status_layout.addWidget(status_label)
+        status_layout.addWidget(status_bar)
+
         self.plot = Plotter(
             self.window,
             dim[0],
@@ -1116,24 +1248,16 @@ class Outliner:
             dpi=self.screen_dpi,
             experiment_data=self.experiment_data,
             image_loader=self.image_loader,
+            status_bar=status_bar,
         )
         self.plot.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.plot.setFocus()
-
         self.window.toolbar = Toolbar(self.plot, self.experiment_data, self.window)
 
         tool_layout = QtWidgets.QVBoxLayout()
         tool_layout.addWidget(self.window.toolbar)
-
-        # add tolerance box thing
-        label = QtWidgets.QLabel("Tolerance:")
-        self.tolerance_widget = QtWidgets.QLineEdit()
-        self.tolerance_widget.setText(str(self.plot.image_percentile))
-        self.tolerance_widget.textChanged[str].connect(lambda text: self._submit_tolerance(text))
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(label)
-        layout.addWidget(self.tolerance_widget)
         tool_layout.addLayout(layout)
+        tool_layout.addLayout(status_layout)
 
         main_layout.addLayout(tool_layout)
         main_layout.addWidget(self.plot)
