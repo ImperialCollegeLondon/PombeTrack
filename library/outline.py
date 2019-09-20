@@ -296,6 +296,7 @@ class Plotter(FigureCanvas):
                     p.set_xy(prev_outline.get_xy())
                     p._modified = True
                 p.set_edgecolor("yellow")
+                p._selected = True
                 fresh_selections.append(p)
 
             self.main_ax.add_patch(p)
@@ -533,6 +534,9 @@ class Plotter(FigureCanvas):
         elif evt.key == "enter" and self.subfigure_patches:
             self._accept_event()
 
+        elif evt.key == "shift" or evt.key == "control":
+            pass
+
         else:
             print("Unknown key:", evt.key)
 
@@ -592,7 +596,7 @@ class Plotter(FigureCanvas):
                         self.draw()
 
     def check_selected_outlines(self):
-        if sum([hasattr(x, "_modified") for x in self.selected_outlines]) > 0:
+        if sum([hasattr(x, "_modified") and x._modified or False for x in self.selected_outlines]) > 0:
             alert = QtWidgets.QMessageBox()
             message = ("The selected outlines have been modified"
                         "\nWould you like to save them?")
@@ -612,6 +616,7 @@ class Plotter(FigureCanvas):
                         )
                     )
                     self.save_outline(auto=False, explicit=outline)
+                    outline._modified = False
                 self.set_status(
                     "Modified outlines saved ({0} outlines)".format(
                         len(self.selected_outlines),
@@ -640,6 +645,8 @@ class Plotter(FigureCanvas):
     def deselect_outlines(self):
         for outline in self.selected_outlines:
             outline.set_edgecolor("red")
+            outline._selected = False
+            outline._modified = False
 
         self.selected_outlines = []
 
@@ -651,17 +658,51 @@ class Plotter(FigureCanvas):
             rect_width = evt.xdata - self.main_dragging[0]
             rect_height = evt.ydata - self.main_dragging[1]
 
-        if not self.check_selected_outlines():
-            self.main_dragging = False
-            self.main_dragging_rect.remove()
-            del self.main_dragging_rect
-            self.draw()
-            return
+        keyboard_mods = QtGui.QGuiApplication.queryKeyboardModifiers()
+        # if keyboard_mods & (QtCore.Qt.ShiftModifier | QtCore.Qt.ControlModifier):
+        if keyboard_mods & QtCore.Qt.ShiftModifier:
+            # additive mode
+            additive_flag = True
+            reductive_flag = False
+
+        elif keyboard_mods & QtCore.Qt.ControlModifier:
+            additive_flag = False
+            reductive_flag = True
+            if not self.check_selected_outlines():
+                self.main_dragging = False
+                self.main_dragging_rect.remove()
+                del self.main_dragging_rect
+                self.draw()
+                return
+        else:
+            additive_flag = False
+            reductive_flag = False
+            if not self.check_selected_outlines():
+                self.main_dragging = False
+                self.main_dragging_rect.remove()
+                del self.main_dragging_rect
+                self.draw()
+                return
+
+            self.deselect_outlines()
 
         # determine whether any outline within the bounds
-        self.deselect_outlines()
-        if abs(rect_width) > 10 and abs(rect_height) > 10:
-            self._get_outlines_in_rect()
+        new_outlines = self._get_outlines_in_rect(evt)
+
+        if not reductive_flag:
+            for outline in new_outlines:
+                outline.set_edgecolor("yellow")
+                outline._selected = True
+                self.selected_outlines.append(outline)
+
+        elif reductive_flag:
+            for outline in new_outlines:
+                if hasattr(outline, "_selected") and outline._selected:
+                    outline.set_edgecolor("red")
+                    outline._selected = False
+                    self.selected_outlines.pop(
+                        self.selected_outlines.index(outline)
+                    )
 
         self.main_dragging = False
         self.main_dragging_rect.remove()
@@ -674,17 +715,9 @@ class Plotter(FigureCanvas):
             self._select_hit(self.selected_outlines[0])
 
         elif len(self.selected_outlines) == 0:
-            # check is not in an existing outline
-            hit = False
-            for outline in self.cell_outlines:
-                hit, _ = outline.contains(evt)
-                if hit:
-                    break
-
-            if hit:
-                self.selected_outlines.append(outline)
-                self._select_hit(outline)
-            else:
+            self.clear_sub_ax()
+            if (not additive_flag and not reductive_flag and
+                rect_width < 10 and rect_height < 10):
                 self.previous_id = None
                 self.cell_id = str(uuid.uuid4())
                 centre = [evt.ydata, evt.xdata]
@@ -701,12 +734,14 @@ class Plotter(FigureCanvas):
                     centre_offset_left=centre_offset_left,
                     centre_offset_top=centre_offset_top,
                 )
+
         self.draw()
 
-    def _get_outlines_in_rect(self):
+    def _get_outlines_in_rect(self, evt):
         rect_path = self.main_dragging_rect.get_path()
         rect_transform = self.main_dragging_rect.get_transform()
         true_rect = rect_transform.transform_path(rect_path)
+        new_outlines = []
         for outline in self.cell_outlines:
             out_transform = outline.get_transform()
             out_path = outline.get_path()
@@ -715,8 +750,14 @@ class Plotter(FigureCanvas):
                 true_outline.vertices
             )
             if sum(contains) > 0:
-                outline.set_edgecolor("yellow")
-                self.selected_outlines.append(outline)
+                new_outlines.append(outline)
+
+        if not new_outlines:
+            hit = self._check_hit(evt)
+            if hit:
+                new_outlines.append(hit)
+
+        return new_outlines
 
     def _button_release_event(self, evt):
         if self.parent().toolbar.mode:
@@ -735,8 +776,16 @@ class Plotter(FigureCanvas):
             self._plot_nodes()
             self.dragging = False
 
+    def _check_hit(self, evt):
+        for outline in self.cell_outlines:
+            hit, _ = outline.contains(evt)
+            if hit:
+                return outline
+        return False
+
     def _select_hit(self, outline):
         outline.set_edgecolor("yellow")
+        outline._selected = True
         outline_info = database.getOutlineById(outline._outline_id)
         self.previous_id = outline_info.parent_id
         self.cell_id = outline_info.cell_id
@@ -1014,6 +1063,7 @@ class Plotter(FigureCanvas):
                 self.draw()
                 return
 
+        self.selected_outlines[0]._modified = True
         self.set_status("Refinement complete ({0} cycles)".format(num_ref))
         self._plot_nodes()
         self.draw()
