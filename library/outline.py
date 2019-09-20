@@ -385,8 +385,8 @@ class Plotter(FigureCanvas):
 
         self.balloon_obj = balloon.Balloon(init_nodes, roi)
         self.sub_ax.imshow(self.load_frame(), cmap="gray")
-        self.sub_ax.set_ylim([self.offset_left, self.offset_left + self.region_halfwidth * 2])
-        self.sub_ax.set_xlim([self.region_halfheight * 2 + self.offset_top, self.offset_top])
+        self.sub_ax.set_ylim([self.offset_left + self.region_halfwidth * 2, self.offset_left])
+        self.sub_ax.set_xlim([self.offset_top, self.region_halfheight * 2 + self.offset_top])
         self.sub_ax.set_title("Frame = {0}".format(self.current_frame_idx + 1))
         self._plot_nodes()
 
