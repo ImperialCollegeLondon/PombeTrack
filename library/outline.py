@@ -633,88 +633,96 @@ class Plotter(FigureCanvas):
 
         self.selected_outlines = []
 
+    def _button_release_main(self, evt):
+        if not evt.xdata or not evt.ydata or evt.inaxes != self.main_ax:
+            rect_width = self.main_dragging_rect.get_width()
+            rect_height = self.main_dragging_rect.get_height()
+        else:
+            rect_width = evt.xdata - self.main_dragging[0]
+            rect_height = evt.ydata - self.main_dragging[1]
+
+        if not self.check_selected_outlines():
+            self.main_dragging = False
+            self.main_dragging_rect.remove()
+            del self.main_dragging_rect
+            self.draw()
+            return
+
+        keyboard_mods = QtGui.QGuiApplication.queryKeyboardModifiers()
+        if keyboard_mods & (QtCore.Qt.ShiftModifier | QtCore.Qt.ControlModifier):
+
+        # determine whether any outline within the bounds
+        self.deselect_outlines()
+        if abs(rect_width) > 10 and abs(rect_height) > 10:
+            self._get_outlines_in_rect()
+
+        self.main_dragging = False
+        self.main_dragging_rect.remove()
+        del self.main_dragging_rect
+
+        if len(self.selected_outlines) > 1:
+            self.sub_ax.clear()
+            self.decorate_axis(self.sub_ax)
+            self.outline_id = None
+            self.balloon_obj = None
+            self.main_dragging = False
+            self.dragging = False
+            self.subfigure_patches = []
+
+        elif len(self.selected_outlines) == 1:
+            self._select_hit(self.selected_outlines[0])
+
+        elif len(self.selected_outlines) == 0:
+            # check is not in an existing outline
+            hit = False
+            for outline in self.cell_outlines:
+                hit, _ = outline.contains(evt)
+                if hit:
+                    break
+
+            if hit:
+                self.selected_outlines.append(outline)
+                self._select_hit(outline)
+            else:
+                self.previous_id = None
+                self.cell_id = str(uuid.uuid4())
+                centre = [evt.ydata, evt.xdata]
+                (self.offset_left, self.offset_top,
+                centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+
+                roi = self.load_frame(channel_idx=0)[
+                    self.offset_left:self.offset_left + (self.region_width * 2),
+                    self.offset_top:self.offset_top + (self.region_height * 2)
+                ]
+
+                self.fit_outline(
+                    roi,
+                    centre_offset_left=centre_offset_left,
+                    centre_offset_top=centre_offset_top,
+                )
+        self.draw()
+
+    def _get_outlines_in_rect(self):
+        rect_path = self.main_dragging_rect.get_path()
+        rect_transform = self.main_dragging_rect.get_transform()
+        true_rect = rect_transform.transform_path(rect_path)
+        for outline in self.cell_outlines:
+            out_transform = outline.get_transform()
+            out_path = outline.get_path()
+            true_outline = out_transform.transform_path(out_path)
+            contains = true_rect.contains_points(
+                true_outline.vertices
+            )
+            if sum(contains) > 0:
+                outline.set_edgecolor("yellow")
+                self.selected_outlines.append(outline)
+
     def _button_release_event(self, evt):
         if self.parent().toolbar.mode:
             return
 
         elif self.main_dragging:
-            if not evt.xdata or not evt.ydata or evt.inaxes != self.main_ax:
-                rect_width = self.main_dragging_rect.get_width()
-                rect_height = self.main_dragging_rect.get_height()
-            else:
-                rect_width = evt.xdata - self.main_dragging[0]
-                rect_height = evt.ydata - self.main_dragging[1]
-
-            if not self.check_selected_outlines():
-                self.main_dragging = False
-                self.main_dragging_rect.remove()
-                del self.main_dragging_rect
-                self.draw()
-                return
-
-            # determine whether any outline within the bounds
-            self.deselect_outlines()
-            if abs(rect_width) > 10 and abs(rect_height) > 10:
-                rect_path = self.main_dragging_rect.get_path()
-                rect_transform = self.main_dragging_rect.get_transform()
-                true_rect = rect_transform.transform_path(rect_path)
-                for outline in self.cell_outlines:
-                    out_transform = outline.get_transform()
-                    out_path = outline.get_path()
-                    true_outline = out_transform.transform_path(out_path)
-                    contains = true_rect.contains_points(
-                        true_outline.vertices
-                    )
-                    if sum(contains) > 0:
-                        outline.set_edgecolor("yellow")
-                        self.selected_outlines.append(outline)
-
-            self.main_dragging = False
-            self.main_dragging_rect.remove()
-            del self.main_dragging_rect
-
-            if len(self.selected_outlines) > 1:
-                self.sub_ax.clear()
-                self.decorate_axis(self.sub_ax)
-                self.outline_id = None
-                self.balloon_obj = None
-                self.main_dragging = False
-                self.dragging = False
-                self.subfigure_patches = []
-
-            elif len(self.selected_outlines) == 1:
-                self._select_hit(self.selected_outlines[0])
-
-            elif len(self.selected_outlines) == 0:
-                # check is not in an existing outline
-                hit = False
-                for outline in self.cell_outlines:
-                    hit, _ = outline.contains(evt)
-                    if hit:
-                        break
-
-                if hit:
-                    self.selected_outlines.append(outline)
-                    self._select_hit(outline)
-                else:
-                    self.previous_id = None
-                    self.cell_id = str(uuid.uuid4())
-                    centre = [evt.ydata, evt.xdata]
-                    (self.offset_left, self.offset_top,
-                    centre_offset_left, centre_offset_top) = self.get_offsets(centre)
-
-                    roi = self.load_frame(channel_idx=0)[
-                        self.offset_left:self.offset_left + (self.region_width * 2),
-                        self.offset_top:self.offset_top + (self.region_height * 2)
-                    ]
-
-                    self.fit_outline(
-                        roi,
-                        centre_offset_left=centre_offset_left,
-                        centre_offset_top=centre_offset_top,
-                    )
-            self.draw()
-
+            return self._button_release_main(evt)
         elif evt.inaxes == self.sub_ax:
             if not self.dragging:
                 return
