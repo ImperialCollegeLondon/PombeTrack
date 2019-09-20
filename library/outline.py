@@ -658,9 +658,6 @@ class Plotter(FigureCanvas):
             self.draw()
             return
 
-        keyboard_mods = QtGui.QGuiApplication.queryKeyboardModifiers()
-        if keyboard_mods & (QtCore.Qt.ShiftModifier | QtCore.Qt.ControlModifier):
-
         # determine whether any outline within the bounds
         self.deselect_outlines()
         if abs(rect_width) > 10 and abs(rect_height) > 10:
@@ -727,6 +724,7 @@ class Plotter(FigureCanvas):
 
         elif self.main_dragging:
             return self._button_release_main(evt)
+
         elif evt.inaxes == self.sub_ax:
             if not self.dragging:
                 return
