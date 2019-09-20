@@ -515,10 +515,10 @@ class Plotter(FigureCanvas):
         elif evt.key == "r" and self.subfigure_patches:
             self._refine_event()
 
-        elif (evt.key == "d" or evt.key == "delete") and len(self.selected_outlines) > 1:
+        elif evt.key == "delete" and len(self.selected_outlines) > 1:
             self._delete_multi()
 
-        elif (evt.key == "d" or evt.key == "delete") and self.subfigure_patches:
+        elif evt.key == "delete" and self.subfigure_patches:
             self._delete_event()
 
         elif evt.key == "." and len(self.selected_outlines) > 1:
@@ -1088,7 +1088,7 @@ class Toolbar(NavigationToolbar):
             ("Save", "Save view", "filesave_large", "save_figure"),
             (None, None, None, None),
             ("Accept", "Accept outline (enter)", "accept", "accept"),
-            ("Delete", "Delete outline (d or delete)", "delete", "delete"),
+            ("Delete", "Delete outline (delete)", "delete", "delete"),
             ("Refine", "Refine outline (r)", "recycle", "refine"),
             ("Refine1", "Refine one step (.)", "recycle_single", "refine_single"),
             (None, None, None, None),
