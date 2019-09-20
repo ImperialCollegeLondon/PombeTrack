@@ -172,8 +172,6 @@ class Plotter(FigureCanvas):
                 self.cell_id  =  str(uuid.uuid4())
                 centre = [np.mean(self.full_coords[:, 0]).astype(int), np.mean(self.full_coords[:, 1]).astype(int)]
                 self.centre_y, self.centre_x = centre
-                #  self.offset_left, self.offset_top, _, _  =  self.get_offsets(centre)
-                #  self.auto_coords = self.full_coords-np.array([self.offset_left, self.offset_top])
                 self.save_outline(auto = True)
 
                 # Draw the cell
@@ -371,10 +369,11 @@ class Plotter(FigureCanvas):
         database.deleteCellById(self.cell_id)
 
     def fit_outline(self, roi, init_nodes=None, centre_offset_left=0, centre_offset_top=0):
-        centre = [self.region_halfwidth - centre_offset_left,
-                  self.region_halfheight - centre_offset_top]
-
         if init_nodes is None:
+            centre = [
+                self.region_halfwidth - centre_offset_left,
+                self.region_halfheight - centre_offset_top,
+            ]
             self.outline_id = str(uuid.uuid4())
             radius = 5
             num_nodes = 10
