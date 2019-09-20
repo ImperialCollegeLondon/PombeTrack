@@ -808,8 +808,8 @@ class Plotter(FigureCanvas):
         self.cell_id = outline_info.cell_id
         self.offset_left = outline_info.offset_left
         self.offset_top = outline_info.offset_top
-        centre = [self.offset_left + self.region_width,
-                self.offset_top + self.region_height]
+        centre = [self.offset_left + self.region_halfwidth,
+                self.offset_top + self.region_halfheight]
         _, _, centre_offset_left, centre_offset_top = self.get_offsets(centre)
         roi = self.load_frame(channel_idx=0)[
             self.offset_left:self.offset_left + (self.region_halfwidth * 2),
