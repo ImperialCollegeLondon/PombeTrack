@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import numpy as np
 import pathlib
 import shutil
 import sqlite3
@@ -1116,8 +1117,17 @@ def _update4():
     cursor.execute(query)
     conn.commit()
 
-    query = "UPDATE _backup SET centre_x = 0, centre_y = 0;"
+    query = "SELECT outline_id, coords_path, offset_left, offset_top FROM outlines;"
     cursor.execute(query)
+    for outline_id, coords_path, offset_left, offset_top in cursor.fetchall():
+        print("Adding centre coordinates for outline {0}".format(outline_id))
+        # calculate centre_x, centre_y
+        coords = np.load(coords_path)
+        true_coords = coords + np.array([offset_left, offset_top])
+        centre_x, centre_y = true_coords.mean(axis=0)
+        query = "UPDATE _backup SET centre_x = ?, centre_y = ? WHERE outline_id = ?;"
+        args = (centre_x, centre_y, outline_id)
+        cursor.execute(query, args)
     conn.commit()
 
     query = "DROP TABLE outlines;"
