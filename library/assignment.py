@@ -104,8 +104,8 @@ class Assigner:
     def __init__(self, experiment_data, image_loader):
         self.experiment_data = experiment_data
         self.image_loader = image_loader
-        self.region_width = 75
-        self.region_height = 75
+        self.region_halfwidth = 75
+        self.region_halfheight = 75
 
         if not database.checkTable("cells"):
             database.createCellsTable()
@@ -226,8 +226,8 @@ class Assigner:
                 cell_plot.setMaximumWidth(width)
                 cell_plot.setMinimumHeight(width)
                 roi = self.image_loader.load_frame(outline.frame_idx, 0)[
-                    outline.offset_left:outline.offset_left + (self.region_width * 2),
-                    outline.offset_top:outline.offset_top + (self.region_height * 2),
+                    outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
+                    outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
                 ]
                 cell_plot.axes[0].imshow(roi, cmap="gray")
                 cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
@@ -377,8 +377,8 @@ class Assigner:
                 plot.current_channel = 0
 
             roi = self.image_loader.load_frame(outline.frame_idx, plot.current_channel)[
-                outline.offset_left:outline.offset_left + (self.region_width * 2),
-                outline.offset_top:outline.offset_top + (self.region_height * 2),
+                outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
+                outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
             ]
 
             if plot.current_channel != 0:
@@ -479,8 +479,8 @@ class Assigner:
 
         im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
         offset_left, offset_right = (first_outline.offset_top,
-                                     first_outline.offset_top + (self.region_height * 2))
-        offset_top, offset_bottom = (first_outline.offset_left + (self.region_width * 2),
+                                     first_outline.offset_top + (self.region_halfheight * 2))
+        offset_top, offset_bottom = (first_outline.offset_left + (self.region_halfwidth * 2),
                                      first_outline.offset_left)
         self.plot.offsets[1] = (offset_top, offset_right, offset_bottom, offset_left)
         self.plot.axes[1].imshow(im1, cmap="gray")
@@ -525,22 +525,22 @@ class Assigner:
             im2 = self.image_loader.load_frame(fidx, 0)
         else:
             fidx = first_outline.frame_idx + 1
-            im2 = np.zeros((self.region_width * 2, self.region_height * 2))
+            im2 = np.zeros((self.region_halfwidth * 2, self.region_halfheight * 2))
             offt = 0
             offl = 0
 
         self.plot.axes[2].imshow(im2, cmap="gray")
         self.plot.offsets[2] = (
-            offl + (self.region_width * 2),
-            offt + (self.region_height * 2),
+            offl + (self.region_halfwidth * 2),
+            offt + (self.region_halfheight * 2),
             offl,
             offt
         )
         self.plot.axes[2].set_xlim([
-            offt, offt + (self.region_height * 2)
+            offt, offt + (self.region_halfheight * 2)
         ])
         self.plot.axes[2].set_ylim([
-            offl + (self.region_width * 2), offl
+            offl + (self.region_halfwidth * 2), offl
         ])
 
         for outline in database.getOutlinesByFrameIdx(fidx, self.experiment_data.experiment_id):
@@ -578,8 +578,8 @@ class Assigner:
             im3 = self.image_loader.load_frame(prev_outline.frame_idx, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
             self.plot.offsets[0] = (
-                prev_outline.offset_left + (self.region_width * 2),
-                prev_outline.offset_top + (self.region_height * 2),
+                prev_outline.offset_left + (self.region_halfwidth * 2),
+                prev_outline.offset_top + (self.region_halfheight * 2),
                 prev_outline.offset_left,
                 prev_outline.offset_top,
             )
@@ -599,14 +599,14 @@ class Assigner:
             im3 = self.image_loader.load_frame(first_outline.frame_idx - 1, 0)
             self.plot.axes[0].imshow(im3, cmap="gray")
             self.plot.offsets[0] = (
-                first_outline.offset_left + (self.region_width * 2),
-                first_outline.offset_top + (self.region_height * 2),
+                first_outline.offset_left + (self.region_halfwidth * 2),
+                first_outline.offset_top + (self.region_halfheight * 2),
                 first_outline.offset_left,
                 first_outline.offset_top,
             )
         else:
             prev_outline = None
-            im3 = np.zeros((self.region_width * 2, self.region_height * 2))
+            im3 = np.zeros((self.region_halfwidth * 2, self.region_halfheight * 2))
             self.plot.axes[0].imshow(im3, cmap="gray")
 
         self.plot.axes[0].set_xlim([
