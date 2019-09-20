@@ -858,6 +858,7 @@ class Plotter(FigureCanvas):
             offset_centre = self.balloon_obj.get_centre()
 
             # clear plot
+            self.previous_id = str(self.outline_id)
             self.clear_sub_ax()
 
             # fit next
@@ -869,13 +870,13 @@ class Plotter(FigureCanvas):
             if self.current_frame_idx == self.num_frames - 1:
                 bf_frame = self.load_frame()
                 self.main_frame.set_data(bf_frame)
+                self.previous_id = None
                 self.outline_id = None
                 self.plot_existing_outlines()
                 self.clear_sub_outlines()
                 self.draw()
                 return
             else:
-                self.previous_id = str(self.outline_id)
                 self.current_frame_idx += 1
                 bf_frame = self.load_frame()
                 self.main_frame.set_data(bf_frame)
