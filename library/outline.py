@@ -1066,7 +1066,9 @@ class Plotter(FigureCanvas):
                 self.draw()
                 return
 
-        self.selected_outlines[0]._modified = True
+        if self.selected_outlines:
+            self.selected_outlines[0]._modified = True
+
         self.set_status("Refinement complete ({0} cycles)".format(num_ref))
         self._plot_nodes()
         self.draw()
