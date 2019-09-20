@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import datetime
+import matplotlib
 import numpy as np
 import os
 import pandas as pd
@@ -196,6 +197,10 @@ class ExperimentView:
         print(time.time()-startt)
 
     def auto_one(self):
+        self.set_status(
+        text="Preprocessing image {0} of {1}".format(
+            self.current_frame_idx+1, self.image_loader.num_frames), status="working"
+            )
         # load_frame: frame, z-slice, channel
         im_mid = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2)), 0)
         im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
@@ -228,21 +233,21 @@ class ExperimentView:
 
 
             #  Test if the cell exists
-            #  overlap = False
-            #  outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
-            #  for i, outline in enumerate(outline_data):
-                #  if not os.path.exists(outline.coords_path):
-                    #  continue
-                #  if outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth):
-                    #  continue
-#
-                #  polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept = True),\
-                        #  balloon_obj.get_coordinates(accept = True)[1, :].reshape(1, 2), axis = 0), closed = True)
-                #  if polygonpath.contains_point([outline.centre_y-origin_y, outline.centre_x - origin_x]):
-                    #  overlap = True
-#
-            #  if overlap:
-                #  continue
+            overlap = False
+            outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
+            for i, outline in enumerate(outline_data):
+                if not os.path.exists(outline.coords_path):
+                    continue
+                if outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth):
+                    continue
+
+                polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept = True),\
+                        balloon_obj.get_coordinates(accept = True)[1, :].reshape(1, 2), axis = 0), closed = True)
+                if polygonpath.contains_point([outline.centre_y-origin_y, outline.centre_x - origin_x]):
+                    overlap = True
+
+            if overlap:
+                continue
 
 
 

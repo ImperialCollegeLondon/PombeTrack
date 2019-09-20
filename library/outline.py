@@ -110,6 +110,9 @@ class Plotter(FigureCanvas):
         self.status_bar.repaint()
 
     def automatic_segmentation(self, display = True):
+        self.set_status(
+        text="Preprocessing", status="working"
+            )
         # load_frame: frame, z-slice, channel
         im_mid = self.load_frame(self.current_frame_idx, int(np.floor(self.num_slices / 2)), 0)
         im_up = self.load_frame(self.current_frame_idx, int(np.floor(self.num_slices / 2) - 1), 0)
@@ -122,10 +125,15 @@ class Plotter(FigureCanvas):
         #  bd = segmentation.find_bd(im_wat)
 
         if display:
-            background  =  self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
+            background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
 
+        cell_count=0
 
         for index in range(1, im_wat.max()+1):
+            self.set_status(
+            text="Processing cell {0} of {1}".format(
+                index, im_wat.max()), status="working"
+            )
             im_ii = im_wat == index
             if (np.any(np.asarray(im_ii.nonzero()) == 0) or
                     np.any(np.asarray(im_ii.nonzero()) == 2047)):
@@ -190,7 +198,9 @@ class Plotter(FigureCanvas):
                     background  =  self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
             except ValueError:
                 continue
+            cell_count+=1
             self.draw()
+        self.set_status(text="Auto segmentation finished with {0} cells".format(cell_count))
 
 
 
