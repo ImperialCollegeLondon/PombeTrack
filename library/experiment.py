@@ -1,18 +1,23 @@
 #!/usr/bin/env python
 
 import datetime
+import numpy as np
 import os
 import pandas as pd
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtGui as QtGui
 import PyQt5.QtCore as QtCore
 import PyQt5.Qt as Qt
+import time
+import uuid
 
 from . import database
 from . import loader
 from . import outline
 from . import assignment
 from . import analysis
+
+from . import segmentation
 
 class ExperimentView:
     def __init__(self, experiment_id):
@@ -133,19 +138,178 @@ class ExperimentView:
         details_box.setLayout(layout)
         self.main_layout.addWidget(details_box)
 
+
+    # Indicate progress
+    def set_status(self, text=None, clear=False, status=None):
+        if not clear and text is not None:
+            self.status_bar.showMessage(text)
+        else:
+            self.status_bar.clearMessage()
+
+        if not status and self.current_status:
+            QtGui.QGuiApplication.restoreOverrideCursor()
+            # QtGui.QGuiApplication.setOverrideCursor(QtGui.QCursor(
+            #     QtCore.Qt.ArrowCursor
+            # ))
+        elif status == "working" and self.current_status != status:
+            QtGui.QGuiApplication.setOverrideCursor(QtGui.QCursor(
+                QtCore.Qt.WaitCursor
+            ))
+
+        self.current_status = status
+        self.status_bar.repaint()
+
+
     def _addBatchAuto(self):
-        outline_box = QtWidgets.QGroupBox("Automatic segmentation for all")
+        self.current_status = None
+        auto_box = QtWidgets.QGroupBox("Automatic segmentation for all")
         layout = QtWidgets.QVBoxLayout()
 
+        # Box for progression status
+        status_label = QtWidgets.QLabel("Status:")
+        self.status_bar = QtWidgets.QStatusBar()
+        status_layout = QtWidgets.QHBoxLayout()
+        status_layout.setAlignment(QtCore.Qt.AlignLeft)
+        status_layout.addWidget(status_label)
+        status_layout.addWidget(self.status_bar)
 
-        outline_btn = QtWidgets.QPushButton("Start Auto")
-        outline_btn.clicked.connect(lambda: self.outline_cells())
-        layout.addWidget(outline_btn)
+        # Box for button
+        auto_btn = QtWidgets.QPushButton("Start Auto")
+        auto_btn.clicked.connect(lambda: self.batch_auto())
+        layout.addWidget(auto_btn)
+        layout.addLayout(status_layout)
 
-        outline_box.setLayout(layout)
-        self.main_layout.addWidget(outline_box)
+        auto_box.setLayout(layout)
+        self.main_layout.addWidget(auto_box)
 
-    #  def batch_auto(self):
+    def batch_auto(self):
+        self.outline_store = os.path.join(
+            "data", "outlines", self._data.experiment_id
+        )
+        if not os.path.exists(self.outline_store):
+            os.makedirs(self.outline_store)
+        startt=time.time()
+        for ff in range(0,self.image_loader.num_frames):
+            self.current_frame_idx=ff
+            self.auto_one()
+        self.set_status(text="Auto segmentation finished")
+        print(time.time()-startt)
+
+    def auto_one(self):
+        # load_frame: frame, z-slice, channel
+        im_mid = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2)), 0)
+        im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
+        im = np.maximum(im_mid, im_up)
+
+
+        im_pp = segmentation.preprocessing(im)
+        im_i = segmentation.find_cellinterior(im_pp)
+        im_wat = segmentation.find_watershed(im_i)
+        #  bd = segmentation.find_bd(im_wat)
+
+
+        for index in range(1, im_wat.max()+1):
+            self.set_status(
+                    text="Processing image {0} of {1}, cell {2} of {3}".format(
+                        self.current_frame_idx+1, self.image_loader.num_frames,
+                        index, im_wat.max()), status="working"
+                    )
+            im_ii = im_wat == index
+            if (np.any(np.asarray(im_ii.nonzero()) == 0) or
+                    np.any(np.asarray(im_ii.nonzero()) == 2047)):
+                continue
+
+            im_ii_bd = segmentation.find_boundaries(im_ii, mode = 'inner')
+            #  Sort in radial
+            bd_ii_sorted = segmentation.sort_in_order(im_ii_bd)
+
+            #  Define the balloon object
+            balloon_obj, origin_y, origin_x, halfwidth = segmentation.find_balloon_obj(bd_ii_sorted.astype(int)[::5], im)
+
+
+            #  Test if the cell exists
+            #  overlap = False
+            #  outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
+            #  for i, outline in enumerate(outline_data):
+                #  if not os.path.exists(outline.coords_path):
+                    #  continue
+                #  if outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth):
+                    #  continue
+#
+                #  polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept = True),\
+                        #  balloon_obj.get_coordinates(accept = True)[1, :].reshape(1, 2), axis = 0), closed = True)
+                #  if polygonpath.contains_point([outline.centre_y-origin_y, outline.centre_x - origin_x]):
+                    #  overlap = True
+#
+            #  if overlap:
+                #  continue
+
+
+
+
+            # Evolve the contour
+            try:
+                sensitivity = 0.4
+                area_init = balloon_obj.get_area()
+                for i in range(20):
+                    balloon_obj.evolve(display = False, image_percentile = sensitivity)
+                    if balloon_obj.get_area() > 1.5 * area_init or balloon_obj.get_area() < 0.5 * area_init:
+                        raise ValueError()
+                full_coords = balloon_obj.get_coordinates(accept = True) + [origin_y, origin_x]
+                outline_id  =  str(uuid.uuid4())
+                cell_id  =  str(uuid.uuid4())
+                centre = [np.mean(full_coords[:, 0]).astype(int), np.mean(full_coords[:, 1]).astype(int)]
+                centre_y, centre_x = centre
+
+                # Save to database
+                offset_left=0
+                offset_top=0
+                coords_path = os.path.join(
+                    self.outline_store,
+                    "{0}.npy".format(outline_id)
+                )
+                data = {
+                    "outline_id": outline_id,
+                    "cell_id": cell_id,
+                    "experiment_num": self._data.experiment_num,
+                    "experiment_id": self._data.experiment_id,
+                    "image_path": self._data.image_path,
+                    "frame_idx": self.current_frame_idx,
+                    "coords_path": coords_path,
+                    "offset_left": offset_left,
+                    "offset_top": offset_top,
+                    "parent_id": "",
+                    "centre_x":int(centre_x),
+                    "centre_y":int(centre_y),
+                }
+                #  if self._data.image_mode == "static":
+                    #  data["parent_id"] = ""
+    #
+                if os.path.exists(coords_path):
+                    os.remove(coords_path)
+                    database.updateOutlineById(
+                        outline_id,
+                        centre_x=int(centre_x),
+                        centre_y=int(centre_y),
+                    )
+                else:
+                    database.insertOutline(**data)
+
+                np.save(coords_path, full_coords)
+
+                #  if self.previous_id:
+                    #  database.addOutlineChild(self.previous_id, child1=self.outline_id)
+
+                database.updateExperimentById(
+                    self._data.experiment_id,
+                    verified=False,
+                )
+                #  database.deleteCellById(self.cell_id)
+            except ValueError:
+                continue
+
+
+
 
 
     def _addOutline(self):
