@@ -1,8 +1,36 @@
 #!/usr/bin/env python3
+""" This script initialises and launches the interface for PombeTrack.
+
+PombeTrack is a Python application designed to analyse widefield
+microscopy of Schizosaccharomyces pombe cells, both static and timelapse, to
+outline cells, and to process any fluorescent data.
+
+See <https://github.com/ImperialCollegeLondon/PombeTrack>.
+
+Authors:
+    Miles Priestman     <https://github.com/mountainpenguin>
+    Ziqi Lu ("Alvin")   <https://github.com/luziqi96>
+
+
+Dependencies (versions are those tested, others may work):
+    CPython      (3.7.4)    <https://python.org>
+    matplotlib   (3.1.1)    <https://matplotlib.org>
+    numpy        (1.17.1)   <https://numpy.org>
+    pandas       (0.25.1)   <https://pandas.pydata.org>
+    PyQt5        (5.13.1)   <https://pypi.org/project/PyQt5>
+    scikit-image (0.15.0)   <https://scikit-image.org>
+    scipy        (1.3.1)    <https://www.scipy.org>
+    seaborn      (0.9.0)    <https://seaborn.pydata.org>
+    tifffile     (0.15.1)   <https://www.lfd.uci.edu/~gohlke/>
+
+These dependencies are relatively standard for the scientific python stack,
+except for PyQt5 and tifffile.
+"""
 
 import warnings
-warnings.filterwarnings("ignore")
 from library import interface
+
+warnings.filterwarnings("ignore")
 
 if __name__ == "__main__":
     i = interface.Interface()
