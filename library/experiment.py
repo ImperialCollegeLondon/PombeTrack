@@ -379,12 +379,12 @@ class ExperimentView:
         self.main_layout.addWidget(box)
 
     def assign_cell_lineages(self):
-        assigner = assignment.Assigner(self._data, self.image_loader)
         desktop = QtWidgets.QDesktopWidget()
-        assigner.set_screen_res(
-            desktop.width(),
-            desktop.height(),
-            desktop.logicalDpiX(),
+        assigner = assignment.Assigner(
+            self._data, self.image_loader,
+            (desktop.width(),
+             desktop.height(),
+             desktop.logicalDpiX()),
         )
         assigner.start_assigning(self.window)
         assigner.window.finished[int].connect(self.assignment_finished)

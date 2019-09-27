@@ -1,29 +1,33 @@
 #!/usr/bin/env python3
 
+""" Interface for assembling cells and assigning lineages.  """
+
+import os
+import uuid
+
 import matplotlib
-matplotlib.use('Qt5Agg')
+import matplotlib.figure
 import matplotlib.widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-import matplotlib.figure
+
 import numpy as np
 import pandas as pd
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtGui as QtGui
 import PyQt5.QtCore as QtCore
-import PyQt5.Qt as Qt
 import seaborn as sns
-import os
-import tifffile
-import uuid
 
 from . import database
 from . import movie_generator
+
+matplotlib.use('Qt5Agg')
 
 sns.set_context("talk")
 sns.set_style("white")
 
 class Toolbar(NavigationToolbar):
+    """Custom toolbar for controlling cell assembly and lineage assignment."""
     def __init__(self, figure_canvas, parent=None):
         self.toolitems = [
             ("Home", "Home", "home_large", "home_event"),
@@ -44,44 +48,116 @@ class Toolbar(NavigationToolbar):
         if not os.path.exists(path):
             path = os.path.join(self.basedir, name)
 
-        pm = QtGui.QPixmap(path)
-        if hasattr(pm, "setDevicePixelRatio"):
-            pm.setDevicePixelRatio(self.canvas._dpi_ratio)
+        pixmap = QtGui.QPixmap(path)
+        if hasattr(pixmap, "setDevicePixelRatio"):
+            pixmap.setDevicePixelRatio(self.canvas._dpi_ratio)
 
-        return QtGui.QIcon(pm)
+        return QtGui.QIcon(pixmap)
 
-    def home_event(self, *args, **kwargs):
-        for ax, lims in zip(self.canvas.axes, self.canvas.offsets):
-            ax.set_xlim(lims[0], lims[2])
-            ax.set_ylim(lims[1], lims[3])
+    def home_event(self):
+        """Set axis limits to the default limits.
+
+        Triggered when the home button is pressed in the toolbar."""
+        for axis, lims in zip(self.canvas.axes, self.canvas.offsets):
+            axis.set_xlim(lims[0], lims[2])
+            axis.set_ylim(lims[1], lims[3])
+
         self.canvas.draw()
 
-    def previous_frame(self, *args, **kwargs):
+    def previous_frame(self):
+        """Change frame to previous frame on toolbar click.
+
+        Actually calls `Assigner.previous_frame` function."""
         self.parent.trigger_previous_frame()
 
-    def next_frame(self, *args, **kwargs):
+    def next_frame(self):
+        """Change frame to next frame on toolbar click.
+
+        Actually calls `Assigner.next_frame` function."""
         self.parent.trigger_next_frame()
 
-    def accept(self, *args, **kwargs):
+    def accept(self):
+        """Accepts the current lineage on toolbar click.
+
+        Includes all relatives of the current cell.
+        Actually calls `Assigner.accept_all` function."""
         self.parent.trigger_accept_all()
 
-    def cancel(self, *args, **kwargs):
+    def cancel(self):
+        """Cancels assignment of lineage, discarding any changes.
+
+        Actually calls `Assigner.cancel_assignment` function."""
         self.parent.trigger_cancel()
 
 
 class Plotter(FigureCanvas):
-    def __init__(self, parent_window, width, height, dpi, experiment_data, image_loader, subplots=3):
+    """Interface for assigning outlines to cells and constructing cell lineages.
+
+    Interface creates three subplots representing consecutive frames of the
+    timelapse with a single outline focus.
+
+    Actual interactivity functionality is encoded in the Analysis class, but is
+    also described here for convenience.
+
+    ---- Left subplot ----
+    This shows the frame prior to the current outline, with the assigned
+    "parent" outline (if division has just occurred this will be a true parent,
+    otherwise it will display the _same_ outline just in the previous frame)
+    outlined with a yellow dotted line.
+
+    If there is no prior frame, and black image will be displayed.
+    If no parent outline is known, no cell will be outlined.
+
+    --- Middle subplot ---
+    This shows the outline in its current frame, outlined in red.
+
+    --- Right subplot ---
+    This shows the subsequent frame compared to the current frame.
+    All known cells in the vicinity of the current outline are displayed as
+    shaded polygons.
+
+    Outlines that are connected to the current outline are coloured in green,
+    else in yellow.
+    If a single outline is coloured in green, a "cell growth" event will be
+    assigned, i.e. no division occurs.
+    If two outlines are coloured in green, a division event will be assigned.
+    If no outlines are coloured in green, a loss/death event will be assigned.
+
+    The initial state of the right-hand subplot denotes the currently known
+    state of the data.
+
+    These assignment options can be altered simply by clicking on the outlines
+    to toggle their colour between green and yellow.
+
+    Assignments can be accepted by pressing the ENTER key, the RIGHT arrow key,
+    or the > arrow button in the toolbar, advancing the timelapse by one frame.
+    Past assignments can be be altered by pressing the LEFT arrow key, or the <
+    arrow button in the toolbar, which moves the timelapse back one frame,
+    permitting reassignment.
+    This alteration method however only works within a single cell (i.e. not
+    across division events).
+
+    The tick toolbar button results in the automatic acceptance of the cell
+    assignments, including all "growth" events and all division events for the
+    cell and all its ancestors.
+
+    The cross button results in the discarding of all assignments and the
+    closing of the assignment interface."""
+    def __init__(self, parent_window, fig_dimensions, experiment_data,
+                 image_loader):
+        self.current_channel = None
+        width, height, dpi, subplots = fig_dimensions
         fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
         self.axes = []
         self.offsets = []
-        for sp in range(subplots):
-            ax = fig.add_subplot(1, subplots, sp + 1)
-            # ax.axis("off")
-            ax.set_xticks([], [])
-            ax.set_yticks([], [])
-            ax.set_aspect("equal")
-            ax.autoscale("off")
-            self.axes.append(ax)
+        for sp_idx in range(subplots):
+            axis = fig.add_subplot(1, subplots, sp_idx + 1)
+            # axis.axis("off")
+            axis.set_xticks([], [])
+            axis.set_yticks([], [])
+            axis.set_aspect("equal")
+            axis.autoscale("off")
+            self.axes.append(axis)
             self.offsets.append((0, 0, 0, 0))  # top, right, bottom, left (like CSS)
 
         FigureCanvas.__init__(self, fig)
@@ -99,9 +175,93 @@ class Plotter(FigureCanvas):
         self.image_loader = image_loader
         fig.tight_layout()
 
+    def set_channel(self, channel):
+        """Assign channel number to internal variable."""
+        self.current_channel = channel
+
 
 class Assigner:
-    def __init__(self, experiment_data, image_loader):
+    """Provides the assigner interface
+
+    The interface will display all potention "cells" and allow them to be
+    defined, and to be collected into lineages.
+
+    Each outline has the parameters `parent_id`, `child_id1`, and `child_id2`.
+    `parent_id` is not necessarily a "parent", since we are dealing with
+    outlines in single frames at a time.
+    Instead, the `parent_id` is defined as the `outline_id` of the outline in
+    the previous frame which is associated with each outline.
+    If division has occurred between the two frames, then the `parent_id` will
+    reflect true divison, otherwise it will reflect growth.
+
+    Similarly, `child_id1` does not imply that division occurs, it is populated
+    with the `outline_id` of the associated outline in the subsequent frame.
+    If `child_id1` is not defined, the lineage is terminated at that point.
+    If `child_id2` is not defined (but `child_id1` is), a "growth event" has
+    occurred.
+    If both parameters are defined, then true division has occurred.
+
+    Outlines from birth until division are defined as a "cell", which are
+    comprised of collections of outlines over multiple frames.
+
+    This class provides an interface to assemble/verify which outlines belong
+    to the same cell, and a method to define division events.
+
+    The interface is arranged as a series of "cards" vertically.
+    Each card represents a single cell.
+    From left to right, each card contains:
+    - A red/green bar signalling whether the cell has been verified.
+    - Two images with the prospective cell outlined at birth (or the first
+      frame in which it is observed) and the cell outlined at division or
+      loss.
+    - A control/information panel:
+        - A cross or tick image signalling the cell verification state
+        - The `cell_id` and whether it has been set to be wildtype
+        - Information about the cell e.g.:
+            "Unverified cell with 4 frames (F2 - F5), ending in loss"
+            "Verified cell with 40 frames (F10 - F49), ending in division"
+          I believe these are self-explanatory.
+        - The buttons <Assign Cell Lineage>, <Export movie>, <Change channel>,
+          <Set/Unset wildtype>; see below.
+
+    ___Control buttons___
+    __Assign Cell Lineage__
+    This button launches the assignment interface in a dialog window.
+    See the `Plotter` class for information about the interface.
+
+    __Export movie__
+    This button allows movies to be generated.
+    A popup interface allows parameters to be selected:
+        - <Include descendants>: a movie rooted from the selected cell will be
+            generated, including all its descendants.
+        - <Include outlines>: cell outlines will be drawn in the movie.
+        - <Include frame numbers>: frame numbers will be annotated.
+        - <Include scale bar>: a 10 µm scale bar will be annotated.
+        - <Include all channels>: if selected, the movie will display up to
+            three panels with brightfield, and two fluorescent channels
+            displayed. If not selected, only brightfield will be exported.
+
+    Data will be exported as a series of PNG files for each frame, into the
+    directory data/movies/<experiment_id>/<cell_id>.
+
+    True movies can be subsequently generated from these files with third-party
+    software, e.g. ImageJ.
+
+    __Change channel__
+    This button allows cycling through each channel in the left-hand images,
+    for example to determine quickly whether a cell is wildtype.
+
+    __Set/Unset wildtype__
+    Toggles the wildtype status of a cell (and all its descendants).
+    This information may be useful for subsequent analysis.
+    This button is only displayed when a cell has been verified (green bar and
+    tick mark).
+    """
+    # pylint: disable=too-many-instance-attributes
+    # not sure how to get fewer attributes for functionality really
+    # pylint: disable=no-member
+    # apparently database.py can't be introspected properly
+    def __init__(self, experiment_data, image_loader, screen_dimensions):
         self.experiment_data = experiment_data
         self.image_loader = image_loader
         self.region_halfwidth = 75
@@ -110,28 +270,35 @@ class Assigner:
         if not database.checkTable("cells"):
             database.createCellsTable()
 
-    def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
-        self.max_width_px = max_width_px
-        self.max_height_px = max_height_px
-        self.screen_dpi = screen_dpi
+        self.max_width_px = screen_dimensions[0]
+        self.max_height_px = screen_dimensions[1]
+        self.screen_dpi = screen_dimensions[2]
 
-    def _px_to_in(self, px):
-        return px / self.screen_dpi
+        self.outlines = pd.DataFrame()
+        self.parent_window = None
+        self.window = None
+        self.temp_window = None
+        self.main_layout = None
+        self.plot = None
+        self.status_bar = None
+        self.lineage_scroll_area = None
+        self.lineage = []
+        self.selected_outlines = []
+        self.assignment_queue = []
+
+    def _px_to_in(self, num_pixels):
+        return num_pixels / self.screen_dpi
 
     def get_outlines(self):
         outlines = database.getOutlinesByExperimentId(self.experiment_data.experiment_id)
         self.outlines = pd.DataFrame(outlines)
 
     def start_assigning(self, parent_window):
-        if not hasattr(self, "max_width_px"):
-            raise ValueError("Screen resolution has not been set")
-
         self.parent_window = parent_window
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
         self.window.setGeometry(0, 60, self.max_width_px * 0.5, self.max_height_px * 0.9)
         self.window.setWindowTitle("Assign/Verify cell lineages")
-        self.assignment_queue = []
 
         self.main_layout = QtWidgets.QVBoxLayout()
 
@@ -146,9 +313,12 @@ class Assigner:
 
         self.plot = Plotter(
             self.window,
-            width=self._px_to_in(self.max_width_px * 0.5),
-            height=self._px_to_in((self.max_width_px * 0.5) / 3),
-            dpi=self.screen_dpi,
+            fig_dimensions=(
+                self._px_to_in(self.max_width_px * 0.5),
+                self._px_to_in((self.max_width_px * 0.5) / 3),
+                self.screen_dpi,
+                3,
+            ),
             experiment_data=self.experiment_data,
             image_loader=self.image_loader,
         )
@@ -180,17 +350,17 @@ class Assigner:
     def get_offsets(self, centre):
         offset_left = int(round(centre[0] - self.region_halfwidth))
         offset_top = int(round(centre[1] - self.region_halfheight))
-        im = self.image_loader.load_frame(0)
+        img = self.image_loader.load_frame(0)
         if offset_left < 0:
             offset_left = 0
-        elif offset_left >= im.shape[0] - (self.region_halfwidth * 2):
-            offset_left = im.shape[0] - (self.region_halfwidth * 2)
+        elif offset_left >= img.shape[0] - (self.region_halfwidth * 2):
+            offset_left = img.shape[0] - (self.region_halfwidth * 2)
 
         if offset_top < 0:
             offset_top = 0
-        elif offset_top >= im.shape[1] - (self.region_halfheight * 2):
-            offset_top = im.shape[1] - (self.region_halfheight * 2)
-        del im
+        elif offset_top >= img.shape[1] - (self.region_halfheight * 2):
+            offset_top = img.shape[1] - (self.region_halfheight * 2)
+        del img
 
         return offset_left, offset_top
 
@@ -206,150 +376,175 @@ class Assigner:
             zip(unique_cells, verification),
             key=lambda x: bool(x[1]),
         )
-        for cell_num, (cell_id, verified_cell) in enumerate(unique_cells):
-            cell_box = QtWidgets.QWidget()
-            # create proper lineage
-            cell_outlines = self.outlines[
-                self.outlines.cell_id == cell_id
-            ].sort_values("frame_idx")
-
-            plot_layout = QtWidgets.QHBoxLayout()
-
-            spacer_l = QtWidgets.QHBoxLayout()
-            spacer = QtWidgets.QWidget()
-            if verified_cell:
-                spacer.setStyleSheet("background-color:green")
-            else:
-                spacer.setStyleSheet("background-color:red")
-            spacer.setMaximumWidth(5)
-            spacer_l.addWidget(spacer)
-            plot_layout.addLayout(spacer_l)
-
-            # only take the first and last frames
-            cell_plots = []
-            for outline_num in [0, -1]:
-                outline = cell_outlines.iloc[outline_num]
-                width = self.max_width_px * 0.1
-                cell_plot = Plotter(
-                    self.window,
-                    width=self._px_to_in(width),
-                    height=self._px_to_in(width),
-                    dpi=self.screen_dpi,
-                    experiment_data=self.experiment_data,
-                    image_loader=self.image_loader,
-                    subplots=1
-                )
-                cell_plot.setMinimumWidth(width)
-                cell_plot.setMaximumWidth(width)
-                cell_plot.setMinimumHeight(width)
-                centre = outline.centre_y, outline.centre_x
-                outline.offset_left, outline.offset_top = self.get_offsets(centre)
-                roi = self.image_loader.load_frame(outline.frame_idx, 0)[
-                    outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
-                    outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
-                ]
-                cell_plot.axes[0].imshow(roi, cmap="gray")
-                cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
-                c = np.load(outline.coords_path) - np.array(
-                    [outline.offset_left, outline.offset_top]
-                )
-                outline_poly = matplotlib.patches.Polygon(
-                    np.array([c[:, 1], c[:, 0]]).T,
-                    edgecolor="r",
-                    fill=False,
-                    lw=1
-                )
-                cell_plot.axes[0].add_patch(outline_poly)
-                cell_plot.current_channel = 0
-                cell_plots.append(cell_plot)
-                plot_layout.addWidget(cell_plot)
-
-            control_layout = QtWidgets.QVBoxLayout()
-            control_layout.setAlignment(QtCore.Qt.AlignTop)
-            info_layout = QtWidgets.QHBoxLayout()
-            if verified_cell:
-                pixmap = QtGui.QPixmap("resources/tick.png")
-                if verified_cell.is_wildtype:
-                    wildtype = True
-                    wildtype_btn = QtWidgets.QPushButton("Unset wildtype")
-                    desc_str = "Wildtype cell {0}".format(cell_id)
-                else:
-                    wildtype = False
-                    wildtype_btn = QtWidgets.QPushButton("Set wildtype")
-                    desc_str = "Cell {0}".format(cell_id)
-            else:
-                pixmap = QtGui.QPixmap("resources/cross.png")
-                wildtype = False
-                wildtype_btn = None
-                desc_str = "Cell {0}".format(cell_id)
-
-            verification_sign = pixmap.scaledToWidth(20)
-            verification_label = QtWidgets.QLabel()
-            verification_label.setPixmap(verification_sign)
-            info_layout.addWidget(verification_label)
-
-            desc_label = QtWidgets.QLabel(desc_str)
-            info_layout.addWidget(desc_label)
-            control_layout.addLayout(info_layout)
-
-            row1 = QtWidgets.QHBoxLayout()
-            verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
-            verify_btn._cell_id = cell_id
-            verify_btn.clicked.connect(self.assign_lineage)
-            row1.addWidget(verify_btn)
-            export_btn = QtWidgets.QPushButton("Export movie")
-            export_btn._cell_id = cell_id
-            export_btn.clicked.connect(self.export_movie)
-            row1.addWidget(export_btn)
-            control_layout.addLayout(row1)
-
-            if wildtype_btn:
-                row2 = QtWidgets.QHBoxLayout()
-                switch_channel = QtWidgets.QPushButton("Change channel")
-                switch_channel._cell_id = cell_id
-                switch_channel._cell_plots = cell_plots
-                switch_channel.clicked.connect(self.switch_channel)
-                row2.addWidget(switch_channel)
-                wildtype_btn._cell_id = cell_id
-                wildtype_btn.clicked.connect(self.toggle_wildtype)
-                row2.addWidget(wildtype_btn)
-                control_layout.addLayout(row2)
-
-            details_label = QtWidgets.QLabel(
-                "{0} cell with {1} frames (F{2} - F{3}), ending in {4}".format(
-                    verified_cell and "Verified" or "Unverified",
-                    cell_outlines.iloc[-1].frame_idx + 1 - cell_outlines.iloc[0].frame_idx,
-                    cell_outlines.iloc[0].frame_idx + 1,
-                    cell_outlines.iloc[-1].frame_idx + 1,
-                    cell_outlines.iloc[-1].child_id1 and "division" or "loss",
-                )
+        for cell_id, verified_cell in unique_cells:
+            lineage_layout.addWidget(
+                self.create_cell_box(cell_id, verified_cell)
             )
-            control_layout.addWidget(details_label)
-
-            plot_layout.addLayout(control_layout)
-            cell_box.setLayout(plot_layout)
-            lineage_layout.addWidget(cell_box)
 
         lineage_widget = QtWidgets.QWidget()
         lineage_widget.setMinimumWidth(self.max_width_px * 0.5 - 50)
         lineage_widget.setLayout(lineage_layout)
-        replace = hasattr(self, "lineage_scroll_area")
-        if not replace:
+
+        if self.lineage_scroll_area is None:
             self.lineage_scroll_area = QtWidgets.QScrollArea()
             self.lineage_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
         self.lineage_scroll_area.setWidget(lineage_widget)
+        self.main_layout.addWidget(self.lineage_scroll_area)
 
-        if not replace:
-            self.main_layout.addWidget(self.lineage_scroll_area)
+    def create_cell_box(self, cell_id, verified_cell):
+        cell_box = QtWidgets.QWidget()
+        # create proper lineage
+        cell_outlines = self.outlines[
+            self.outlines.cell_id == cell_id
+        ].sort_values("frame_idx")
+
+        plot_layout = QtWidgets.QHBoxLayout()
+        spacer = QtWidgets.QWidget()
+        if verified_cell:
+            spacer.setStyleSheet("background-color:green")
+        else:
+            spacer.setStyleSheet("background-color:red")
+        spacer.setMaximumWidth(5)
+        plot_layout.addWidget(spacer)
+
+        # only take the first and last frames
+        cell_plot1 = self.create_cell_plot(cell_outlines.iloc[0])
+        cell_plot2 = self.create_cell_plot(cell_outlines.iloc[-1])
+        plot_layout.addWidget(cell_plot1)
+        plot_layout.addWidget(cell_plot2)
+
+        control_layout = self.create_control_layout(
+            cell_outlines,
+            cell_id,
+            verified_cell,
+            [cell_plot1, cell_plot2],
+        )
+        plot_layout.addLayout(control_layout)
+        cell_box.setLayout(plot_layout)
+        return cell_box
+
+    def create_cell_plot(self, outline):
+        width = self.max_width_px * 0.1
+        cell_plot = Plotter(
+            self.window,
+            fig_dimensions=(
+                self._px_to_in(width),
+                self._px_to_in(width),
+                self.screen_dpi,
+                1,
+            ),
+            experiment_data=self.experiment_data,
+            image_loader=self.image_loader,
+        )
+        cell_plot.setMinimumWidth(width)
+        cell_plot.setMaximumWidth(width)
+        cell_plot.setMinimumHeight(width)
+        centre = outline.centre_y, outline.centre_x
+        outline.offset_left, outline.offset_top = self.get_offsets(centre)
+        roi = self.image_loader.load_frame(outline.frame_idx, 0)[
+            outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
+            outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
+        ]
+        cell_plot.axes[0].imshow(roi, cmap="gray")
+        cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
+        coords = np.load(outline.coords_path) - np.array(
+            [outline.offset_left, outline.offset_top]
+        )
+        outline_poly = matplotlib.patches.Polygon(
+            np.array([coords[:, 1], coords[:, 0]]).T,
+            edgecolor="r",
+            fill=False,
+            lw=1
+        )
+        cell_plot.axes[0].add_patch(outline_poly)
+        cell_plot.set_channel(0)  # current_channel = 0
+        return cell_plot
+
+    def create_control_layout(self, cell_outlines, cell_id,
+                              verified_cell, cell_plots):
+        control_layout = QtWidgets.QVBoxLayout()
+        control_layout.setAlignment(QtCore.Qt.AlignTop)
+        info_layout = self.create_info_layout(cell_id, verified_cell)
+        control_layout.addLayout(info_layout)
+
+        button_layouts = self.create_control_button_layouts(
+            cell_id, verified_cell, cell_plots
+        )
+        for layout in button_layouts:
+            control_layout.addLayout(layout)
+
+        control_layout.addWidget(QtWidgets.QLabel(
+            "{0} cell with {1} frames (F{2} - F{3}), ending in {4}".format(
+                verified_cell and "Verified" or "Unverified",
+                cell_outlines.iloc[-1].frame_idx + 1 - cell_outlines.iloc[0].frame_idx,
+                cell_outlines.iloc[0].frame_idx + 1,
+                cell_outlines.iloc[-1].frame_idx + 1,
+                cell_outlines.iloc[-1].child_id1 and "division" or "loss",
+            )
+        ))
+        return control_layout
+
+    @staticmethod
+    def create_info_layout(cell_id, verified_cell):
+        info_layout = QtWidgets.QHBoxLayout()
+        if verified_cell:
+            pixmap = QtGui.QPixmap("resources/tick.png").scaledToWidth(20)
+            if verified_cell.is_wildtype:
+                desc_str = "Wildtype cell {0}".format(cell_id)
+            else:
+                desc_str = "Cell {0}".format(cell_id)
+        else:
+            pixmap = QtGui.QPixmap("resources/cross.png").scaledToWidth(20)
+            desc_str = "Cell {0}".format(cell_id)
+
+        verification_label = QtWidgets.QLabel()
+        verification_label.setPixmap(pixmap)
+        info_layout.addWidget(verification_label)
+
+        info_layout.addWidget(QtWidgets.QLabel(desc_str))
+        return info_layout
+
+    def create_control_button_layouts(self, cell_id, verified_cell,
+                                      cell_plots):
+        row1 = QtWidgets.QHBoxLayout()
+        verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
+        verify_btn.cell_id = cell_id
+        verify_btn.clicked.connect(self.assign_lineage)
+        row1.addWidget(verify_btn)
+        export_btn = QtWidgets.QPushButton("Export movie")
+        export_btn.cell_id = cell_id
+        export_btn.clicked.connect(self.export_movie)
+        row1.addWidget(export_btn)
+
+        if verified_cell:
+            row2 = QtWidgets.QHBoxLayout()
+            switch_channel = QtWidgets.QPushButton("Change channel")
+            switch_channel.cell_id = cell_id
+            switch_channel.cell_plots = cell_plots
+            switch_channel.clicked.connect(self.switch_channel)
+            row2.addWidget(switch_channel)
+
+            if verified_cell.is_wildtype:
+                wildtype_btn = QtWidgets.QPushButton("Unset wildtype")
+            else:
+                wildtype_btn = QtWidgets.QPushButton("Set wildtype")
+
+            wildtype_btn.cell_id = cell_id
+            wildtype_btn.clicked.connect(self.toggle_wildtype)
+            row2.addWidget(wildtype_btn)
+            return [row1, row2]
+
+        return [row1]
+
 
     def _clear_assignment_plot(self):
-        for ax in self.plot.axes:
-            ax.clear()
-            ax.set_xticks([], [])
-            ax.set_yticks([], [])
-            ax.set_aspect("equal")
-            ax.autoscale("off")
+        for axis in self.plot.axes:
+            axis.clear()
+            axis.set_xticks([], [])
+            axis.set_yticks([], [])
+            axis.set_aspect("equal")
+            axis.autoscale("off")
 
     def exit_assignment(self):
         self.create_layout()
@@ -370,8 +565,8 @@ class Assigner:
             cell_ids.extend(self.get_child_ids(this_cell.child_cell_id2))
         return cell_ids
 
-    def toggle_wildtype(self, click=False):
-        cell_id = self.window.sender()._cell_id
+    def toggle_wildtype(self):
+        cell_id = self.window.sender().cell_id
         this_cell = database.getCellById(cell_id)
         if this_cell:
             setting = not this_cell.is_wildtype
@@ -384,18 +579,18 @@ class Assigner:
                 database.updateCellById(child_id, is_wildtype=setting)
             self.create_layout()
 
-    def switch_channel(self, click=False):
+    def switch_channel(self):
         cell_outlines = self.outlines[
-            self.outlines.cell_id == self.window.sender()._cell_id
+            self.outlines.cell_id == self.window.sender().cell_id
         ].sort_values("frame_idx")
-        cell_plots = self.window.sender()._cell_plots
+        cell_plots = self.window.sender().cell_plots
         for plot, outline in zip(
             cell_plots,
             [cell_outlines.iloc[0], cell_outlines.iloc[-1]]
         ):
-            plot.current_channel += 1
+            plot.set_channel(plot.current_channel + 1)
             if plot.current_channel == self.image_loader.num_channels:
-                plot.current_channel = 0
+                plot.set_channel(0)
 
             roi = self.image_loader.load_frame(outline.frame_idx, plot.current_channel)[
                 outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
@@ -416,8 +611,8 @@ class Assigner:
 
             plot.draw()
 
-    def export_movie(self, click=False):
-        cell_id = self.window.sender()._cell_id
+    def export_movie(self):
+        cell_id = self.window.sender().cell_id
         settings = QtWidgets.QDialog(self.window)
         settings.setModal(True)
         settings.setWindowTitle("Cell lineage exporter")
@@ -460,7 +655,7 @@ class Assigner:
                 "image_loader": self.image_loader,
                 "screen_dpi": self.screen_dpi,
             }
-            m = movie_generator.MovieMaker(**settings)
+            movie_generator.MovieMaker(**settings)
 
         button_layout = QtWidgets.QHBoxLayout()
         submit = QtWidgets.QPushButton("Generate")
@@ -472,13 +667,17 @@ class Assigner:
         settings.setLayout(layout)
         settings.show()
 
-    def assign_lineage(self, click=False, outline_id=None):
+    def assign_lineage(self, outline_id=None):
         self.lineage_scroll_area.hide()
         self.get_outlines()
         if not outline_id:
-            potential_outlines = self.outlines[self.outlines.cell_id == self.window.sender()._cell_id]
+            potential_outlines = self.outlines[
+                (self.outlines.cell_id == self.window.sender().cell_id)
+            ]
         else:
-            potential_outlines = self.outlines[self.outlines.outline_id == outline_id]
+            potential_outlines = self.outlines[
+                (self.outlines.outline_id == outline_id)
+            ]
 
         self.lineage = [potential_outlines[
             potential_outlines.frame_idx == potential_outlines.frame_idx.min()
@@ -498,20 +697,35 @@ class Assigner:
         self.plot.axes[1].set_title("Frame {0}".format(first_outline.frame_idx + 1))
         self.plot.axes[2].set_title("Frame {0}".format(first_outline.frame_idx + 2))
 
-        im1 = self.image_loader.load_frame(first_outline.frame_idx, 0)
-        first_offset_left, first_offset_top = self.get_offsets((
-            first_outline.centre_y,
-            first_outline.centre_x,
-        ))
-
-        # y0, x1, y1, x0
-        self.plot.offsets[1] = (
-            first_offset_top,
-            first_offset_left + self.region_halfwidth * 2,
-            first_offset_top + self.region_halfheight * 2,
-            first_offset_left,
+        self.display_frame_centre(first_outline)
+        self.display_frame_right(first_outline)
+        self.display_frame_left(first_outline)
+        status_message = "Defining cell lineage {0}: frame {1} ".format(
+            self.lineage[0].cell_id,
+            first_outline.frame_idx + 1,
         )
-        self.plot.axes[1].imshow(im1, cmap="gray")
+        if len(self.selected_outlines) == 1:
+            status_message += "[Press ENTER to move to the next frame]"
+        elif len(self.selected_outlines) == 2:
+            status_message += "[Press ENTER to denote division]"
+
+        self.status_bar.showMessage(status_message)
+        self.plot.draw()
+
+    def display_frame_centre(self, outline):
+        # y0, x1, y1, x0
+        img = self.image_loader.load_frame(outline.frame_idx, 0)
+        offset_left, offset_top = self.get_offsets((
+            outline.centre_y,
+            outline.centre_x,
+        ))
+        self.plot.offsets[1] = (
+            offset_top,
+            offset_left + self.region_halfwidth * 2,
+            offset_top + self.region_halfheight * 2,
+            offset_left,
+        )
+        self.plot.axes[1].imshow(img, cmap="gray")
         self.plot.axes[1].set_xlim([
             self.plot.offsets[1][0],
             self.plot.offsets[1][2],
@@ -520,18 +734,19 @@ class Assigner:
             self.plot.offsets[1][1],
             self.plot.offsets[1][3],
         ])
-        c = np.load(first_outline.coords_path)
-        p = matplotlib.patches.Polygon(
-            np.array([c[:, 1], c[:, 0]]).T,
+        coords = np.load(outline.coords_path)
+        outline_poly = matplotlib.patches.Polygon(
+            np.array([coords[:, 1], coords[:, 0]]).T,
             edgecolor="r",
             fill=False,
             lw=1
         )
-        self.plot.axes[1].add_patch(p)
+        self.plot.axes[1].add_patch(outline_poly)
 
-        if first_outline.child_id1 is not None:
+    def display_frame_right(self, current_outline):
+        if current_outline.child_id1 is not None:
             selected_outline = self.outlines[
-                self.outlines.outline_id == first_outline.child_id1
+                self.outlines.outline_id == current_outline.child_id1
             ].iloc[0]
             self.selected_outlines.append(selected_outline)
             fidx = selected_outline.frame_idx
@@ -539,11 +754,11 @@ class Assigner:
                 selected_outline.centre_y,
                 selected_outline.centre_x,
             ))
-            print("offl:", offl, "offt:", offt)
 
-            if first_outline.child_id2 is not None and first_outline.child_id1 != first_outline.child_id2:
+            if (current_outline.child_id2 is not None and
+                    current_outline.child_id1 != current_outline.child_id2):
                 selected_outline = self.outlines[
-                    self.outlines.outline_id == first_outline.child_id2
+                    self.outlines.outline_id == current_outline.child_id2
                 ].iloc[0]
                 self.selected_outlines.append(selected_outline)
                 offl2, offt2 = self.get_offsets((
@@ -553,19 +768,19 @@ class Assigner:
                 offt = (offt + offt2) / 2
                 offl = (offl + offl2) / 2
 
-            im2 = self.image_loader.load_frame(fidx, 0)
+            img = self.image_loader.load_frame(fidx, 0)
 
-        elif first_outline.frame_idx + 1 < self.image_loader.num_frames:
-            fidx = first_outline.frame_idx + 1
-            offl, offt = first_offset_left, first_offset_top
-            im2 = self.image_loader.load_frame(fidx, 0)
+        elif current_outline.frame_idx + 1 < self.image_loader.num_frames:
+            fidx = current_outline.frame_idx + 1
+            offl, offt = self.plot.offsets[1][3], self.plot.offsets[1][0]
+            img = self.image_loader.load_frame(fidx, 0)
         else:
-            fidx = first_outline.frame_idx + 1
-            im2 = np.zeros((self.region_halfwidth * 2, self.region_halfheight * 2))
+            fidx = current_outline.frame_idx + 1
+            img = np.zeros((self.region_halfwidth * 2, self.region_halfheight * 2))
             offt = 0
             offl = 0
 
-        self.plot.axes[2].imshow(im2, cmap="gray")
+        self.plot.axes[2].imshow(img, cmap="gray")
         self.plot.offsets[2] = (
             offt,
             offl + (self.region_halfwidth * 2),
@@ -580,70 +795,76 @@ class Assigner:
         ])
 
         for outline in database.getOutlinesByFrameIdx(fidx, self.experiment_data.experiment_id):
-            c = np.load(outline.coords_path)
+            coords = np.load(outline.coords_path)
             kws = dict(
                 edgecolor="k",
                 lw=1,
                 alpha=0.9,
                 picker=True,
             )
-            if (len(self.selected_outlines) > 0 and
-                outline.outline_id in [x.outline_id
-                                       for x in self.selected_outlines]):
-                p = matplotlib.patches.Polygon(
-                    np.array([c[:, 1], c[:, 0]]).T,
+            if (self.selected_outlines and
+                    outline.outline_id in [
+                        x.outline_id
+                        for x in self.selected_outlines
+                    ]):
+                outline_poly = matplotlib.patches.Polygon(
+                    np.array([coords[:, 1], coords[:, 0]]).T,
                     facecolor="g",
                     **kws
                 )
-                p.selected = True
+                outline_poly.selected = True
             else:
-                p = matplotlib.patches.Polygon(
-                    np.array([c[:, 1], c[:, 0]]).T,
+                outline_poly = matplotlib.patches.Polygon(
+                    np.array([coords[:, 1], coords[:, 0]]).T,
                     facecolor="y",
                     **kws
                 )
-                p.selected = False
+                outline_poly.selected = False
 
-            p.outline_id = outline.outline_id
-            self.plot.axes[2].add_patch(p)
+            outline_poly.outline_id = outline.outline_id
+            self.plot.axes[2].add_patch(outline_poly)
 
-        if first_outline.parent_id:
-            prev_outline = database.getOutlineById(first_outline.parent_id)
-            prev_offset_left, prev_offset_top = self.get_offsets((
-                prev_outline.centre_y,
-                prev_outline.centre_x,
+    def display_frame_left(self, current_outline):
+        if current_outline.parent_id:
+            outline = database.getOutlineById(current_outline.parent_id)
+            offset_left, offset_top = self.get_offsets((
+                outline.centre_y,
+                outline.centre_x,
             ))
-            im3 = self.image_loader.load_frame(prev_outline.frame_idx, 0)
-            self.plot.axes[0].imshow(im3, cmap="gray")
+            img = self.image_loader.load_frame(outline.frame_idx, 0)
+            self.plot.axes[0].imshow(img, cmap="gray")
             self.plot.offsets[0] = (
-                prev_offset_top,
-                prev_offset_left + self.region_halfwidth * 2,
-                prev_offset_top + self.region_halfheight * 2,
-                prev_offset_left,
+                offset_top,
+                offset_left + self.region_halfwidth * 2,
+                offset_top + self.region_halfheight * 2,
+                offset_left,
             )
-            c = np.load(prev_outline.coords_path)
-            p = matplotlib.patches.Polygon(
-                np.array([c[:, 1], c[:, 0]]).T,
+            coords = np.load(outline.coords_path)
+            outline_poly = matplotlib.patches.Polygon(
+                np.array([coords[:, 1], coords[:, 0]]).T,
                 edgecolor="y",
                 linestyle="--",
                 fill=False,
                 lw=1
             )
-            self.plot.axes[0].add_patch(p)
+            self.plot.axes[0].add_patch(outline_poly)
 
-        elif first_outline.frame_idx - 1 >= 0:
-            im3 = self.image_loader.load_frame(first_outline.frame_idx - 1, 0)
-            self.plot.axes[0].imshow(im3, cmap="gray")
-            self.plot.offsets[0] = (
-                first_offset_top,
-                first_offset_left + self.region_halfwidth * 2,
-                first_offset_top + self.region_halfheight * 2,
-                first_offset_top,
-            )
+        elif current_outline.frame_idx - 1 >= 0:
+            img = self.image_loader.load_frame(current_outline.frame_idx - 1, 0)
+            self.plot.axes[0].imshow(img, cmap="gray")
+            self.plot.offsets[0] = self.plot.offsets[1]
         else:
-            prev_outline = None
-            im3 = np.zeros((self.region_halfwidth * 2, self.region_halfheight * 2))
-            self.plot.axes[0].imshow(im3, cmap="gray")
+            outline = None
+            img = np.zeros((
+                self.region_halfwidth * 2 + 2,
+                self.region_halfheight * 2 + 2
+            ))
+            self.plot.axes[0].imshow(img, cmap="gray")
+            self.plot.offsets[0] = (
+                1, self.region_halfwidth * 2 + 1,
+                self.region_halfwidth * 2 + 1,
+                1,
+            )
 
         self.plot.axes[0].set_xlim([
             self.plot.offsets[0][0],
@@ -653,18 +874,6 @@ class Assigner:
             self.plot.offsets[0][1],
             self.plot.offsets[0][3]
         ])
-
-        status_message = "Defining cell lineage {0}: frame {1} ".format(
-            self.lineage[0].cell_id,
-            first_outline.frame_idx + 1,
-        )
-        if len(self.selected_outlines) == 1:
-            status_message += "[Press ENTER to move to the next frame]"
-        elif len(self.selected_outlines) == 2:
-            status_message += "[Press ENTER to denote division]"
-
-        self.status_bar.showMessage(status_message)
-        self.plot.draw()
 
     def key_press_event(self, evt):
         if evt.key == "enter" or evt.key == "right":
@@ -721,7 +930,8 @@ class Assigner:
 
         self.exit_assignment()
 
-    def get_cell_area(self, coords):
+    @staticmethod
+    def get_cell_area(coords):
         area = np.dot(
             coords[:, 0],
             np.roll(coords[:, 1], 1)
@@ -732,7 +942,7 @@ class Assigner:
         return area
 
     def previous_frame(self):
-        if (hasattr(self, "lineage") and len(self.lineage) <= 1):
+        if not self.lineage:
             return
 
         self.lineage.pop()
@@ -740,7 +950,7 @@ class Assigner:
         self.plot.setFocus()
 
     def next_frame(self):
-        if (hasattr(self, "lineage") and len(self.lineage) == 0) or not hasattr(self, "selected_outlines"):
+        if not self.lineage or not self.selected_outlines:
             return
 
         if len(self.selected_outlines) == 1:
@@ -755,7 +965,8 @@ class Assigner:
                 confirm = QtWidgets.QMessageBox().question(
                     self.window,
                     "Confirm assignment",
-                    ("The outline you have selected causes a greater than 70% change in cell area.\n"
+                    ("The outline you have selected causes a greater than 70% "
+                     "change in cell area.\n"
                      "Are you sure you wish to assign it to the same cell?"),
                     QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
                     QtWidgets.QMessageBox.No,
@@ -796,8 +1007,8 @@ class Assigner:
             ].iloc[0]
             self.selected_outlines.append(selected_outline)
         else:
-            for i, x in enumerate(self.selected_outlines):
-                if x.outline_id == evt.artist.outline_id:
+            for i, outline in enumerate(self.selected_outlines):
+                if outline.outline_id == evt.artist.outline_id:
                     self.selected_outlines.pop(i)
                     break
 
@@ -818,50 +1029,59 @@ class Assigner:
         self.status_bar.showMessage(status_message)
         self.plot.draw()
 
-    def write_lineage(self, selected_outlines=None):
-        self.status_bar.showMessage("Writing lineage, please wait...")
-        if selected_outlines is None:
-            if len(self.selected_outlines) == 0:
-                death_confirm = QtWidgets.QMessageBox().question(
-                    self.window,
-                    "Confirm end of cell lineage",
-                    "Are you sure this lineage ends here?",
-                    QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
-                    QtWidgets.QMessageBox.No,
-                )
-                if death_confirm == QtWidgets.QMessageBox.No:
-                    status_message = "Defining cell lineage {0}: frame {1} ".format(
-                        self.lineage[0].cell_id,
-                        self.lineage[-1].frame_idx + 1,
-                    )
-                    self.status_bar.showMessage(status_message)
-                    return False
+    def determine_state(self, selected_outlines):
+        if selected_outlines is not None:
+            self.selected_outlines = selected_outlines
+            return True
 
-            elif len(self.selected_outlines) == 2:
-                div_confirm = QtWidgets.QMessageBox().question(
-                    self.window,
-                    "Confirm cell division",
-                    "Are you sure this cell divides?\nThere is no going back if you say yes...",
-                    QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
-                    QtWidgets.QMessageBox.No,
+        if not self.selected_outlines:
+            death_confirm = QtWidgets.QMessageBox().question(
+                self.window,
+                "Confirm end of cell lineage",
+                "Are you sure this lineage ends here?",
+                QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+                QtWidgets.QMessageBox.No,
+            )
+            if death_confirm == QtWidgets.QMessageBox.No:
+                status_message = "Defining cell lineage {0}: frame {1} ".format(
+                    self.lineage[0].cell_id,
+                    self.lineage[-1].frame_idx + 1,
                 )
-                if div_confirm == QtWidgets.QMessageBox.No:
-                    status_message = "Defining cell lineage {0}: frame {1} ".format(
-                        self.lineage[0].cell_id,
-                        self.lineage[-1].frame_idx + 1,
-                    )
-                    self.status_bar.showMessage(status_message)
-                    return False
-
-            elif len(self.selected_outlines) != 2:
-                print("Trying to write with {0} selected outlines".format(
-                    len(self.selected_outlines)
-                ))
-                self.status_bar.showMessage("Something went wrong, more than 2 outlines were selected")
+                self.status_bar.showMessage(status_message)
                 return False
 
-        else:
-            self.selected_outlines = selected_outlines
+        elif len(self.selected_outlines) == 2:
+            div_confirm = QtWidgets.QMessageBox().question(
+                self.window,
+                "Confirm cell division",
+                "Are you sure this cell divides?\nThere is no going back if you say yes...",
+                QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Yes,
+                QtWidgets.QMessageBox.No,
+            )
+            if div_confirm == QtWidgets.QMessageBox.No:
+                status_message = "Defining cell lineage {0}: frame {1} ".format(
+                    self.lineage[0].cell_id,
+                    self.lineage[-1].frame_idx + 1,
+                )
+                self.status_bar.showMessage(status_message)
+                return False
+
+        elif len(self.selected_outlines) != 2:
+            print("Trying to write with {0} selected outlines".format(
+                len(self.selected_outlines)
+            ))
+            self.status_bar.showMessage(
+                "Something went wrong, more than  2 outlines were selected"
+            )
+            return False
+
+        return True
+
+    def write_lineage(self, selected_outlines=None):
+        self.status_bar.showMessage("Writing lineage, please wait...")
+        stop_condition = self.determine_state(selected_outlines)
+        if not stop_condition:
+            return False
 
         self.temp_window = QtWidgets.QDialog(self.window)
         self.temp_window.setGeometry(0, 0, self.max_width_px * 0.5, self.max_height_px * 0.9)
@@ -871,8 +1091,34 @@ class Assigner:
         self.temp_window.setLayout(temp_layout)
         self.temp_window.show()
 
-        self.status_bar.showMessage("Removing cell_id from extra outlines")
         cell_id = self.lineage[0].cell_id
+        self.clear_extra_outlines(cell_id)
+        rel_params = self.assign_relationships(cell_id)
+
+        kwargs = {
+            "cell_id": cell_id,
+            "experiment_id": self.lineage[0].experiment_id,
+            "start_frame_idx": int(self.lineage[0].frame_idx),
+            "end_frame_idx": int(self.lineage[-1].frame_idx),
+            "birth_observed": self.lineage[0].parent_id is not None,
+            "division_observed": len(self.selected_outlines) == 2,
+            "is_wildtype": rel_params["wildtype"],
+            "first_outline_id": self.lineage[0].outline_id,
+            "last_outline_id": self.lineage[-1].outline_id,
+            "parent_cell_id": rel_params["parent_cell_id"],
+            "child_cell_id1": rel_params["child_cell_id1"],
+            "child_cell_id2": rel_params["child_cell_id2"],
+        }
+        database.insertCell(**kwargs)
+        self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
+        self.temp_window.close()
+        self.temp_window.deleteLater()
+        self.temp_window = None
+        self.plot.setFocus()
+        return True
+
+    def clear_extra_outlines(self, cell_id):
+        self.status_bar.showMessage("Removing cell_id from extra outlines")
         for outline in self.lineage:
             database.updateOutlineById(
                 outline.outline_id,
@@ -880,47 +1126,23 @@ class Assigner:
             )
 
         existing_outlines = database.getOutlinesByCellId(cell_id)
-        if len(existing_outlines) > 0:
-            new_cell_id = str(uuid.uuid4())
+        if existing_outlines:
+            random_cell_id = str(uuid.uuid4())
+            for outline in existing_outlines:
+                database.updateOutlineById(
+                    outline.outline_id,
+                    cell_id=random_cell_id,
+                )
 
-        for outline in existing_outlines:
-            database.updateOutlineById(
-                outline.outline_id,
-                cell_id=new_cell_id,
-            )
-
+    def assign_relationships(self, cell_id):
         self.status_bar.showMessage("Assigning parents and children")
-        parent_replacements = []
-        child_replacements = []
-        for i, outline in enumerate(self.lineage):
-            if i == 0:
+        for outline_idx, outline in enumerate(self.lineage):
+            if outline_idx == 0:
                 parent_id = self.lineage[0].parent_id
             else:
-                parent_id = self.lineage[i - 1].outline_id
+                parent_id = self.lineage[outline_idx - 1].outline_id
 
-            if i < len(self.lineage) - 1:
-                child_id1 = self.lineage[i + 1].outline_id
-                child_id2 = ""
-                database.updateOutlineById(
-                    child_id1,
-                    parent_id=outline.outline_id,
-                )
-            else:
-                if len(self.selected_outlines) == 0:
-                    child_id1 = ""
-                    child_id2 = ""
-                else:
-                    child_id1 = self.selected_outlines[0].outline_id
-                    child_id2 = self.selected_outlines[1].outline_id
-                    database.updateOutlineById(
-                        child_id1,
-                        parent_id=outline.outline_id,
-                    )
-                    database.updateOutlineById(
-                        child_id2,
-                        parent_id=outline.outline_id,
-                    )
-
+            child_id1, child_id2 = self.get_children(outline_idx, outline)
             database.updateOutlineById(
                 outline.outline_id,
                 cell_id=cell_id,
@@ -939,7 +1161,7 @@ class Assigner:
                 self.lineage[0].parent_id
             ).cell_id
             parent_cell = database.getCellById(parent_cell_id)
-            wildtype = parent_cell and parent_cell.is_wildtype or False
+            wildtype = parent_cell.is_wildtype if parent_cell else False
 
         if len(self.selected_outlines) == 2:
             child_cell_id1 = database.getOutlineById(
@@ -953,24 +1175,34 @@ class Assigner:
         if existing:
             database.deleteCellById(cell_id)
 
-        kwargs = {
-            "cell_id": cell_id,
-            "experiment_id": self.lineage[0].experiment_id,
-            "start_frame_idx": int(self.lineage[0].frame_idx),
-            "end_frame_idx": int(self.lineage[-1].frame_idx),
-            "birth_observed": self.lineage[0].parent_id is not None,
-            "division_observed": len(self.selected_outlines) == 2,
-            "is_wildtype": wildtype,
-            "first_outline_id": self.lineage[0].outline_id,
-            "last_outline_id": self.lineage[-1].outline_id,
+        return {
+            "wildtype": wildtype,
             "parent_cell_id": parent_cell_id,
             "child_cell_id1": child_cell_id1,
             "child_cell_id2": child_cell_id2,
         }
-        database.insertCell(**kwargs)
-        self.status_bar.showMessage("Finished writing lineage {0}".format(cell_id))
-        self.temp_window.close()
-        self.temp_window.deleteLater()
-        self.temp_window = None
-        self.plot.setFocus()
-        return True
+
+    def get_children(self, outline_idx, outline):
+        if outline_idx < len(self.lineage) - 1:
+            child_id1 = self.lineage[outline_idx + 1].outline_id
+            child_id2 = ""
+            database.updateOutlineById(
+                child_id1,
+                parent_id=outline.outline_id,
+            )
+        elif not self.selected_outlines:
+            child_id1 = ""
+            child_id2 = ""
+        else:
+            child_id1 = self.selected_outlines[0].outline_id
+            child_id2 = self.selected_outlines[1].outline_id
+            database.updateOutlineById(
+                child_id1,
+                parent_id=outline.outline_id,
+            )
+            database.updateOutlineById(
+                child_id2,
+                parent_id=outline.outline_id,
+            )
+
+        return child_id1, child_id2
