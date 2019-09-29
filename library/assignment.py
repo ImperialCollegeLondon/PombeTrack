@@ -60,11 +60,7 @@ class Toolbar(NavigationToolbar):
         """Set axis limits to the default limits.
 
         Triggered when the home button is pressed in the toolbar."""
-        for axis, lims in zip(self.canvas.axes, self.canvas.offsets):
-            axis.set_xlim(lims[0], lims[2])
-            axis.set_ylim(lims[1], lims[3])
-
-        self.canvas.draw()
+        self.canvas.reset_limits()
 
     def previous_frame(self):
         """Change frame to previous frame on toolbar click.
@@ -93,6 +89,103 @@ class Toolbar(NavigationToolbar):
 
 
 class Plotter(FigureCanvas):
+    """Base class for simply constructing a matplotlib plot."""
+    def __init__(self, parent_window, fig_dimensions):
+        self.current_channel = None
+        width, height, dpi, subplots = fig_dimensions
+        fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
+        self.axes = []
+        self.offsets = []
+        for sp_idx in range(subplots):
+            axis = fig.add_subplot(1, subplots, sp_idx + 1)
+            # axis.axis("off")
+            axis.set_xticks([], [])
+            axis.set_yticks([], [])
+            axis.set_aspect("equal")
+            axis.autoscale("off")
+            self.axes.append(axis)
+            self.offsets.append((0, 0, 0, 0))  # top, right, bottom, left (like CSS)
+
+        FigureCanvas.__init__(self, fig)
+        self.setParent(parent_window)
+        self.parent = parent_window
+
+        FigureCanvas.setSizePolicy(
+            self,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding,
+        )
+        FigureCanvas.updateGeometry(self)
+
+        self.screen_dpi = dpi
+        fig.tight_layout()
+
+    def set_channel(self, channel):
+        """Assign channel number to internal variable."""
+        self.current_channel = channel
+
+    def display_image(self, img, sp_idx, title=None, limits=None, **im_kwargs):
+        """Display image in specified subplot.
+
+        Arguments:
+            img (NxM array):  matrix of image intensity values.
+            sp_idx (int):     subplot index to display the image in.
+            title (str):      optional title to set for the subplot.
+            limits (tuple):   (left, top, right, bottom) xy limits to display.
+            im_kwargs:        see `matplotlib.axes.Axes.imshow`.
+
+        Returns:
+            None
+        """
+        if len(self.axes) <= sp_idx:
+            raise KeyError("Non-existent subplot")
+
+        self.axes[sp_idx].imshow(img, **im_kwargs)
+        if title:
+            self.axes[sp_idx].set_title(title)
+
+        if limits:
+            self.axes[sp_idx].set_xlim([limits[0], limits[2]])
+            self.axes[sp_idx].set_ylim([limits[1], limits[3]])
+
+    def add_coords(self, coords, sp_idx, attr=None, **kwargs):
+        """Add an outline to a specified subplot.
+
+        Arguments:
+            coords (Nx2 array): matrix of coordinates (x, y).
+            sp_idx (int):       subplot index.
+            attr (dict):        any attributes to assign to the artist.
+            kwargs:             arguments for `matplotlib.patches.Polygon`.
+
+        Returns:
+            None
+
+        Polygon default settings:
+            red outline with a linewidth of 1 pixel, no fill
+        """
+        if len(self.axes) <= sp_idx:
+            raise KeyError("Non-existent subplot")
+
+        default_kwargs = dict(
+            edgecolor="r",
+            fill=False,
+            lw=1,
+        )
+        default_kwargs.update(kwargs)
+
+        outline_coords = np.array([coords[:, 1], coords[:, 0]]).T
+        outline_poly = matplotlib.patches.Polygon(
+            outline_coords,
+            **default_kwargs,
+        )
+        if attr:
+            for attribute, value in attr.items():
+                setattr(outline_poly, attribute, value)
+
+        self.axes[sp_idx].add_patch(outline_poly)
+
+
+class AssignerPlotter(Plotter):
     """Interface for assigning outlines to cells and constructing cell lineages.
 
     Interface creates three subplots representing consecutive frames of the
@@ -144,42 +237,85 @@ class Plotter(FigureCanvas):
     cell and all its ancestors.
 
     The cross button results in the discarding of all assignments and the
-    closing of the assignment interface."""
-    def __init__(self, parent_window, fig_dimensions, experiment_data,
-                 image_loader):
-        self.current_channel = None
-        width, height, dpi, subplots = fig_dimensions
-        fig = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi)
-        self.axes = []
-        self.offsets = []
-        for sp_idx in range(subplots):
-            axis = fig.add_subplot(1, subplots, sp_idx + 1)
-            # axis.axis("off")
+    closing of the assignment interface.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mpl_connect("key_press_event", self.key_press)
+        self.mpl_connect("pick_event", self.outline_pick)
+
+    def key_press(self, evt):
+        """Handle keyboard press event.
+
+        Keys:
+            enter: move to the next frame
+            right: move to the next frame
+            left: move to the previous frame
+        """
+        if evt.key == "enter" or evt.key == "right":
+            self.parent.trigger_next_frame()
+        elif evt.key == "left":
+            self.parent.trigger_previous_frame()
+
+    def outline_pick(self, evt):
+        """Handle pick events in the right-hand subplot during assignment.
+
+        A pick event is defined as the clicking of a filled polygon in the
+        right-hand subplot.
+        This triggers the toggling of the selection state of an outline, yellow
+        to green if selected, or green to yellow if deselected.
+        """
+        if not evt.artist.selected:
+            evt.artist.selected = True
+            evt.artist.set_facecolor("g")
+            self.parent.trigger_select(evt.artist.outline_id, True)
+        else:
+            evt.artist.selected = False
+            evt.artist.set_facecolor("y")
+            self.parent.trigger_select(evt.artist.outline_id, False)
+
+        self.draw()
+
+    def clear_plots(self):
+        """Remove all elements from all subplots."""
+        for axis in self.axes:
+            axis.clear()
             axis.set_xticks([], [])
             axis.set_yticks([], [])
             axis.set_aspect("equal")
             axis.autoscale("off")
-            self.axes.append(axis)
-            self.offsets.append((0, 0, 0, 0))  # top, right, bottom, left (like CSS)
 
-        FigureCanvas.__init__(self, fig)
-        self.setParent(parent_window)
+    def set_titles(self, left=None, centre=None, right=None):
+        """Add titles to each subplot.
 
-        FigureCanvas.setSizePolicy(
-            self,
-            QtWidgets.QSizePolicy.Expanding,
-            QtWidgets.QSizePolicy.Expanding,
-        )
-        FigureCanvas.updateGeometry(self)
+        Arguments:
+            left (str)
+            centre (str)
+            right (str)
 
-        self.screen_dpi = dpi
-        self._data = experiment_data
-        self.image_loader = image_loader
-        fig.tight_layout()
+        Returns:
+            None
 
-    def set_channel(self, channel):
-        """Assign channel number to internal variable."""
-        self.current_channel = channel
+        All three keyword arguments are optional, if left blank, no title will
+        be set.
+        """
+        if left:
+            self.axes[0].set_title(left)
+
+        if centre:
+            self.axes[1].set_title(centre)
+
+        if right:
+            self.axes[2].set_title(right)
+
+    def reset_limits(self):
+        """Set x and y limits for each subplot to their last setting."""
+        for axis, lims in zip(self.axes, self.offsets):
+            if lims:
+                axis.set_xlim(lims[0], lims[2])
+                axis.set_ylim(lims[1], lims[3])
+
+        self.draw()
 
 
 class Assigner:
@@ -322,7 +458,7 @@ class Assigner:
 
         self.create_layout()
 
-        self.plot = Plotter(
+        self.plot = AssignerPlotter(
             self.window,
             fig_dimensions=(
                 self._px_to_in(self.max_width_px * 0.5),
@@ -330,16 +466,13 @@ class Assigner:
                 self.screen_dpi,
                 3,
             ),
-            experiment_data=self.experiment_data,
-            image_loader=self.image_loader,
         )
-        self.plot.mpl_connect("key_press_event", self.key_press_event)
-        self.plot.mpl_connect("pick_event", self.pick_event)
 
         self.window.trigger_previous_frame = self.previous_frame
         self.window.trigger_next_frame = self.next_frame
         self.window.trigger_accept_all = self.accept_all
         self.window.trigger_cancel = self.cancel_assignment
+        self.window.trigger_select = self.select_outline
 
         self.window.toolbar = Toolbar(self.plot, self.window)
         tool_layout = QtWidgets.QVBoxLayout()
@@ -472,8 +605,6 @@ class Assigner:
                 self.screen_dpi,
                 1,
             ),
-            experiment_data=self.experiment_data,
-            image_loader=self.image_loader,
         )
         cell_plot.setMinimumWidth(width)
         cell_plot.setMaximumWidth(width)
@@ -484,18 +615,16 @@ class Assigner:
             outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
             outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
         ]
-        cell_plot.axes[0].imshow(roi, cmap="gray")
-        cell_plot.axes[0].set_title("F{0}".format(outline.frame_idx + 1))
+        cell_plot.display_image(
+            roi,
+            sp_idx=0,
+            title="F{0}".format(outline.frame_idx + 1),
+            cmap="gray"
+        )
         coords = np.load(outline.coords_path) - np.array(
             [outline.offset_left, outline.offset_top]
         )
-        outline_poly = matplotlib.patches.Polygon(
-            np.array([coords[:, 1], coords[:, 0]]).T,
-            edgecolor="r",
-            fill=False,
-            lw=1
-        )
-        cell_plot.axes[0].add_patch(outline_poly)
+        cell_plot.add_coords(coords, sp_idx=0)
         cell_plot.set_channel(0)  # current_channel = 0
         return cell_plot
 
@@ -591,20 +720,11 @@ class Assigner:
 
         return [row1]
 
-    def _clear_assignment_plot(self):
-        """Remove all elements from a plot window."""
-        for axis in self.plot.axes:
-            axis.clear()
-            axis.set_xticks([], [])
-            axis.set_yticks([], [])
-            axis.set_aspect("equal")
-            axis.autoscale("off")
-
     def exit_assignment(self):
         """Close the assignment interface and refresh the main layout."""
         self.create_layout()
         self.lineage_scroll_area.show()
-        self._clear_assignment_plot()
+        self.plot.clear_plots()
         self.window.toolbar.hide()
         self.plot.hide()
         self.lineage = []
@@ -671,18 +791,19 @@ class Assigner:
                 outline.offset_left:outline.offset_left + (self.region_halfwidth * 2),
                 outline.offset_top:outline.offset_top + (self.region_halfheight * 2),
             ]
-
             if plot.current_channel != 0:
-                plot.axes[0].imshow(roi, cmap="binary")
-                plot.axes[0].set_title("F{0} (C{1})".format(
-                    outline.frame_idx + 1,
-                    plot.current_channel + 1,
-                ))
+                plot.display_image(
+                    roi, sp_idx=0, cmap="binary",
+                    title="F{0} (C{1})".format(
+                        outline.frame_idx + 1,
+                        plot.current_channel + 1
+                    ),
+                )
             else:
-                plot.axes[0].imshow(roi, cmap="gray")
-                plot.axes[0].set_title("F{0}".format(
-                    outline.frame_idx + 1,
-                ))
+                plot.display_image(
+                    roi, sp_idx=0, cmap="gray",
+                    title="F{0}".format(outline.frame_idx + 1),
+                )
 
             plot.draw()
 
@@ -800,12 +921,14 @@ class Assigner:
         object (`self.lineage`).
         """
         self.selected_outlines = []
-        self._clear_assignment_plot()
+        self.plot.clear_plots()
         first_outline = self.lineage[-1]
 
-        self.plot.axes[0].set_title("Frame {0}".format(first_outline.frame_idx))
-        self.plot.axes[1].set_title("Frame {0}".format(first_outline.frame_idx + 1))
-        self.plot.axes[2].set_title("Frame {0}".format(first_outline.frame_idx + 2))
+        self.plot.set_titles(
+            "Frame {0}".format(first_outline.frame_idx),
+            "Frame {0}".format(first_outline.frame_idx + 1),
+            "Frame {0}".format(first_outline.frame_idx + 2),
+        )
 
         self.display_frame_centre(first_outline)
         self.display_frame_right(first_outline)
@@ -842,23 +965,12 @@ class Assigner:
             offset_top + self.region_halfheight * 2,
             offset_left,
         )
-        self.plot.axes[1].imshow(img, cmap="gray")
-        self.plot.axes[1].set_xlim([
-            self.plot.offsets[1][0],
-            self.plot.offsets[1][2],
-        ])
-        self.plot.axes[1].set_ylim([
-            self.plot.offsets[1][1],
-            self.plot.offsets[1][3],
-        ])
-        coords = np.load(outline.coords_path)
-        outline_poly = matplotlib.patches.Polygon(
-            np.array([coords[:, 1], coords[:, 0]]).T,
-            edgecolor="r",
-            fill=False,
-            lw=1
+        self.plot.display_image(
+            img, sp_idx=1, cmap="gray",
+            limits=self.plot.offsets[1],
         )
-        self.plot.axes[1].add_patch(outline_poly)
+        coords = np.load(outline.coords_path)
+        self.plot.add_coords(coords, sp_idx=1)
 
     def display_frame_right(self, current_outline):
         """Display the next frame in the right subplot during assignment.
@@ -908,49 +1020,42 @@ class Assigner:
             offt = 0
             offl = 0
 
-        self.plot.axes[2].imshow(img, cmap="gray")
         self.plot.offsets[2] = (
             offt,
             offl + (self.region_halfwidth * 2),
             offt + (self.region_halfheight * 2),
             offl,
         )
-        self.plot.axes[2].set_xlim([
-            offt, offt + (self.region_halfheight * 2)
-        ])
-        self.plot.axes[2].set_ylim([
-            offl + (self.region_halfwidth * 2), offl
-        ])
+        self.plot.display_image(
+            img, sp_idx=2, cmap="gray",
+            limits=self.plot.offsets[2],
+        )
 
         for outline in database.getOutlinesByFrameIdx(fidx, self.experiment_data.experiment_id):
             coords = np.load(outline.coords_path)
             kws = dict(
                 edgecolor="k",
-                lw=1,
                 alpha=0.9,
                 picker=True,
+                fill=True,
             )
+            attr = dict(outline_id=outline.outline_id)
             if (self.selected_outlines and
                     outline.outline_id in [
                         x.outline_id
                         for x in self.selected_outlines
                     ]):
-                outline_poly = matplotlib.patches.Polygon(
-                    np.array([coords[:, 1], coords[:, 0]]).T,
-                    facecolor="g",
-                    **kws
-                )
-                outline_poly.selected = True
+                kws["facecolor"] = "g"
+                attr["selected"] = True
             else:
-                outline_poly = matplotlib.patches.Polygon(
-                    np.array([coords[:, 1], coords[:, 0]]).T,
-                    facecolor="y",
-                    **kws
-                )
-                outline_poly.selected = False
+                kws["facecolor"] = "y"
+                attr["selected"] = False
 
-            outline_poly.outline_id = outline.outline_id
-            self.plot.axes[2].add_patch(outline_poly)
+            self.plot.add_coords(
+                coords, sp_idx=2,
+                attr=attr,
+                **kws
+            )
 
     def display_frame_left(self, current_outline):
         """Display the previous frame in the left subplot during assignment.
@@ -969,7 +1074,6 @@ class Assigner:
                 outline.centre_x,
             ))
             img = self.image_loader.load_frame(outline.frame_idx, 0)
-            self.plot.axes[0].imshow(img, cmap="gray")
             self.plot.offsets[0] = (
                 offset_top,
                 offset_left + self.region_halfwidth * 2,
@@ -977,18 +1081,14 @@ class Assigner:
                 offset_left,
             )
             coords = np.load(outline.coords_path)
-            outline_poly = matplotlib.patches.Polygon(
-                np.array([coords[:, 1], coords[:, 0]]).T,
+            self.plot.add_coords(
+                coords, sp_idx=0,
                 edgecolor="y",
                 linestyle="--",
-                fill=False,
-                lw=1
             )
-            self.plot.axes[0].add_patch(outline_poly)
 
         elif current_outline.frame_idx - 1 >= 0:
             img = self.image_loader.load_frame(current_outline.frame_idx - 1, 0)
-            self.plot.axes[0].imshow(img, cmap="gray")
             self.plot.offsets[0] = self.plot.offsets[1]
         else:
             outline = None
@@ -996,34 +1096,16 @@ class Assigner:
                 self.region_halfwidth * 2 + 2,
                 self.region_halfheight * 2 + 2
             ))
-            self.plot.axes[0].imshow(img, cmap="gray")
             self.plot.offsets[0] = (
                 1, self.region_halfwidth * 2 + 1,
                 self.region_halfwidth * 2 + 1,
                 1,
             )
 
-        self.plot.axes[0].set_xlim([
-            self.plot.offsets[0][0],
-            self.plot.offsets[0][2]
-        ])
-        self.plot.axes[0].set_ylim([
-            self.plot.offsets[0][1],
-            self.plot.offsets[0][3]
-        ])
-
-    def key_press_event(self, evt):
-        """Handle keyboard press event.
-
-        Keys:
-            enter: move to the next frame
-            right: move to the next frame
-            left: move to the previous frame
-        """
-        if evt.key == "enter" or evt.key == "right":
-            self.next_frame()
-        elif evt.key == "left":
-            self.previous_frame()
+        self.plot.display_image(
+            img, sp_idx=0, cmap="gray",
+            limits=self.plot.offsets[0],
+        )
 
     def accept_all(self):
         """Accept the lineage and update the database.
@@ -1099,6 +1181,41 @@ class Assigner:
             np.roll(coords[:, 0], 1)
         )
         return area
+
+    def select_outline(self, outline_id, selected):
+        """Add/Remove an outline from the current record of selected outlines.
+
+        Arguments:
+            outline_id (str): outline ID of the outline in question.
+            selected (bool):  whether the outline is being selected (True) or
+                              deselected (False).
+
+        Returns:
+            None
+        """
+        if selected:
+            selected_outline = self.outlines[
+                self.outlines.outline_id == outline_id
+            ].iloc[0]
+            self.selected_outlines.append(selected_outline)
+        else:
+            for i, outline in enumerate(self.selected_outlines):
+                if outline.outline_id == outline_id:
+                    self.selected_outlines.pop(i)
+                    break
+
+        status_message = "Defining cell lineage {0}: frame {1} ".format(
+            self.lineage[0].cell_id,
+            self.lineage[-1].frame_idx + 1,
+        )
+        if len(self.selected_outlines) == 1:
+            status_message += "[Press ENTER to move to the next frame]"
+        elif len(self.selected_outlines) == 2:
+            status_message += "[Press ENTER to denote division]"
+        elif len(self.selected_outlines) > 2:
+            status_message += "[!!! Too many outlines selected !!!]"
+
+        self.status_bar.showMessage(status_message)
 
     def previous_frame(self):
         """Changes the current frame back one.
@@ -1180,44 +1297,6 @@ class Assigner:
                 self.exit_assignment()
 
             self.plot.setFocus()
-
-    def pick_event(self, evt):
-        """Handle pick events in the right-hand subplot during assignment.
-
-        A pick event is defined as the clicking of a filled polygon in the
-        right-hand subplot.
-        This triggers the toggling of the selection state of an outline, yellow
-        to green if selected, or green to yellow if deselected.
-        """
-        if not evt.artist.selected:
-            evt.artist.selected = True
-            evt.artist.set_facecolor("g")
-            selected_outline = self.outlines[
-                self.outlines.outline_id == evt.artist.outline_id
-            ].iloc[0]
-            self.selected_outlines.append(selected_outline)
-        else:
-            for i, outline in enumerate(self.selected_outlines):
-                if outline.outline_id == evt.artist.outline_id:
-                    self.selected_outlines.pop(i)
-                    break
-
-            evt.artist.selected = False
-            evt.artist.set_facecolor("y")
-
-        status_message = "Defining cell lineage {0}: frame {1} ".format(
-            self.lineage[0].cell_id,
-            self.lineage[-1].frame_idx + 1,
-        )
-        if len(self.selected_outlines) == 1:
-            status_message += "[Press ENTER to move to the next frame]"
-        elif len(self.selected_outlines) == 2:
-            status_message += "[Press ENTER to denote division]"
-        elif len(self.selected_outlines) > 2:
-            status_message += "[!!! Too many outlines selected !!!]"
-
-        self.status_bar.showMessage(status_message)
-        self.plot.draw()
 
     def determine_state(self, selected_outlines):
         """Check whether the current cell can be written to the database.
