@@ -287,13 +287,22 @@ class Assigner:
         self.assignment_queue = []
 
     def _px_to_in(self, num_pixels):
+        """Convert a pixel count into screen inches"""
         return num_pixels / self.screen_dpi
 
     def get_outlines(self):
+        """Return all outlines for this experiment.
+
+        Arguments: none.
+        Returns: pd.DataFrame of all outlines.
+
+        See `database.OutlineRow` for columns present in the output data frame.
+        """
         outlines = database.getOutlinesByExperimentId(self.experiment_data.experiment_id)
         self.outlines = pd.DataFrame(outlines)
 
     def start_assigning(self, parent_window):
+        """Create interface for assembling cells and assigning lineages."""
         self.parent_window = parent_window
         self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
@@ -348,6 +357,20 @@ class Assigner:
         self.plot.hide()
 
     def get_offsets(self, centre):
+        """Calculate bounding box for a position
+
+        Arguments:
+            centre (tuple): y, x coordinates
+
+        Returns:
+            offset_left (int): pixels from the left edge of the image
+            offset_top (int): pixels from the top edge of the image
+
+        Results in the left and top edge of a bounding box with width and
+        height as defined by `self.region_halfwidth` and
+        `self.region_halfheight`.
+        The input coordinate is at the centre of this bounding box.
+        """
         offset_left = int(round(centre[0] - self.region_halfwidth))
         offset_top = int(round(centre[1] - self.region_halfheight))
         img = self.image_loader.load_frame(0)
@@ -365,6 +388,12 @@ class Assigner:
         return offset_left, offset_top
 
     def create_layout(self):
+        """Form the layout for displaying all cells.
+
+        Retrieves all cells for the experiment and places them in a vertical
+        layout with images (first and last frame) and control buttons for
+        altering them.
+        """
         self.get_outlines()
         unique_cells = self.outlines.cell_id.unique()
         lineage_layout = QtWidgets.QVBoxLayout()
@@ -393,6 +422,12 @@ class Assigner:
         self.main_layout.addWidget(self.lineage_scroll_area)
 
     def create_cell_box(self, cell_id, verified_cell):
+        """Create layout for a single cell.
+
+        Consists of a coloured spacer indicating the verification state, an
+        image of the cell in its first observed frame and an image of the cell
+        in its last observed frame, and a series of control/info buttons.
+        """
         cell_box = QtWidgets.QWidget()
         # create proper lineage
         cell_outlines = self.outlines[
@@ -425,6 +460,7 @@ class Assigner:
         return cell_box
 
     def create_cell_plot(self, outline):
+        """Add images of a single cell in its first and last frames."""
         width = self.max_width_px * 0.1
         cell_plot = Plotter(
             self.window,
@@ -463,6 +499,7 @@ class Assigner:
 
     def create_control_layout(self, cell_outlines, cell_id,
                               verified_cell, cell_plots):
+        """Create info and control buttons for a single cell."""
         control_layout = QtWidgets.QVBoxLayout()
         control_layout.setAlignment(QtCore.Qt.AlignTop)
         info_layout = self.create_info_layout(cell_id, verified_cell)
@@ -487,6 +524,11 @@ class Assigner:
 
     @staticmethod
     def create_info_layout(cell_id, verified_cell):
+        """Create info for a single cell.
+
+        Consists of the cell verification state, its ID, and its wildtype
+        status.
+        """
         info_layout = QtWidgets.QHBoxLayout()
         if verified_cell:
             pixmap = QtGui.QPixmap("resources/tick.png").scaledToWidth(20)
@@ -507,6 +549,16 @@ class Assigner:
 
     def create_control_button_layouts(self, cell_id, verified_cell,
                                       cell_plots):
+        """ Create control buttons for a single cell.
+
+        Assign Cell Lineage: launch assignment interface.
+        Export movie:        create movie of a cell and its descendants, if
+                             desired.
+        Change channel:      cycle through each channel of the cell in its
+                             first and last frames.
+        Set/Unset wildtype:  toggle wildtype status for the cell and all its
+                             ancestors and descendants.
+        """
         row1 = QtWidgets.QHBoxLayout()
         verify_btn = QtWidgets.QPushButton("Assign Cell Lineage")
         verify_btn.cell_id = cell_id
@@ -537,8 +589,8 @@ class Assigner:
 
         return [row1]
 
-
     def _clear_assignment_plot(self):
+        """Remove all elements from a plot window."""
         for axis in self.plot.axes:
             axis.clear()
             axis.set_xticks([], [])
@@ -547,6 +599,7 @@ class Assigner:
             axis.autoscale("off")
 
     def exit_assignment(self):
+        """Close the assignment interface and refresh the main layout."""
         self.create_layout()
         self.lineage_scroll_area.show()
         self._clear_assignment_plot()
@@ -556,6 +609,16 @@ class Assigner:
         self.selected_outlines = []
 
     def get_child_ids(self, cell_id):
+        """Return the IDs of the children of a cell.
+
+        Arguments:
+            cell_id (str): ID of the cell in question.
+
+        Returns:
+            cell_ids (list): IDs of the cell children (if any).
+
+        Only returns children which are set in the database.
+        """
         this_cell = database.getCellById(cell_id)
         cell_ids = []
         if this_cell and this_cell.child_cell_id1:
@@ -566,6 +629,12 @@ class Assigner:
         return cell_ids
 
     def toggle_wildtype(self):
+        """Toggle wildtype status of a cell.
+
+        Triggered by clicking the Set/Unset wildtype button.
+        Iterates through all the ancestors of the cell and its descendants,
+        toggling their wildtype state.
+        """
         cell_id = self.window.sender().cell_id
         this_cell = database.getCellById(cell_id)
         if this_cell:
@@ -580,6 +649,12 @@ class Assigner:
             self.create_layout()
 
     def switch_channel(self):
+        """Change channel in the plots of a single cell in the main layout.
+
+        Triggered by the Change Channel button.
+        Cycles through all available channels (i.e. keep clicking to get back
+        to brightfield).
+        """
         cell_outlines = self.outlines[
             self.outlines.cell_id == self.window.sender().cell_id
         ].sort_values("frame_idx")
@@ -612,6 +687,26 @@ class Assigner:
             plot.draw()
 
     def export_movie(self):
+        """Export a movie of a single cell, with various options.
+
+        A popup interface allows parameters to be selected:
+            - <Include descendants>: a movie rooted from the selected cell will be
+                generated, including all its descendants.
+            - <Include outlines>: cell outlines will be drawn in the movie.
+            - <Include frame numbers>: frame numbers will be annotated.
+            - <Include scale bar>: a 10 µm scale bar will be annotated.
+            - <Include all channels>: if selected, the movie will display up to
+                three panels with brightfield, and two fluorescent channels
+                displayed. If not selected, only brightfield will be exported.
+
+        Data will be exported as a series of PNG files for each frame, into the
+        directory data/movies/<experiment_id>/<cell_id>.
+
+        True movies can be subsequently generated from these files with third-party
+        software, e.g. ImageJ.
+
+        Calls `movie_generator.MovieMaker`.
+        """
         cell_id = self.window.sender().cell_id
         settings = QtWidgets.QDialog(self.window)
         settings.setModal(True)
@@ -668,6 +763,12 @@ class Assigner:
         settings.show()
 
     def assign_lineage(self, outline_id=None):
+        """Internally set a cell lineage.
+
+        Triggered by user interaction in the assignment interface.
+        Refreshes the main layout to reflect these internal changes.
+        Note: does not record the lineage or any changes in the database.
+        """
         self.lineage_scroll_area.hide()
         self.get_outlines()
         if not outline_id:
@@ -689,6 +790,15 @@ class Assigner:
         self.plot.setFocus()
 
     def display_frame(self):
+        """Display subplots for a single outline during assignment.
+
+        Outlines cells in three subplots: parent outline in the preceding frame
+        (left), current outline in the current frame (centre), and all outlines
+        in the succeeding frame (right).
+
+        The single outline is the last outline in the internal lineage tracking
+        object (`self.lineage`).
+        """
         self.selected_outlines = []
         self._clear_assignment_plot()
         first_outline = self.lineage[-1]
@@ -713,6 +823,13 @@ class Assigner:
         self.plot.draw()
 
     def display_frame_centre(self, outline):
+        """Display the current frame in the central subplot during assignment.
+
+        Loads the image for the current frame, and outlines the current outline
+        in that frame with a red line, and sets the plot x and y limits within
+        a bounding box defined by `self.region_halfwidth` and
+        `self.region_halfheight` (see `Assigner.get_offsets`).
+        """
         # y0, x1, y1, x0
         img = self.image_loader.load_frame(outline.frame_idx, 0)
         offset_left, offset_top = self.get_offsets((
@@ -744,6 +861,17 @@ class Assigner:
         self.plot.axes[1].add_patch(outline_poly)
 
     def display_frame_right(self, current_outline):
+        """Display the next frame in the right subplot during assignment.
+
+        Loads the image for the next frame (if any), and highlights all
+        outlines within that frame with filled polygons.
+        If an outline is thought to be the same cell, or a daughter cell -- as
+        determined by the database information -- the outline will be coloured
+        green, else coloured yellow.
+        A bounding box will be constructed using x and y limits to display
+        these selected cells, or will encompass the same region as the current
+        cell if no outlines are linked to the current outline.
+        """
         if current_outline.child_id1 is not None:
             selected_outline = self.outlines[
                 self.outlines.outline_id == current_outline.child_id1
@@ -825,6 +953,15 @@ class Assigner:
             self.plot.axes[2].add_patch(outline_poly)
 
     def display_frame_left(self, current_outline):
+        """Display the previous frame in the left subplot during assignment.
+
+        Loads the image for the previous frame (if any), and outlines the
+        outline known to precede the current outline with a yellow dotted line.
+        If division has just occurred, the parent cell will be outlined.
+        A bounding box will be constructed using x and y limits to display
+        the parent outline, or will encompass the same region as the current
+        cell if no outlines are linked to the current outline.
+        """
         if current_outline.parent_id:
             outline = database.getOutlineById(current_outline.parent_id)
             offset_left, offset_top = self.get_offsets((
@@ -876,12 +1013,26 @@ class Assigner:
         ])
 
     def key_press_event(self, evt):
+        """Handle keyboard press event.
+
+        Keys:
+            enter: move to the next frame
+            right: move to the next frame
+            left: move to the previous frame
+        """
         if evt.key == "enter" or evt.key == "right":
             self.next_frame()
         elif evt.key == "left":
             self.previous_frame()
 
     def accept_all(self):
+        """Accept the lineage and update the database.
+
+        Requires user confirmation.
+        Will append any children to the assignment queue to be verified.
+        Once the database is updated, this function also triggers the
+        assignment of the next cell in the queue.
+        """
         confirm_accept = QtWidgets.QMessageBox().question(
             self.window,
             "Confirm automatic assignment",
@@ -918,6 +1069,10 @@ class Assigner:
         self.plot.setFocus()
 
     def cancel_assignment(self):
+        """Cancel assignment of a cell lineage.
+
+        Confirms the cancellation with user input then triggers the exit.
+        """
         confirm_cancel = QtWidgets.QMessageBox().question(
             self.window,
             "Confirm cancellation",
@@ -932,6 +1087,10 @@ class Assigner:
 
     @staticmethod
     def get_cell_area(coords):
+        """Calculate the area of an outline.
+
+        Uses a rapid calculation method that I don't quite understand.
+        """
         area = np.dot(
             coords[:, 0],
             np.roll(coords[:, 1], 1)
@@ -942,6 +1101,12 @@ class Assigner:
         return area
 
     def previous_frame(self):
+        """Changes the current frame back one.
+
+        Simply removes the last outline from the internal lineage, then replots
+        according to the next last outline in the internal lineage (in the
+        prior frame by definition).
+        """
         if not self.lineage:
             return
 
@@ -950,6 +1115,24 @@ class Assigner:
         self.plot.setFocus()
 
     def next_frame(self):
+        """Change the current frame forward one.
+
+        Only permits movement forward if at least one outline is selected in
+        the right-hand subplot.
+
+        If there is a single outline selected, a growth event is recorded.
+        The outline is checked for a drastic change in area compared to the
+        current outline, and progression confirmed by user input if this has
+        occurred.
+        This permits mistakes to be checked (e.g. recording a growth event when
+        division has occurred).
+
+        If two outlines are selected, a division event is recorded, after user
+        confirmation.
+        A confirmed division will also write the current cell to the database,
+        and load the next cell in the queue for assignment (one of the daughter
+        cells).
+        """
         if not self.lineage or not self.selected_outlines:
             return
 
@@ -999,6 +1182,13 @@ class Assigner:
             self.plot.setFocus()
 
     def pick_event(self, evt):
+        """Handle pick events in the right-hand subplot during assignment.
+
+        A pick event is defined as the clicking of a filled polygon in the
+        right-hand subplot.
+        This triggers the toggling of the selection state of an outline, yellow
+        to green if selected, or green to yellow if deselected.
+        """
         if not evt.artist.selected:
             evt.artist.selected = True
             evt.artist.set_facecolor("g")
@@ -1030,6 +1220,13 @@ class Assigner:
         self.plot.draw()
 
     def determine_state(self, selected_outlines):
+        """Check whether the current cell can be written to the database.
+
+        Checks whether a non-growth event has occurred (death/loss or
+        division), and confirms this with the user.
+        It also checks whether more than two outlines have been selected (which
+        is not possible for this application to handle).
+        """
         if selected_outlines is not None:
             self.selected_outlines = selected_outlines
             return True
@@ -1078,6 +1275,19 @@ class Assigner:
         return True
 
     def write_lineage(self, selected_outlines=None):
+        """Write a cell to the database.
+
+        Arguments:
+            selected_outlines (iterable[str]): [optional] the IDs of the
+                outlines currently selected in the right-hand subplot.
+
+        Returns:
+            True
+
+        Includes cleaning up any prior writes that involve the current cell
+        which would be made ambiguous, and assigns the child/parent
+        relationships appropriately.
+        """
         self.status_bar.showMessage("Writing lineage, please wait...")
         stop_condition = self.determine_state(selected_outlines)
         if not stop_condition:
@@ -1118,6 +1328,20 @@ class Assigner:
         return True
 
     def clear_extra_outlines(self, cell_id):
+        """Redefine outlines previously associated with the current cell.
+
+        Arguments:
+            cell_id (str): ID of the current cell.
+
+        Returns:
+            None
+
+        This function is required when a cell is redefined to include more or
+        less outlines than a previous state.
+        cell_ids are removed from all outlines in the cell, and a new cell_id
+        generated, and applied to all outlines that are no longer defined as
+        being a part of the current cell.
+        """
         self.status_bar.showMessage("Removing cell_id from extra outlines")
         for outline in self.lineage:
             database.updateOutlineById(
@@ -1135,6 +1359,26 @@ class Assigner:
                 )
 
     def assign_relationships(self, cell_id):
+        """Assign cell, parent, and child IDs to each outline in the cell.
+
+        Arguments:
+            cell_id (str): ID of the current cell.
+
+        Returns:
+            dict {
+                wildtype:       wildtype status of the cell
+                parent_cell_id: cell ID of the parent cell.
+                child_cell_id1: cell ID of the first daughter cell.
+                child_cell_id2: cell ID of the second daughter cell.
+            }
+
+        Iterates through the outlines in the current cell, writing the
+        following parameters to the database:
+            cell_id:   unifying ID of all outlines in the current cell.
+            parent_id: ID of the last outline of the parent cell.
+            child_id1: ID of the first outline of the first daughter cell.
+            child_id2: ID of the first outline of the second daughter cell.
+        """
         self.status_bar.showMessage("Assigning parents and children")
         for outline_idx, outline in enumerate(self.lineage):
             if outline_idx == 0:
@@ -1183,6 +1427,39 @@ class Assigner:
         }
 
     def get_children(self, outline_idx, outline):
+        """Determine children of the current cell, and write them.
+
+        Arguments:
+            outline_idx (int):             index of the current outline.
+            outline (database.OutlineRow): OutlineRow object of the current
+                                           outline.
+
+        If the outline is not the last of the cell.
+        Returns:
+            tuple (
+                child_id1 (str): outline ID of the cell in the next frame.
+                child_id2 (str): empty string.
+            )
+
+        If no outlines are selected in the right-hand plot.
+        Returns:
+            tuple (
+                child_id1 (str): empty string.
+                child_id2 (str): empty string.
+            )
+
+        If two outlines are selected in the right-hand plot.
+        Returns:
+            tuple (
+                child_id1 (str): outline ID of the first outline in the first
+                                 daughter cell.
+                child_id2 (str): outline ID of the first outline in the second
+                                 daughter cell.
+            )
+
+        For all three of these cases, the outline database table is updated to
+        reflect parent/daughter relationships.
+        """
         if outline_idx < len(self.lineage) - 1:
             child_id1 = self.lineage[outline_idx + 1].outline_id
             child_id2 = ""
