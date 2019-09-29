@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches
 import os
 import skimage.draw
 import skimage.morphology
@@ -145,18 +143,6 @@ class Balloon(object):
         Cy = coords[:, 1].mean()
         return Cx, Cy
 
-    def refine(self, display=False):
-        # contract for 50 iterations
-        for i in range(50):
-            for n in self.nodes:
-                n.contract(self.centre)
-
-            for n in self.nodes:
-                n.apply_changes()
-
-        # evolve again
-        self.run_evolution(display_step=1000)
-
     def remove_node(self, n):
         self.nodes.pop(self.nodes.index(n))
         n1 = n.neighbour1
@@ -226,7 +212,7 @@ class Balloon(object):
 
         return new_nodes
 
-    def evolve(self, display=False, image_percentile=5):
+    def evolve(self, image_percentile=5):
         self.refining_cycles += 1
         node_positions = np.array([(x.x, x.y) for x in self.nodes])
         poly_rr, poly_cc = skimage.draw.polygon(
@@ -258,209 +244,12 @@ class Balloon(object):
                 n.y = original_positions[i, 1]
             raise ValueError("Area too small")
 
-        if display:
-            f = plt.figure()
-            ax = f.add_subplot(111)
-            ax.imshow(self.base_image, cmap="gray")
-            ax.plot(skel_coords[:, 1], skel_coords[:, 0], color="b", marker="o", ms=3, ls="none")
-            ax.set_aspect("equal")
-            #  ax.plot(original_positions[:, 1], original_positions[:, 0], marker="o", ms=5, color="k")
-            ax.plot(new_positions[:, 1], new_positions[:, 0], marker="o", ms=0.1, color="r")
-            ax.set_title("Change in area: {0:.5f}".format(delta_area))
-
-            if type(display) is int:
-                ax.set_title("Iteration {0}: Change in area: {1:.5f}".format(display, delta_area))
-                if not os.path.exists("out"):
-                    os.mkdir("out")
-                f.savefig("out/{0}.png".format(display), dpi=600)
-                plt.close()
-            else:
-                plt.show()
-                plt.close()
-
         self.nodes = self.prune_branches()
         self.nodes = self.insert_nodes()
         return delta_area
 
-    def run_evolution(
-        self,
-        display_step=None,
-        min_iterations=100,
-        max_iterations=2000,
-        threshold=0.04,
-        save_progress=False,
-        display_final=False,
-    ):
-        i = 1
-        threshold_hits = 0
-        while True:
-            if display_step and i % display_step == 0:
-                if save_progress:
-                    delta_area = self.evolve(i)
-                else:
-                    delta_area = self.evolve(display_final)
-            else:
-                delta_area = self.evolve()
-
-            if delta_area < threshold and i > min_iterations:
-                threshold_hits += 1
-                if threshold_hits > 5:
-                    print("Ending after {0} iterations".format(i))
-                    self.evolve(display_final)
-                    self.mode = "refinement"
-                    return
-            elif i == max_iterations:
-                print("Ending after {0} iterations".format(i))
-                self.evolve(display_final)
-                self.mode = "refinement"
-                return
-            i += 1
-
-    def _keypress(self, evt):
-        if self.mode == "refinement":
-            if evt.key == "enter":
-                self.mode = "confirmed"
-                plt.close()
-            elif evt.key == "escape":
-                self.mode = "adjust"
-                self.adjust_coordinates()
-
-        elif self.mode == "adjust":
-            if evt.key == "escape":
-                self.mode = "rejected"
-            elif evt.key == "enter":
-                self.mode = "confirmed"
-            elif evt.key == ".":
-                self.evolve()
-                self._replot_nodes()
-                plt.draw()
-            elif evt.key == "r":
-                for i in range(10):
-                    self.evolve()
-                self._replot_nodes()
-                plt.draw()
-
-            if evt.key == "escape" or evt.key == "enter":
-                plt.close()
-
-        else:
-            print("Keypress:", evt.key, "mode ({0})".format(self.mode))
-
-    def _click(self, evt):
-        if self.mode != "adjust":
-            return
-
-        if evt.button == 1:
-            for p in self.figure_patches:
-                if p.contains_point((evt.x, evt.y)):
-                    p.set_facecolor("r")
-                    self.dragging = p
-                    break
-        elif evt.button == 3:
-            for p in self.figure_patches:
-                if p.contains_point((evt.x, evt.y)):
-                    self.remove_node(p.this_node)
-                    self._replot_nodes()
-                    plt.draw()
-                    break
-
-    def _release(self, evt):
-        if self.mode != "adjust":
-            return
-
-        if self.dragging:
-            self.dragging.set_facecolor("y")
-            # update node
-            self.dragging.this_node.set_position((evt.ydata, evt.xdata))
-            self.dragging.this_node.apply_changes()
-
-            # update line
-            ax = plt.gca()
-            ax.lines.pop(0)
-            ax.plot(
-                [n.y for n in self.nodes],
-                [n.x for n in self.nodes],
-                color="y",
-                lw=2,
-            )
-
-            self.dragging = False
-            plt.draw()
-
-    def _motion(self, evt):
-        if self.mode != "adjust":
-            return
-
-        if not self.dragging:
-            return
-
-        self.dragging.center = evt.xdata, evt.ydata
-        plt.draw()
-
-    def get_coordinates(self, accept=False):
-        if accept:
-            return np.array([(n.x, n.y) for n in self.nodes])
-
-        # adjust them first
-        f = plt.figure(figsize=(15, 15))
-        f.canvas.mpl_connect("key_press_event", self._keypress)
-        f.canvas.mpl_connect("button_press_event", self._click)
-        f.canvas.mpl_connect("button_release_event", self._release)
-        f.canvas.mpl_connect("motion_notify_event", self._motion)
-        ax = f.add_subplot(111)
-        ax.imshow(self.base_image, cmap="gray")
-        ax.set_aspect("equal")
-        ax.axis("off")
-        ax.set_title("Confirm segmentation: ENTER/ESCAPE")
-        self._replot_nodes(patches=False)
-        plt.show()
-
-        if self.mode == "confirmed":
-            return np.array([(n.x, n.y) for n in self.nodes])
-        else:
-            return None
-
-    def _replot_nodes(self, line=True, patches=True):
-        # replot patches
-        ax = plt.gca()
-        if line:
-            try:
-                ax.lines.pop(0)
-            except IndexError:
-                pass
-            ax.plot(
-                [n.y for n in self.nodes],
-                [n.x for n in self.nodes],
-                color="y",
-                lw=5,
-            )
-
-        if patches:
-            # replot patches
-            for i in range(len(self.figure_patches)):
-                p = self.figure_patches.pop()
-                p.remove()
-
-            for n in self.nodes:
-                patch = matplotlib.patches.Circle(
-                    (n.y, n.x),
-                    1,
-                    fc="y",
-                )
-                patch.this_node = n
-                self.figure_patches.append(patch)
-                ax.add_artist(patch)
-
-    def adjust_coordinates(self):
-        f = plt.gcf()
-        ax = plt.gca()
-        # ax.lines[0].set_marker("o")
-        # ax.lines[0].set_markersize(10)
-        self.figure_patches = []
-        self.dragging = False
-        self._replot_nodes()
-        ax.set_title("Edit segmentation: ENTER (accept changes)")
-        plt.draw()
+    def get_coordinates(self):
+        return np.array([(n.x, n.y) for n in self.nodes])
 
     def get_area(self, coords=None):
         if coords is None:

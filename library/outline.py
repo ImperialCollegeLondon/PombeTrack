@@ -155,8 +155,8 @@ class Plotter(FigureCanvas):
                 if outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth):
                     continue
 
-                polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(accept = True),\
-                        balloon_obj.get_coordinates(accept = True)[1, :].reshape(1, 2), axis = 0), closed = True)
+                polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(),\
+                        balloon_obj.get_coordinates()[1, :].reshape(1, 2), axis = 0), closed = True)
                 if polygonpath.contains_point([outline.centre_y-origin_y, outline.centre_x - origin_x]):
                     overlap = True
                     #  print(overlap)
@@ -172,10 +172,10 @@ class Plotter(FigureCanvas):
                 sensitivity = self.image_percentile
                 area_init = balloon_obj.get_area()
                 for i in range(20):
-                    balloon_obj.evolve(display = False, image_percentile = sensitivity)
+                    balloon_obj.evolve(image_percentile = sensitivity)
                     if balloon_obj.get_area() > 1.5 * area_init or balloon_obj.get_area() < 0.5 * area_init:
                         raise ValueError()
-                self.full_coords = balloon_obj.get_coordinates(accept = True) + [origin_y, origin_x]
+                self.full_coords = balloon_obj.get_coordinates() + [origin_y, origin_x]
                 self.outline_id  =  str(uuid.uuid4())
                 self.cell_id  =  str(uuid.uuid4())
                 centre = [np.mean(self.full_coords[:, 0]).astype(int), np.mean(self.full_coords[:, 1]).astype(int)]

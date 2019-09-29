@@ -151,7 +151,7 @@ def find_bd(im_wat):
 # # Define Classes for cells and images
 # class Cell(object):
 #     def __init__(self, balloon_obj, origin_y, origin_x, halfwidth):
-#         self.coordinates = balloon_obj.get_coordinates(accept=True) + [origin_y, origin_x]
+#         self.coordinates = balloon_obj.get_coordinates() + [origin_y, origin_x]
 #         self.origin_y=origin_y
 #         self.origin_x=origin_x
 #         self.halfwidth=halfwidth
