@@ -50,6 +50,8 @@ class Toolbar(NavigationToolbar):
 
         pixmap = QtGui.QPixmap(path)
         if hasattr(pixmap, "setDevicePixelRatio"):
+            # pylint: disable=protected-access
+            # no other way to avoid using _dpi_ratio I don't think
             pixmap.setDevicePixelRatio(self.canvas._dpi_ratio)
 
         return QtGui.QIcon(pixmap)
@@ -314,7 +316,7 @@ class Assigner:
         menubar = QtWidgets.QMenuBar(self.window)
         file_menu = menubar.addMenu("&File")
         quit_action = QtWidgets.QAction("&Close", menubar)
-        quit_action.triggered[bool].connect(lambda: self.window.close())
+        quit_action.triggered.connect(self.window.close)
         file_menu.addAction(quit_action)
         self.main_layout.setMenuBar(menubar)
 
@@ -659,10 +661,8 @@ class Assigner:
             self.outlines.cell_id == self.window.sender().cell_id
         ].sort_values("frame_idx")
         cell_plots = self.window.sender().cell_plots
-        for plot, outline in zip(
-            cell_plots,
-            [cell_outlines.iloc[0], cell_outlines.iloc[-1]]
-        ):
+        outlines = [cell_outlines.iloc[0], cell_outlines.iloc[-1]]
+        for plot, outline in zip(cell_plots, outlines):
             plot.set_channel(plot.current_channel + 1)
             if plot.current_channel == self.image_loader.num_channels:
                 plot.set_channel(0)
