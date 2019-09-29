@@ -866,7 +866,7 @@ class Plotter(FigureCanvas):
             coords[:, 1],
             np.roll(coords[:, 0], 1)
         )
-        return area
+        return area * 0.5
 
     def _accept_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:

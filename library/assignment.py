@@ -1180,7 +1180,7 @@ class Assigner:
             coords[:, 1],
             np.roll(coords[:, 0], 1)
         )
-        return area
+        return area * 0.5
 
     def select_outline(self, outline_id, selected):
         """Add/Remove an outline from the current record of selected outlines.
