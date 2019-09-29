@@ -1305,6 +1305,10 @@ class Assigner:
         self.clear_extra_outlines(cell_id)
         rel_params = self.assign_relationships(cell_id)
 
+        existing = database.getCellById(cell_id)
+        if existing:
+            database.deleteCellById(cell_id)
+
         kwargs = {
             "cell_id": cell_id,
             "experiment_id": self.lineage[0].experiment_id,
@@ -1414,10 +1418,6 @@ class Assigner:
             child_cell_id2 = database.getOutlineById(
                 self.selected_outlines[1].outline_id
             ).cell_id
-
-        existing = database.getCellById(cell_id)
-        if existing:
-            database.deleteCellById(cell_id)
 
         return {
             "wildtype": wildtype,
