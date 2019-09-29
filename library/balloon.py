@@ -1,38 +1,116 @@
 #!/usr/bin/env python
 
+""" Provide balloon expansion capability for discovering cell edges.
+
+This module contains the majority of the maths involved in the balloon
+algorithm.
+Cell outlines are imagined as a series of points (nodes) attached
+by strings under strong tension surrounding the cell.
+
+Each node is pushed by an outwards force from the central spine of the cell
+(expansion force).
+This force is mediated by the local intensity of the image (4x4 pixel region),
+where dark areas reduce the expansion force.
+The darkness of the local vicinity is determined by comparing the mean
+intensity within the region to the whole image, and applying the adjustable
+sensitivity parameter.
+
+The nodes are also subjected to a sideways force from each of their neighbours
+(neighbour force).
+This can be imagined as a form of spring tension force, with the result that
+nodes that are further out of the plane of their two neighbours are pulled
+backwards more forcefully that those that are close to the plane.
+This has the effect of smoothing the outline.
+
+A series of pruning and additive steps is also applied.
+Nodes with an overly severe angle to their nearest neighbours are removed, this
+somewhat prevents to formation of tangled outlines.
+If the distance between two nodes is greater than a threshold value (5 pixels),
+a node is inserted halfway between the two nodes on the line connecting them.
+
+This process can be repeated iteratively multiple times to push an outline from
+a central position until it matches the dark cell border very accurately.
+
+I named this algorithm "balloon expansion", since I imagine it as a process in
+which a balloon is inflated to fit the boundaries of a hard enclosing space,
+conforming to any strange shape that could be envisioned.
+The elastic nature of a balloon is reflected by the tension-like effect of
+neighbours, the inflation of air by the expansion force from the central spine,
+and the deforming to fit an arbitrary boundary by the modifying effect of the
+image intensity.
+"""
+
 import numpy as np
-import os
 import skimage.draw
 import skimage.morphology
-# import scipy.ndimage
 
-class Node(object):
+class Node:
+    """Class representing a single node in an outline.
+
+    Defines methods for calculating the forces acting on a node to determine
+    which direction the node will move in the next step of the algorithm.
+
+    The x and y coordinates recorded in this class are used to define the
+    outline coordinates used throughout PombeTrack.
+    """
     def __init__(self, coord):
         self.x = coord[0]
         self.y = coord[1]
         self._connected = False
         self.buff_x = None
         self.buff_y = None
+        self.neighbour1 = None
+        self.neighbour2 = None
 
     def apply_changes(self):
+        """Update the x and y coordinates of the node."""
         self.x = self.buff_x
         self.y = self.buff_y
         self.buff_x = None
         self.buff_y = None
 
-    def _get_distance(self, n):
+    def get_distance(self, node):
+        """Calculate the distance between this node and another.
+
+        Arguments:
+            node (Node instance): node to compare to.
+
+        Returns:
+            distance (float): distance between the nodes (in pixels).
+        """
         return np.sqrt(
-            (self.x - n.x) ** 2 +
-            (self.y - n.y) ** 2
+            (self.x - node.x) ** 2 +
+            (self.y - node.y) ** 2
         )
 
-    def connect(self, n1, n2):
-        self.neighbour1 = n1
-        self.neighbour2 = n2
+    def connect(self, node1, node2):
+        """Sets the neighbours of the node.
 
-    def _get_angle(self, p1, p2):
-        ydelta = p2[0] - p1[0]
-        xdelta = p2[1] - p1[1]
+        Arguments:
+            node1 (Node instance): "left-hand" neighbour.
+            node2 (node instance): "right-hand" neighbour.
+
+        Returns:
+            None
+        """
+        self.neighbour1 = node1
+        self.neighbour2 = node2
+
+    @staticmethod
+    def _get_angle(point1, point2):
+        """Calculate the angle between two points relative to the x axis.
+
+        Arguments:
+            point1 (tuple): x, y coordinates.
+            point2 (tuple): x, y coordinates.
+
+        Returns:
+            angle (float): angle between the points.
+
+        Uses simple trigonometry.
+        """
+        ydelta = point2[0] - point1[0]
+        xdelta = point2[1] - point1[1]
         if xdelta == 0:
             hypot = np.sqrt(xdelta ** 2 + ydelta ** 2)
             theta = np.arcsin(ydelta / hypot)
@@ -43,25 +121,57 @@ class Node(object):
             theta = np.arctan(ydelta / xdelta)
         return theta
 
-    def neighbour_force(self, new_pos):
+    def neighbour_force(self, point):
+        """Calculate the force applied by the neighbours to a hypothetical node
+        position.
+
+        Arguments:
+            point (tuple): x, y coordinates of the hypothetical position.
+
+        Returns:
+            force (float): combination of the distance and position of each
+                           neighbour.
+        """
         left_vector = np.array([
-            self.neighbour1.x - new_pos[0],
-            self.neighbour1.y - new_pos[1],
+            self.neighbour1.x - point[0],
+            self.neighbour1.y - point[1],
         ])
         right_vector = np.array([
-            self.neighbour2.x - new_pos[0],
-            self.neighbour2.y - new_pos[1],
+            self.neighbour2.x - point[0],
+            self.neighbour2.y - point[1],
         ])
         return 0.1 * (left_vector + right_vector)
 
     def get_skeleton_centre(self, skel_coords):
+        """Calculate the nearest point along the skeletonized image to the node.
+
+        Arguments:
+            skel_coords (Nx2 ndarray): x, y coordinates of the skeleton.
+
+        Returns:
+            skel_centre (numpy vector): x, y coordinates of the nearest
+                                        skeleton point.
+
+        Used to determine whether the expansion force originates from.
+        """
         # get nearest pixel coordinate from node to skel
         distances = np.sqrt(
             ((skel_coords - [self.x, self.y]) ** 2).sum(axis=1)
         )
         return skel_coords[np.argmin(distances)]
 
-    def centroid_force(self, expansion_point):
+    def expansion_force(self, expansion_point):
+        """Calculate the expansion force from the cell skeleton.
+
+        Arguments:
+            expansion_point (vector): x, y coordinates of the expansion point.
+
+        Returns:
+            expansion_force (vector): expansion force acting on the node split
+                                      into x and y directions.
+
+        Determined by the angle from the point to the expansion point.
+        """
         angle = self._get_angle(expansion_point, (self.x, self.y))
         force_x = np.cos(angle)
         force_y = np.sin(angle)
@@ -70,14 +180,29 @@ class Node(object):
             return scale_factor * np.array([-force_y, -force_x])
         return scale_factor * np.array([force_y, force_x])
 
-    def contract(self, centre):
-        nforce = self.neighbour_force((self.x, self.y))
-        self.set_position((
-            self.x + nforce[0],
-            self.y + nforce[1]
-        ))
-
     def apply_force(self, skel_coords, image, percentile=5):
+        """Determine the movement of a node after calculating all forces.
+
+        Arguments:
+            skel_coords (Nx2 ndarray): coordinates of the cell skeleton.
+            image (NxM ndarray):       matrix of image intensity values.
+            percentile (float):        the level which is considered to be dark
+                                       in the image.
+
+        Returns:
+            None
+
+        Determines the expansion point for the node, applies the expansion
+        force, neighbour force, and calculates the image force.
+
+        The image force is calculated from a 4x4 region around the node (in its
+        current position) and the percentile setting for what is considered to
+        be "dark" compared to the whole image.
+
+        The calculated node position is updated in a buffer.
+        This means that the order of expansion applied to each node in the
+        outline doesn't matter.
+        """
         if (self.x < 1 or
                 self.x > image.shape[0] - 1 or
                 self.y < 1 or
@@ -85,7 +210,7 @@ class Node(object):
             self.set_position((self.x, self.y))
             return
         expansion_point = self.get_skeleton_centre(skel_coords)
-        cforce = self.centroid_force(expansion_point)
+        cforce = self.expansion_force(expansion_point)
         node_updated = (self.x + cforce[0], self.y + cforce[1])
         nforce = self.neighbour_force(node_updated)
         vicinity = image[
@@ -99,6 +224,7 @@ class Node(object):
         ))
 
     def set_position(self, updated):
+        """Set the buffered new position of the node after evolution is finished."""
         self.buff_x = updated[0]
         self.buff_y = updated[1]
 
@@ -110,7 +236,7 @@ class Node(object):
         )
 
 
-class Balloon(object):
+class Balloon:
     def __init__(self, initial_coords, base_image):
         self.mode = "initialise"
         self.nodes = self.create_nodes(initial_coords)
@@ -118,19 +244,19 @@ class Balloon(object):
         self.centre = self.get_centre()
         self.refining_cycles = 0
 
-    def create_nodes(self, coords):
+    @staticmethod
+    def create_nodes(coords):
         nodes = []
         for coord in coords:
             nodes.append(Node(coord))
 
-        for i in range(len(nodes)):
-            n0 = nodes[i - 1]
-            n1 = nodes[i]
+        for i, node1 in enumerate(nodes):
+            node0 = nodes[i - 1]
             if i == len(nodes) - 1:
-                n2 = nodes[0]
+                node2 = nodes[0]
             else:
-                n2 = nodes[i + 1]
-            n1.connect(n0, n2)
+                node2 = nodes[i + 1]
+            node1.connect(node0, node2)
         return nodes
 
     def get_centre(self):
@@ -139,27 +265,27 @@ class Balloon(object):
         # https://github.com/mapbox/polylabel/blob/master/polylabel.js
         # in the future
         coords = np.array([(n.x, n.y) for n in self.nodes])
-        Cx = coords[:, 0].mean()
-        Cy = coords[:, 1].mean()
-        return Cx, Cy
+        centre_x = coords[:, 0].mean()
+        centre_y = coords[:, 1].mean()
+        return centre_x, centre_y
 
-    def remove_node(self, n):
-        self.nodes.pop(self.nodes.index(n))
-        n1 = n.neighbour1
-        n2 = n.neighbour2
-        n1.neighbour2 = n2
-        n2.neighbour1 = n1
+    def remove_node(self, node):
+        self.nodes.pop(self.nodes.index(node))
+        node1 = node.neighbour1
+        node2 = node.neighbour2
+        node1.neighbour2 = node2
+        node2.neighbour1 = node1
 
     def prune_branches(self):
         if len(self.nodes) < 20:
             return self.nodes
 
         neighbour_min_angle = np.pi*2 / 3
-        for n1 in self.nodes:
-            n0 = n1.neighbour1
-            n2 = n1.neighbour2
-            n0vector = [n1.x - n0.x, n1.y - n0.y]
-            n2vector = [n2.x - n1.x, n2.y - n1.y]
+        for node1 in self.nodes:
+            node0 = node1.neighbour1
+            node2 = node1.neighbour2
+            n0vector = [node1.x - node0.x, node1.y - node0.y]
+            n2vector = [node2.x - node1.x, node2.y - node1.y]
             angle = np.arctan2(
                 np.linalg.norm(
                     np.cross(n0vector, n2vector)
@@ -168,46 +294,46 @@ class Balloon(object):
             )
             if angle > neighbour_min_angle:
                 # prune it out!
-                n0.neighbour2 = n2
-                n2.neighbour1 = n0
-                n1.pruned = True
+                node0.neighbour2 = node2
+                node2.neighbour1 = node0
+                node1.pruned = True
 
         new_nodes = []
-        for n in self.nodes:
-            if not hasattr(n, "pruned"):
-                new_nodes.append(n)
+        for node in self.nodes:
+            if not hasattr(node, "pruned"):
+                new_nodes.append(node)
 
         return new_nodes
 
     def insert_nodes(self):
         neighbour_max_distance = 5
         new_nodes = []
-        for n in self.nodes:
-            left_distance = n._get_distance(n.neighbour1)
-            right_distance = n._get_distance(n.neighbour2)
+        for node in self.nodes:
+            left_distance = node.get_distance(node.neighbour1)
+            right_distance = node.get_distance(node.neighbour2)
             if left_distance > neighbour_max_distance:
                 # halfway
                 half_point = (
-                    n.x + (n.neighbour1.x - n.x) / 2,
-                    n.y + (n.neighbour1.y - n.y) / 2
+                    node.x + (node.neighbour1.x - node.x) / 2,
+                    node.y + (node.neighbour1.y - node.y) / 2
                 )
                 new_node = Node(half_point)
-                n.neighbour1.connect(n.neighbour1.neighbour1, new_node)
-                new_node.connect(n.neighbour1, n)
-                n.connect(new_node, n.neighbour2)
+                node.neighbour1.connect(node.neighbour1.neighbour1, new_node)
+                new_node.connect(node.neighbour1, node)
+                node.connect(new_node, node.neighbour2)
                 new_nodes.append(new_node)
-            new_nodes.append(n)
+            new_nodes.append(node)
 
             if right_distance > neighbour_max_distance:
                 # halfway
                 half_point = (
-                    n.x + (n.neighbour2.x - n.x) / 2,
-                    n.y + (n.neighbour2.y - n.y) / 2
+                    node.x + (node.neighbour2.x - node.x) / 2,
+                    node.y + (node.neighbour2.y - node.y) / 2
                 )
                 new_node = Node(half_point)
-                n.neighbour2.connect(new_node, n.neighbour2.neighbour2)
-                new_node.connect(n, n.neighbour2)
-                n.connect(n.neighbour1, new_node)
+                node.neighbour2.connect(new_node, node.neighbour2.neighbour2)
+                new_node.connect(node, node.neighbour2)
+                node.connect(node.neighbour1, new_node)
                 new_nodes.append(new_node)
 
         return new_nodes
@@ -220,33 +346,31 @@ class Balloon(object):
             node_positions[:, 1],
             shape=self.base_image.shape
         )
-        poly_img = np.zeros_like(self.base_image)
+        poly_img = np.zeros(self.base_image.shape)
         poly_img[poly_rr, poly_cc] = 1
         skel = skimage.morphology.skeletonize(poly_img)
-        skel_coords = np.array(np.where(skel == True)).T
+        skel_coords = np.array(np.where(skel)).T
 
-        for n in self.nodes:
-            n.apply_force(skel_coords, self.base_image, image_percentile)
+        for node in self.nodes:
+            node.apply_force(skel_coords, self.base_image, image_percentile)
 
         original_positions = np.zeros((len(self.nodes), 2))
         new_positions = np.zeros((len(self.nodes), 2))
-        for i, n in enumerate(self.nodes):
-            original_positions[i, :] = (n.x, n.y)
-            new_positions[i, :] = (n.buff_x, n.buff_y)
-            n.apply_changes()
+        for i, node in enumerate(self.nodes):
+            original_positions[i, :] = (node.x, node.y)
+            new_positions[i, :] = (node.buff_x, node.buff_y)
+            node.apply_changes()
 
-        original_area = self.get_area(original_positions)
         new_area = self.get_area(new_positions)
-        delta_area = np.abs(new_area - original_area)
         if new_area < 50:
-            for i, n in enumerate(self.nodes):
-                n.x = original_positions[i, 0]
-                n.y = original_positions[i, 1]
+            for i, node in enumerate(self.nodes):
+                node.x = original_positions[i, 0]
+                node.y = original_positions[i, 1]
             raise ValueError("Area too small")
 
         self.nodes = self.prune_branches()
         self.nodes = self.insert_nodes()
-        return delta_area
+        return np.abs(new_area - self.get_area(original_positions))
 
     def get_coordinates(self):
         return np.array([(n.x, n.y) for n in self.nodes])
@@ -266,25 +390,9 @@ class Balloon(object):
 
 
 def initial_nodes(centre, radius, num_nodes):
-    initial_nodes = np.array([
+    nodes = np.array([
         (centre[0] + radius * np.sin(x),
          centre[1] + radius * np.cos(x))
         for x in np.linspace(0, 2 * np.pi, num_nodes)[:-1]
     ])
-    return initial_nodes
-
-
-if __name__ == "__main__":
-    base_image = np.load("test.npy")
-    centre = (45, 43)
-    radius = 5
-    num_nodes = 20
-    init = initial_nodes(centre, radius, num_nodes)
-    B = Balloon(init, base_image)
-    i = 0
-    while True:
-        if i % 50 == 0:
-            B.evolve(True)
-        else:
-            B.evolve()
-        i += 1
+    return nodes
