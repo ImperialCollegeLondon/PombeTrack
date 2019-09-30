@@ -27,8 +27,36 @@ sns.set_context("talk")
 sns.set_style("white")
 
 class Toolbar(NavigationToolbar):
-    """Custom toolbar for controlling cell assembly and lineage assignment."""
-    def __init__(self, figure_canvas, parent=None):
+    """Custom toolbar for controlling cell assembly and lineage assignment.
+
+    Sub-class of matplotlib.backends.backend_qt5agg.NavigationToolbar2QT
+
+    Standard tools:
+        Home:     returns all axes to the default limits.
+        Pan:      tool for panning and zooming the plot.
+        Zoom:     tool for zooming the plot.
+
+    Custom tools:
+        Previous: switch to the previous frame.
+        Next:     switch to the next frame.
+        Accept:   accept the lineage and update the database.
+        Cancel:   cancel assignment and discard any changes.
+
+    Arguments:
+        figure_canvas (FigureCanvas):
+            any matplotlib FigureCanvas, in this case
+            matplotlib.backends.backend_qt5agg.FigureCanvasQTAgg,
+            as subclassed by `Plotter` and `AssignerPlotter`.
+
+        parent (QDialog):
+            the assignment main interface object, this is used to trigger
+            events in the Assigner class by attaching them to the main object.
+
+    Attributes:
+        toolitems (list): the tool items, encoding their name, tooltip, icon,
+                          and method.
+    """
+    def __init__(self, figure_canvas, parent):
         self.toolitems = [
             ("Home", "Home", "home_large", "home_event"),
             # (None, None, None, None),
@@ -50,9 +78,8 @@ class Toolbar(NavigationToolbar):
 
         pixmap = QtGui.QPixmap(path)
         if hasattr(pixmap, "setDevicePixelRatio"):
-            # pylint: disable=protected-access
             # no other way to avoid using _dpi_ratio I don't think
-            pixmap.setDevicePixelRatio(self.canvas._dpi_ratio)
+            pixmap.setDevicePixelRatio(self.canvas._dpi_ratio)  # pylint: disable=protected-access
 
         return QtGui.QIcon(pixmap)
 
@@ -89,7 +116,25 @@ class Toolbar(NavigationToolbar):
 
 
 class Plotter(FigureCanvas):
-    """Base class for simply constructing a matplotlib plot."""
+    """Base class for simply constructing a matplotlib plot.
+
+    Arguments:
+        parent_window (QDialog):
+            the assignment main interface object, this is used to trigger
+            events in the Assigner class by attaching them to the main object.
+
+        fig_dimensions (tuple):
+            width, height, dpi, and number of subplots.
+            width, height: the figure bounds in inches.
+            dpi:           dots per inch of the figure.
+            num subplots:  how many subplot axes to create.
+
+    Attributes:
+        axes (list):      each subplot axis.
+        offsets (list):   xy limits of each axis (each element is a tuple of
+                          left, top, right, and bottom bounds).
+        screen_dpi (int): dots per inch of the figure.
+    """
     def __init__(self, parent_window, fig_dimensions):
         self.current_channel = None
         width, height, dpi, subplots = fig_dimensions
@@ -121,7 +166,11 @@ class Plotter(FigureCanvas):
         fig.tight_layout()
 
     def set_channel(self, channel):
-        """Assign channel number to internal variable."""
+        """Assign channel number to internal variable.
+
+        Arguments:
+            channel (int): channel index to set.
+        """
         self.current_channel = channel
 
     def display_image(self, img, sp_idx, title=None, limits=None, **im_kwargs):
@@ -238,6 +287,12 @@ class AssignerPlotter(Plotter):
 
     The cross button results in the discarding of all assignments and the
     closing of the assignment interface.
+
+    Arguments:
+        as for the `Plotter` class.
+
+    Attributes:
+        as for the `Plotter` class.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -277,7 +332,13 @@ class AssignerPlotter(Plotter):
         self.draw()
 
     def clear_plots(self):
-        """Remove all elements from all subplots."""
+        """Remove all elements from all subplots.
+
+        Arguments: N/A
+
+        Returns:
+            None
+        """
         for axis in self.axes:
             axis.clear()
             axis.set_xticks([], [])
@@ -289,9 +350,9 @@ class AssignerPlotter(Plotter):
         """Add titles to each subplot.
 
         Arguments:
-            left (str)
-            centre (str)
-            right (str)
+            left (str):   title of the first axis (left-hand).
+            centre (str): title of the second axis (centre).
+            right (str):  title of the third axis (right-hand).
 
         Returns:
             None
@@ -394,6 +455,83 @@ class Assigner:
     This information may be useful for subsequent analysis.
     This button is only displayed when a cell has been verified (green bar and
     tick mark).
+
+    Arguments:
+        experiment_data (database.ExperimentRow):
+            saved information about the experiment.
+
+        image_loader (library.loader):
+            instance of library.loader.ImageLoaderMulti or
+            library.loader.ImageLoaderSingle allowing access to all
+            experimental images.
+
+        screen_dimensions (tuple):
+            width (int):  width in pixels of the interface.
+            height (int): height in pixels of the interface.
+            dpi (int):    resolution of the interface.
+
+    Attributes:
+        experiment_data: As above.
+        image_loader:    As above.
+        region_halfwidth (int):
+            Half-width of the default image region (75 pixels).
+
+        region_halfheight (int):
+            Half-height of the default image region (75 pixels).
+
+        max_width_px (int):
+            Width in pixels of the interface.
+
+        max_height_px (int):
+            Height in pixels of the interface.
+
+        screen_dpi (int):
+            Resolution of the interface.
+
+        outlines (pd.DataFrame):
+            All outline information from the database for this experiment.
+
+        parent_window (QWidget):
+            Widget representing the experiment in the experiment interface
+            (first application interface).
+
+        temp_window (QDialog):
+            Usually None, used for creating a pop-up modal dialog that prevents
+            user interaction during slightly longer operations. Due to be
+            replaced by something better in future versions.
+
+        main_layout (QVBoxLayout):
+            Base object for setting out all Qt5 GUI elements.
+
+        plot (AssignerPlotter):
+            Instance of the assignment matplotlib interface, should be None if
+            no assignment is taking place.
+
+        status_bar (QStatusBar):
+            GUI element for displaying the program status.
+
+        lineage_scroll_area (QScrollArea):
+            The scrollable region containing every cell.
+
+        lineage (list):
+            List of all outlines considered to be part of the same cell (the
+            cell that is currently being assigned).  Each element is a
+            database.OutlineRow (or a pd.Series containing the same
+            information). Temporary storage of this information that is
+            frequently modified as the user progresses through the assignment
+            process.
+
+        selected_outlines (list):
+            Contains the outlines that have been selected automatically or by
+            the user in the subsequent frame during assignment. Used to
+            determine whether cell assignment should continue with growth,
+            division, or loss. Elements are pd.Series containing outline
+            information.
+
+        assignment_queue (list):
+            List of the first outline of each cell that has yet to be assigned.
+            Used to allow the definition of all the ancestors of a single cell.
+            Contains outline IDs (str) only.
     """
     # pylint: disable=too-many-instance-attributes
     # not sure how to get fewer attributes for functionality really
