@@ -52,11 +52,23 @@ class Node:
 
     The x and y coordinates recorded in this class are used to define the
     outline coordinates used throughout PombeTrack.
+
+    Arguments:
+        coord (tuple): x, y coordinate of the node position.
+
+    Attributes:
+        x (float):         x coordinate of the node position.
+        y (float):         y coordinate of the node position.
+        buff_x (float):    x coordinate of the node after applying forces.
+        buff_y (float):    y coordinate of the node after applying forces.
+        neighbour1 (Node): node to the left of this node.
+        neighbour2 (Node): node to the right of this node.
+
+    *left and right in this context are arbritrary
     """
     def __init__(self, coord):
         self.x = coord[0]
         self.y = coord[1]
-        self._connected = False
         self.buff_x = None
         self.buff_y = None
         self.neighbour1 = None
