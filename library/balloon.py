@@ -198,8 +198,8 @@ class Node:
         Arguments:
             skel_coords (Nx2 ndarray): coordinates of the cell skeleton.
             image (NxM ndarray):       matrix of image intensity values.
-            percentile (float):        the level which is considered to be dark
-                                       in the image.
+            percentile (int or float): the level which is considered to be dark
+                                       in the image; defaults to 5.
 
         Returns:
             None
@@ -249,8 +249,27 @@ class Node:
 
 
 class Balloon:
+    """ Class for handling all nodes in a balloon model of a cell outline.
+
+    As mentioned in the module docstring, an outline is imagined as a series of
+    points attached together that encircle the cell contents.
+    Each point is handled by the `Node` class above.
+
+    The Balloon class handles operations that affect all nodes, such as adding
+    and removing nodes, node movements, the points from which the expansion
+    force originates, and overall balloon evolution.
+
+    Arguments:
+        initial_coords (Nx2 array): initial x, y coordinates of balloon nodes.
+        base_image (NxM array):     brightfield image containing the cell.
+
+    Attributes:
+        nodes (list):           all nodes defining the balloon in sequential order.
+        base_image (NxM array): brightfield image.
+        centre (tuple):         x, y coordinates of the centre of the balloon.
+        refining_cycles (int):  number of iterations of the evolution.
+    """
     def __init__(self, initial_coords, base_image):
-        self.mode = "initialise"
         self.nodes = self.create_nodes(initial_coords)
         self.base_image = base_image
         self.centre = self.get_centre()
@@ -258,6 +277,18 @@ class Balloon:
 
     @staticmethod
     def create_nodes(coords):
+        """Convert a series of coordinates into Node objects.
+
+        Arguments:
+            coords (Nx2 array): x y coordinates of each point.
+
+        Returns:
+            nodes (list): list of Node objects for each coordinate.
+
+        This function also assumes that the coordinates are arranged in order,
+        thus connects each Node to its preceding and succeeding Node (with
+        wrapping).
+        """
         nodes = []
         for coord in coords:
             nodes.append(Node(coord))
@@ -272,6 +303,18 @@ class Balloon:
         return nodes
 
     def get_centre(self):
+        """Get the centre (centroid) of the area defined by the balloon.
+
+        The centroid is defined simply as the mean x and mean y position of all
+        nodes.
+
+        Arguments:
+            N/A
+
+        Returns:
+            centre_x (float): x coordinate of the centroid positions.
+            centre_y (float): y coordinate of the centroid positions.
+        """
         # just get the centroid
         # perhaps try something like:
         # https://github.com/mapbox/polylabel/blob/master/polylabel.js
@@ -282,6 +325,16 @@ class Balloon:
         return centre_x, centre_y
 
     def remove_node(self, node):
+        """Remove a node from the balloon outline.
+
+        Deletes a node and reconnects its neighbours to themselves.
+
+        Arguments:
+            node (Node): the node to be removed.
+
+        Returns:
+            None
+        """
         self.nodes.pop(self.nodes.index(node))
         node1 = node.neighbour1
         node2 = node.neighbour2
@@ -289,6 +342,20 @@ class Balloon:
         node2.neighbour1 = node1
 
     def prune_branches(self):
+        """Remove errant nodes from the balloon outline.
+
+        Checks whether the angle between the lines connecting the node to its
+        two neighbours is less than a threshold value.
+        This threshold is hard-coded to 2π/3 radians (120°).
+        If the threshold is exceeded, the node is removed, and its neighbours
+        are connected to one another.
+
+        Arguments:
+            N/A
+
+        Returns:
+            new_nodes (list):
+        """
         if len(self.nodes) < 20:
             return self.nodes
 
@@ -318,6 +385,23 @@ class Balloon:
         return new_nodes
 
     def insert_nodes(self):
+        """Add nodes to the outline.
+
+        Checks the distance between each pair of nodes and adds a new node if
+        the distance is larger than a threshold value, currently hard-coded to
+        5 pixels.
+
+        When adding a node, it is placed at the halfway point between the two
+        nodes, and the existing nodes are connected appropriately as
+        neighbours.
+
+        Arguments:
+            N/A
+
+        Returns:
+            new_nodes (list): record of all the new nodes.
+
+        """
         neighbour_max_distance = 5
         new_nodes = []
         for node in self.nodes:
@@ -351,6 +435,26 @@ class Balloon:
         return new_nodes
 
     def evolve(self, image_percentile=5):
+        """Perform single iteration of balloon algorithm.
+
+        Determines the central spine of the outline (skeleton) which become the
+        expansion points.
+        Iterates through each node and calls Node.apply_force.
+        Applies each change after all the nodes have been adjusted.
+        Rejects changes if the cell area becomes lower than 50 pixels^2.
+        Errant nodes are pruned with Balloon.prune_branches.
+        Finally, nodes are added with Balloon.insert_nodes.
+
+        Arguments:
+            image_percentile (int or float):
+                The level which is considered to be dark in the image, see
+                Node.apply_force; defaults to 5.
+
+        Returns:
+            delta_area (float):
+                Change in area (pixels^2) for the original outline compared to
+                the new outline.
+        """
         self.refining_cycles += 1
         node_positions = np.array([(x.x, x.y) for x in self.nodes])
         poly_rr, poly_cc = skimage.draw.polygon(
@@ -385,9 +489,30 @@ class Balloon:
         return np.abs(new_area - self.get_area(original_positions))
 
     def get_coordinates(self):
+        """Obtain the coordinates of all nodes in the outline.
+
+        Arguments:
+            N/A
+
+        Returns:
+            coords (np.array; Nx2): xy coordinates of each node.
+        """
         return np.array([(n.x, n.y) for n in self.nodes])
 
     def get_area(self, coords=None):
+        """Calculate the area within node coordinates.
+
+        Uses a Shoelace algorithm.
+
+        Arguments:
+            coords (np.array; Nx2):
+                xy coordinate positions of each node, defaults to the current
+                outline coordinates if argument is omitted.
+
+        Returns:
+            area (float):
+                Area within the coordinate bounds (pixels^2).
+        """
         if coords is None:
             coords = np.array([(n.x, n.y) for n in self.nodes])
 
@@ -402,6 +527,23 @@ class Balloon:
 
 
 def initial_nodes(centre, radius, num_nodes):
+    """Generate a set of coordinates around a single point.
+
+    Creates a circular set of coordinate points around a given central
+    coordinate.
+
+    Arguments:
+        centre (tuple):
+            x, y coordinates of the central point.
+        radius (float):
+            radius in pixels of the desired circle.
+        num_nodes (int):
+            how many node positions to create in the circle.
+
+    Returns:
+        nodes (np.array; Nx2):
+            x, y coordinates of each node generated.
+    """
     nodes = np.array([
         (centre[0] + radius * np.sin(x),
          centre[1] + radius * np.cos(x))
