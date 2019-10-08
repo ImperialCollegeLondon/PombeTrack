@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 
 import os
-import numpy as np
 import pathlib
 import shutil
 import sqlite3
-import sys
 import time
 import uuid
+import numpy as np
 
 from . import loader
 
-
+# pylint: module-naming-style=camelCase
 class Row(dict):
     COLS = []
     def __init__(self, table_row=None):

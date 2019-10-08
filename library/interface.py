@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+""" Provide the base interface for the entire application.
+
+Creates the Qt5 application and all its immediate daughter windows.
+Retrieves and displays a summarised view of all experiments, and provides
+access to adding, viewing, and removing experiments.
+"""
+
 import os
 
 import PyQt5.QtWidgets as QtWidgets
@@ -27,6 +34,7 @@ class Interface:
         self.window.setWindowIcon(QtGui.QIcon(os.path.abspath("resources/icon.png")))
         self.base_layout = QtWidgets.QVBoxLayout()
         self.base_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.experiment_table = None
 
         self.add_menu()
         self.decorate_window()
@@ -50,7 +58,7 @@ class Interface:
         file_menu = menubar.addMenu("&File")
 
         refresh_action = QtWidgets.QAction("&Refresh", menubar)
-        refresh_action.triggered.connect(lambda: self._refresh_layout())
+        refresh_action.triggered.connect(self._refresh_layout)
         file_menu.addAction(refresh_action)
 
         quit_action = QtWidgets.QAction("&Quit", menubar)
@@ -63,7 +71,118 @@ class Interface:
         self.window.show()
         self.app.exec_()
 
-    def decorate_experiments():
+    @staticmethod
+    def get_date_item(exp):
+        date_item = QtWidgets.QTableWidgetItem()
+        date_item.setText(exp.date)
+        date_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        date_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+        date_item.item_type = "experiment_date"
+        date_item.experiment_id = exp.experiment_id
+        return date_item
+
+    @staticmethod
+    def get_medium_item(exp):
+        medium_item = QtWidgets.QTableWidgetItem()
+        medium_item.setText(exp.medium)
+        medium_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        medium_item.item_type = "experiment_medium"
+        medium_item.experiment_id = exp.experiment_id
+        return medium_item
+
+    @staticmethod
+    def get_strain_item(exp):
+        strain_item = QtWidgets.QTableWidgetItem()
+        strain_item.setText(exp.strain)
+        strain_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        strain_item.item_type = "experiment_strain"
+        strain_item.experiment_id = exp.experiment_id
+        return strain_item
+
+    @staticmethod
+    def get_outlined_item(exp):
+        outlined_item = QtWidgets.QTableWidgetItem()
+        outlined_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+        if exp.outlined:
+            outlined_item.setData(
+                QtCore.Qt.BackgroundRole,
+                QtGui.QBrush(QtGui.QColor("green"))
+            )
+            num_outlines = len(database.getOutlinesByExperimentId(exp.experiment_id))
+            outlined_item.setText(str(num_outlines))
+
+        else:
+            outlined_item.setData(
+                QtCore.Qt.BackgroundRole,
+                QtGui.QBrush(QtGui.QColor("red"))
+            )
+            outlined_item.setText("NO")
+
+        outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        outlined_item.experiment_id = exp.experiment_id
+        outlined_item.item_type = "experiment_outlined"
+        return outlined_item
+
+    @staticmethod
+    def get_verified_item(exp):
+        verified_item = QtWidgets.QTableWidgetItem()
+        verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+        if exp.verified:
+            verified_item.setData(
+                QtCore.Qt.BackgroundRole,
+                QtGui.QBrush(QtGui.QColor("green"))
+            )
+            verified_item.setText("YES")
+
+        else:
+            verified_item.setData(
+                QtCore.Qt.BackgroundRole,
+                QtGui.QBrush(QtGui.QColor("red"))
+            )
+            verified_item.setText("NO")
+
+        verified_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        verified_item.experiment_id = exp.experiment_id
+        verified_item.item_type = "experiment_verified"
+        return verified_item
+
+    @staticmethod
+    def get_analysed_item(exp):
+        analysed_item = QtWidgets.QTableWidgetItem()
+        analysed_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+        if exp.analysed:
+            analysed_item.setData(
+                QtCore.Qt.BackgroundRole,
+                QtGui.QBrush(QtGui.QColor("green"))
+            )
+            analysed_item.setText("YES")
+        else:
+            analysed_item.setData(
+                QtCore.Qt.BackgroundRole,
+                QtGui.QBrush(QtGui.QColor("red"))
+            )
+            analysed_item.setText("NO")
+
+        analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        analysed_item.experiment_id = exp.experiment_id
+        analysed_item.item_type = "experiment_analysed"
+        return analysed_item
+
+    @staticmethod
+    def get_cells_counted_item(exp, cell_count):
+        cells_counted_item = QtWidgets.QTableWidgetItem()
+        cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+        if exp.verified:
+            cells_counted_item.setText(cell_count)
+        else:
+            cells_counted_item.setText("0")
+
+        cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
+        cells_counted_item.experiment_id = exp.experiment_id
+        cells_counted_item.item_type = "experiment_cells_counted"
+        return cells_counted_item
+
+    def decorate_experiments(self, existing_experiments):
         self.experiment_table = QtWidgets.QTableWidget()
         self.experiment_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.experiment_table.setRowCount(len(existing_experiments))
@@ -74,105 +193,17 @@ class Interface:
         self.experiment_table.setHorizontalHeaderLabels(header_labels)
         table_rows = []
         for exp in existing_experiments:
-            date_item = QtWidgets.QTableWidgetItem()
-            date_item.setText(exp.date)
-            date_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            date_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-            date_item.item_type = "experiment_date"
-            date_item.experiment_id = exp.experiment_id
-
-            medium_item = QtWidgets.QTableWidgetItem()
-            medium_item.setText(exp.medium)
-            medium_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            medium_item.item_type = "experiment_medium"
-            medium_item.experiment_id = exp.experiment_id
-
-            strain_item = QtWidgets.QTableWidgetItem()
-            strain_item.setText(exp.strain)
-            strain_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            strain_item.item_type = "experiment_strain"
-            strain_item.experiment_id = exp.experiment_id
-
-            outlined_item = QtWidgets.QTableWidgetItem()
-            outlined_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-
-            if exp.outlined:
-                outlined_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("green"))
-                )
-                num_outlines = len(database.getOutlinesByExperimentId(exp.experiment_id))
-                outlined_item.setText(str(num_outlines))
-
-            else:
-                outlined_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("red"))
-                )
-                outlined_item.setText("NO")
-
-            outlined_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            outlined_item.experiment_id = exp.experiment_id
-            outlined_item.item_type = "experiment_outlined"
-
-            verified_item = QtWidgets.QTableWidgetItem()
-            verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-            if exp.verified:
-                verified_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("green"))
-                )
-                verified_item.setText("YES")
-
-            else:
-                verified_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("red"))
-                )
-                verified_item.setText("NO")
-
-            verified_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            verified_item.experiment_id = exp.experiment_id
-            verified_item.item_type = "experiment_verified"
-
-            cells_counted_item = QtWidgets.QTableWidgetItem()
-            cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-            analysed_item = QtWidgets.QTableWidgetItem()
-            analysed_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
-            if exp.analysed:
-                analysed_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("green"))
-                )
-                analysed_item.setText("YES")
-            else:
-                analysed_item.setData(
-                    QtCore.Qt.BackgroundRole,
-                    QtGui.QBrush(QtGui.QColor("red"))
-                )
-                analysed_item.setText("NO")
-
-            analysed_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            analysed_item.experiment_id = exp.experiment_id
-            analysed_item.item_type = "experiment_analysed"
-
-            if exp.verified:
-                cells_counted_item.setText(self.get_cell_count(exp.experiment_id))
-            else:
-                cells_counted_item.setText("0")
-
-            cells_counted_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            cells_counted_item.experiment_id = exp.experiment_id
-            cells_counted_item.item_type = "experiment_cells_counted"
-
             table_rows.append({
-                "date": (exp.date, date_item),
-                "medium": (exp.medium, medium_item),
-                "strain": (exp.strain, strain_item),
-                "outlined": (None, outlined_item),
-                "verified": (None, verified_item),
-                "analysed": (None, analysed_item),
-                "counted": (None, cells_counted_item),
+                "date": (exp.date, self.get_date_item(exp)),
+                "medium": (exp.medium, self.get_medium_item(exp)),
+                "strain": (exp.strain, self.get_strain_item(exp)),
+                "outlined": (None, self.get_outlined_item(exp)),
+                "verified": (None, self.get_verified_item(exp)),
+                "analysed": (None, self.get_analysed_item(exp)),
+                "counted": (None, self.get_cells_counted_item(
+                    exp,
+                    self.get_cell_count(exp.experiment_id),
+                )),
             })
 
         table_rows.sort(key=lambda x: (x["date"][0], x["strain"][0]))
@@ -185,12 +216,20 @@ class Interface:
         header_label.setFont(header_font)
         self.base_layout.addWidget(header_label)
 
+        table_cols = [
+            "date",
+            "medium",
+            "strain",
+            "outlined",
+            "verified",
+            "analysed",
+            "counted",
+        ]
         existing_experiments = self.get_existing_experiments()
         if existing_experiments:
-            table_rows = self.decorate_experiments()
-
+            table_rows = self.decorate_experiments(existing_experiments)
             for row_num, table_row in enumerate(table_rows):
-                for col_num, table_col in enumerate(["date", "medium", "strain", "outlined", "verified", "analysed", "counted"]):
+                for col_num, table_col in enumerate(table_cols):
                     self.experiment_table.setItem(row_num, col_num, table_row[table_col][1])
 
             self.experiment_table.itemClicked.connect(self.table_click_event)
