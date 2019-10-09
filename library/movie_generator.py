@@ -1,58 +1,53 @@
 #!/usr/bin/env python3
 
 import itertools
+import os
+
 import matplotlib.patches
 import matplotlib.figure
 import numpy as np
-import operator
-import os
-import tifffile
 
 from . import database
 
 
 class MovieMaker:
-    def __init__(
-        self,
-        experiment_id,
-        cell_id,
-        descendants,
-        outlines,
-        frames,
-        scale,
-        channels,
-        image_loader,
-        screen_dpi,
-    ):
-        self.experiment_id = experiment_id
-        self.cell_id = cell_id
-        self.image_loader = image_loader
-        self.screen_dpi = screen_dpi
+    def __init__(self, **settings):
+        self.experiment_id = settings["experiment_id"]
+        self.cell_id = settings["cell_id"]
+        self.image_loader = settings["image_loader"]
+        self.screen_dpi = settings["screen_dpi"]
 
-        cells = sorted(
-            self.get_cells(self.cell_id, descendants),
-            key=operator.itemgetter(0),
-        )
+        cells = self.get_cells(self.cell_id, settings["descendants"])
+        # this bit groups outlines by frame index
         self.cells = [
-            (f, [x[1] for x in d])
-            for f, d in itertools.groupby(cells, operator.itemgetter(0))
+            (frame_idx, list(cells))
+            for frame_idx, cells in
+            itertools.groupby(cells, lambda x: x.frame_idx)
         ]
 
-        self.create_movie(outlines, frames, scale, channels)
+        self.create_movie(
+            settings["outlines"],
+            settings["frames"],
+            settings["scale"],
+            settings["channels"],
+        )
 
     def get_cells(self, cell_id, descendants):
-        cells = [(x.frame_idx, x) for x in database.getOutlinesByCellId(cell_id)]
+        cells = database.getOutlinesByCellId(cell_id)
 
         if not descendants:
             return cells
 
-        if cells[-1][1].child_id2:
-            child1 = database.getOutlineById(cells[-1][1].child_id1)
-            child2 = database.getOutlineById(cells[-1][1].child_id2)
+        if cells[-1].child_id2:
+            child1 = database.getOutlineById(cells[-1].child_id1)
+            child2 = database.getOutlineById(cells[-1].child_id2)
             cells.extend(self.get_cells(child1.cell_id, descendants))
             cells.extend(self.get_cells(child2.cell_id, descendants))
 
-        return cells
+        return sorted(
+            cells,
+            key=lambda x: x.frame_idx
+        )
 
     def create_movie(self, outlines, frames, scale, channels):
         out_path = os.path.join("data", "movies", self.experiment_id, self.cell_id)
@@ -76,14 +71,13 @@ class MovieMaker:
                 if cell.offset_top + 150 > bottom_edge:
                     bottom_edge = cell.offset_top + 150
 
-                d = (right_edge - left_edge) - (bottom_edge - top_edge)
-                if d > 0:
-                    bottom_edge += d / 2
-                    top_edge -= d / 2
-                elif d < 0:
-                    right_edge -= d / 2
-                    left_edge += d / 2
-                d2 = (right_edge - left_edge) - (bottom_edge - top_edge)
+                delta = (right_edge - left_edge) - (bottom_edge - top_edge)
+                if delta > 0:
+                    bottom_edge += delta / 2
+                    top_edge -= delta / 2
+                elif delta < 0:
+                    right_edge -= delta / 2
+                    left_edge += delta / 2
 
                 if left_edge < 0:
                     left_edge = 0
@@ -95,13 +89,10 @@ class MovieMaker:
                     bottom_edge = c_temp.shape[0]
 
         for frame_idx, cells in self.cells:
-            frame_num = frame_idx + 1
-            c1 = self.image_loader.load_frame(frame_idx, 0)
-            c2, c3 = None, None
+            channel1 = self.image_loader.load_frame(frame_idx, 0)
+            channel2, channel3 = None, None
 
-            width = bottom_edge - top_edge
-            height = right_edge - left_edge
-            width_in = width / self.screen_dpi
+            width_in = (bottom_edge - top_edge) / self.screen_dpi
             if not channels or self.image_loader.num_channels == 1:
                 fig = matplotlib.figure.Figure(figsize=(width_in, width_in))
                 ax1 = fig.add_subplot(111)
@@ -111,42 +102,42 @@ class MovieMaker:
                 fig = matplotlib.figure.Figure(figsize=(width_in * 2, width_in))
                 ax1 = fig.add_subplot(121)
                 ax2 = fig.add_subplot(122)
-                c2 = self.image_loader.load_frame(frame_idx, 1)
+                channel2 = self.image_loader.load_frame(frame_idx, 1)
                 ax3 = None
             elif channels and self.image_loader.num_channels == 3:
                 fig = matplotlib.figure.Figure(figsize=(width_in * 3, width_in))
                 ax1 = fig.add_subplot(131)
                 ax2 = fig.add_subplot(132)
                 ax3 = fig.add_subplot(133)
-                c2 = self.image_loader.load_frame(frame_idx, 1)
-                c3 = self.image_loader.load_frame(frame_idx, 2)
+                channel2 = self.image_loader.load_frame(frame_idx, 1)
+                channel3 = self.image_loader.load_frame(frame_idx, 2)
 
-            for ax in [ax1, ax2, ax3]:
-                if not ax:
+            for ax_idx, this_ax in enumerate([ax1, ax2, ax3]):
+                if not this_ax:
                     break
-                ax.set_aspect("equal")
-                ax.axis("off")
-                if ax == ax1:
-                    ax.imshow(c1, cmap="gray")
-                elif ax == ax2:
-                    ax.imshow(c2, cmap="binary")
-                elif ax == ax3:
-                    ax.imshow(c3, cmap="binary")
+                this_ax.set_aspect("equal")
+                this_ax.axis("off")
+                if ax_idx == 0:
+                    this_ax.imshow(channel1, cmap="gray")
+                elif ax_idx == 1:
+                    this_ax.imshow(channel2, cmap="binary")
+                elif ax_idx == 2:
+                    this_ax.imshow(channel3, cmap="binary")
 
             if outlines:
                 for cell in cells:
-                    c = np.load(cell.coords_path) + np.array([cell.offset_left, cell.offset_top])
-                    coords = np.array([c[:, 1], c[:, 0]]).T
-                    for ax in [ax1, ax2, ax3]:
-                        if not ax:
+                    coords = (np.load(cell.coords_path) +
+                              np.array([cell.offset_left, cell.offset_top]))
+                    for this_ax in [ax1, ax2, ax3]:
+                        if not this_ax:
                             break
                         poly = matplotlib.patches.Polygon(
-                            coords,
+                            np.array([coords[:, 1], coords[:, 0]]).T,
                             edgecolor="r",
                             fill=False,
                             lw=1,
                         )
-                        ax.add_patch(poly)
+                        this_ax.add_patch(poly)
 
             if frames:
                 txt = "F{0}".format(int(frame_idx + 1))
@@ -181,11 +172,11 @@ class MovieMaker:
                 )
                 ax1.add_patch(scalebar)
 
-            for ax in [ax1, ax2, ax3]:
-                if not ax:
+            for this_ax in [ax1, ax2, ax3]:
+                if not this_ax:
                     break
-                ax.set_xlim([bottom_edge, top_edge])
-                ax.set_ylim([left_edge, right_edge])
+                this_ax.set_xlim([bottom_edge, top_edge])
+                this_ax.set_ylim([left_edge, right_edge])
 
             fig.tight_layout()
             fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
