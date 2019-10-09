@@ -169,7 +169,15 @@ class Interface:
         return analysed_item
 
     @staticmethod
-    def get_cells_counted_item(exp, cell_count):
+    def get_cells_counted_item(exp):
+        cells = database.getCellsByExperimentId(exp.experiment_id)
+        cells_wanted = database.getCellsByExperimentId(
+            exp.experiment_id,
+            birth_observed=True,
+            division_observed=True,
+        )
+        cell_count = "{0} ({1})".format(len(cells_wanted), len(cells))
+
         cells_counted_item = QtWidgets.QTableWidgetItem()
         cells_counted_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
         if exp.verified:
@@ -182,32 +190,39 @@ class Interface:
         cells_counted_item.item_type = "experiment_cells_counted"
         return cells_counted_item
 
-    def decorate_experiments(self, existing_experiments):
-        self.experiment_table = QtWidgets.QTableWidget()
-        self.experiment_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        self.experiment_table.setRowCount(len(existing_experiments))
+    def create_experiment_table(self):
+        existing_experiments = sorted(
+            database.getExperiments(),
+            key=lambda x: (x.date, x.strain),
+        )
+
+        experiment_table = QtWidgets.QTableWidget()
+        experiment_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        experiment_table.setRowCount(len(existing_experiments))
         header_labels = [
             "Date", "Medium", "Strain", "Outlined", "Verified", "Analysed", "Cells detected",
         ]
-        self.experiment_table.setColumnCount(len(header_labels))
-        self.experiment_table.setHorizontalHeaderLabels(header_labels)
-        table_rows = []
-        for exp in existing_experiments:
-            table_rows.append({
-                "date": (exp.date, self.get_date_item(exp)),
-                "medium": (exp.medium, self.get_medium_item(exp)),
-                "strain": (exp.strain, self.get_strain_item(exp)),
-                "outlined": (None, self.get_outlined_item(exp)),
-                "verified": (None, self.get_verified_item(exp)),
-                "analysed": (None, self.get_analysed_item(exp)),
-                "counted": (None, self.get_cells_counted_item(
-                    exp,
-                    self.get_cell_count(exp.experiment_id),
-                )),
-            })
+        item_methods = [
+            self.get_date_item,
+            self.get_medium_item,
+            self.get_strain_item,
+            self.get_outlined_item,
+            self.get_verified_item,
+            self.get_analysed_item,
+            self.get_cells_counted_item,
+        ]
+        experiment_table.setColumnCount(len(header_labels))
+        experiment_table.setHorizontalHeaderLabels(header_labels)
+        for row_idx, exp in enumerate(existing_experiments):
+            for col_idx, method in enumerate(item_methods):
+                experiment_table.setItem(row_idx, col_idx, method(exp))
 
-        table_rows.sort(key=lambda x: (x["date"][0], x["strain"][0]))
-        return table_rows
+        experiment_table.itemClicked.connect(self.table_click_event)
+        experiment_table.itemDoubleClicked.connect(self.view_experiment)
+        experiment_table.itemChanged.connect(self.table_change_event)
+        experiment_table.setCurrentCell(0, 0, QtCore.QItemSelectionModel.Clear)
+
+        return experiment_table
 
     def decorate_window(self):
         header_label = QtWidgets.QLabel("Experiments:")
@@ -216,30 +231,8 @@ class Interface:
         header_label.setFont(header_font)
         self.base_layout.addWidget(header_label)
 
-        table_cols = [
-            "date",
-            "medium",
-            "strain",
-            "outlined",
-            "verified",
-            "analysed",
-            "counted",
-        ]
-        existing_experiments = self.get_existing_experiments()
-        if existing_experiments:
-            table_rows = self.decorate_experiments(existing_experiments)
-            for row_num, table_row in enumerate(table_rows):
-                for col_num, table_col in enumerate(table_cols):
-                    self.experiment_table.setItem(row_num, col_num, table_row[table_col][1])
-
-            self.experiment_table.itemClicked.connect(self.table_click_event)
-            self.experiment_table.itemDoubleClicked.connect(self.view_experiment)
-            self.experiment_table.itemChanged.connect(self.table_change_event)
-            self.experiment_table.setCurrentCell(0, 0, QtCore.QItemSelectionModel.Clear)
-            self.base_layout.addWidget(self.experiment_table)
-        else:
-            self.experiment_table = QtWidgets.QLabel("No experiments")
-            self.base_layout.addWidget(self.experiment_table)
+        self.experiment_table = self.create_experiment_table()
+        self.base_layout.addWidget(self.experiment_table)
 
         self.btn_row = QtWidgets.QHBoxLayout()
         btn = QtWidgets.QPushButton("Add new experiment")
@@ -256,12 +249,6 @@ class Interface:
 
         self.btn_row.setAlignment(QtCore.Qt.AlignLeft)
         self.base_layout.addLayout(self.btn_row)
-
-    @staticmethod
-    def get_cell_count(experiment_id):
-        cells = database.getCellsByExperimentId(experiment_id)
-        cells_wanted = database.getCellsByExperimentId(experiment_id, True, True)
-        return "{0} ({1})".format(len(cells_wanted), len(cells))
 
     def table_change_event(self, item):
         if not hasattr(item, "item_type"):
@@ -283,11 +270,6 @@ class Interface:
     def table_click_event(self, item):
         self.edit_btn.experiment_id = item.experiment_id
         self.delete_btn.experiment_id = item.experiment_id
-
-    @staticmethod
-    def get_existing_experiments():
-        experiments = database.getExperiments()
-        return experiments
 
     def add_experiment(self):
         exp = experiment.Experiment()
