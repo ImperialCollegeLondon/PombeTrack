@@ -18,6 +18,15 @@ from . import database
 
 
 class Interface:
+    """ Base interface for PombeTrack.
+
+    Creates the first window of the interface, with the experiment table
+    displaying existing experiments with a subset of their status/settings;
+    buttons to add experiments, remove experiments, and view/edit experiments.
+
+    Viewing/editing experiment functionality is also provided through the
+    experiment table, by single/doubling clicking on experiment elements.
+    """
     VERSION = (0, 5)
     def __init__(self):
         self.check_database()
@@ -41,6 +50,11 @@ class Interface:
         self.window.setLayout(self.base_layout)
 
     def check_database(self):
+        """Determine the database version and update it if necessary.
+
+        Arguments: N/A
+        Returns: None
+        """
         version_check = database.checkTable("version")
         if not version_check:
             database.createVersionTable()
@@ -54,6 +68,11 @@ class Interface:
             database.run_database_updates(known_version, self.VERSION)
 
     def add_menu(self):
+        """Create the File menu for PombeTrack in the base window.
+
+        Arguments: N/A
+        Returns: None
+        """
         menubar = QtWidgets.QMenuBar(self.window)
         file_menu = menubar.addMenu("&File")
 
@@ -68,11 +87,26 @@ class Interface:
         self.base_layout.setMenuBar(menubar)
 
     def initiate(self):
+        """Display the window and start the application.
+
+        Arguments: N/A
+        Returns: None
+        """
         self.window.show()
         self.app.exec_()
 
     @staticmethod
     def get_date_item(exp):
+        """Create a widget displaying the date of an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            date_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the date of the experiment.
+        """
         date_item = QtWidgets.QTableWidgetItem()
         date_item.setText(exp.date)
         date_item.setTextAlignment(QtCore.Qt.AlignCenter)
@@ -83,6 +117,16 @@ class Interface:
 
     @staticmethod
     def get_medium_item(exp):
+        """Create a widget displaying the medium of an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            medium_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the medium of the experiment.
+        """
         medium_item = QtWidgets.QTableWidgetItem()
         medium_item.setText(exp.medium)
         medium_item.setTextAlignment(QtCore.Qt.AlignCenter)
@@ -92,6 +136,16 @@ class Interface:
 
     @staticmethod
     def get_strain_item(exp):
+        """Create a widget displaying the strain of an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            strain_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the strain of the experiment.
+        """
         strain_item = QtWidgets.QTableWidgetItem()
         strain_item.setText(exp.strain)
         strain_item.setTextAlignment(QtCore.Qt.AlignCenter)
@@ -101,6 +155,20 @@ class Interface:
 
     @staticmethod
     def get_outlined_item(exp):
+        """Create a widget displaying the outlined status of an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            outlined_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the outlined status of the experiment.
+
+        The widget is a simple cell with the text YES, or NO, depending on
+        whether cells have been outlined for the experiment.
+        Its background colour is green or red respectively.
+        """
         outlined_item = QtWidgets.QTableWidgetItem()
         outlined_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
         if exp.outlined:
@@ -125,6 +193,22 @@ class Interface:
 
     @staticmethod
     def get_verified_item(exp):
+        """Create a widget displaying the verification status of an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            verified_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the verification status of the experiment.
+
+        The widget is a simple cell with the text YES, or NO, depending on
+        whether cells have been verified.
+        Its background colour is green or red respectively.
+        The verification status of an experiment is reset if any outlines are
+        added, removed, or modified.
+        """
         verified_item = QtWidgets.QTableWidgetItem()
         verified_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
         if exp.verified:
@@ -148,6 +232,20 @@ class Interface:
 
     @staticmethod
     def get_analysed_item(exp):
+        """Create a widget displaying the analysis status of an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            analysed_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the analysis status of the experiment.
+
+        The widget is a simple cell with the text YES, or NO, depending on
+        whether cells have been analysed.
+        Its background colour is green or red respectively.
+        """
         analysed_item = QtWidgets.QTableWidgetItem()
         analysed_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
         if exp.analysed:
@@ -170,6 +268,21 @@ class Interface:
 
     @staticmethod
     def get_cells_counted_item(exp):
+        """Create a widget displaying the number of cells in an experiment.
+
+        Arguments:
+            exp (database.ExperimentRow):
+                Data for the experiment in question.
+
+        Returns:
+            cells_counted_item (QtWidgets.QTableWidgetItem):
+                Widget displaying the number of cells in the experiment.
+
+        The number of cells is defined as verified cells in which both birth
+        and division are observed.
+        In brackets in this widget, the total number of cells is also shown,
+        including those in which birth or division are not observed.
+        """
         cells = database.getCellsByExperimentId(exp.experiment_id)
         cells_wanted = database.getCellsByExperimentId(
             exp.experiment_id,
@@ -191,6 +304,35 @@ class Interface:
         return cells_counted_item
 
     def create_experiment_table(self):
+        """Create the experiments table and populate it.
+
+        Arguments: N/A
+
+        Returns:
+            experiment_table (QtWidgets.QTableWidget):
+                The experiments table.
+
+        The table has the following columns:
+            Date, Medium, Strain, Outlined, Verified, Analysed, and Cells
+            detected
+
+        The first 3 of these columns (Date, Medium, Strain) are defined when
+        adding a new experiment (or when edited).
+
+        The next 3 columns (Outlined, Verified, Analysed) are defined by user
+        actions.
+
+        The final column depends on the verification process to define cells.
+
+        When a table row is clicked, the view/edit and delete buttons are
+        re-associated to that experiment (table_click_event function).
+
+        When a table row is double clicked on a non-editable cell, the view
+        interface for that experiment is opened (view_experiment function).
+        Editable cells are Medium and Strain.
+        If these are double clicked, the user can edit the contents of the cell
+        and submit it (table_change_event function).
+        """
         existing_experiments = sorted(
             database.getExperiments(),
             key=lambda x: (x.date, x.strain),
@@ -225,6 +367,14 @@ class Interface:
         return experiment_table
 
     def decorate_window(self):
+        """Create the base layout for PombeTrack.
+
+        Arguments: N/A
+        Returns: None
+
+        Calls the create_experiment_table method, then adds buttons for adding,
+        viewing, and deleting experiments.
+        """
         header_label = QtWidgets.QLabel("Experiments:")
         header_font = QtGui.QFont("Fira Sans", 13)
         header_font.setBold(True)
@@ -251,6 +401,18 @@ class Interface:
         self.base_layout.addLayout(self.btn_row)
 
     def table_change_event(self, item):
+        """Respond to an item edit in the experiment table.
+
+        Arguments:
+            item (QtWidgets.QTableWidgetItem):
+                The item that has been edited.
+
+        Returns: None
+
+        Should be triggered by Qt5 itself by signal binding.
+
+        Updates the database accordingly and refresh the interface.
+        """
         if not hasattr(item, "item_type"):
             return
 
@@ -268,10 +430,33 @@ class Interface:
         self._refresh_layout()
 
     def table_click_event(self, item):
+        """Respond to a single click of an experiment table item.
+
+        Arguments:
+            item (QtWidgets.QTableWidgetItem):
+                The item that has been clicked.
+
+        Returns: None
+
+        Should be triggered by a Qt5 signal.
+
+        Simply assigns the experiment_id of the clicked row to the view/edit
+        and delete buttons.
+        """
         self.edit_btn.experiment_id = item.experiment_id
         self.delete_btn.experiment_id = item.experiment_id
 
     def add_experiment(self):
+        """Create dialog for creating new experiments.
+
+        Arguments: N/A
+        Returns: None
+
+        See the experiment.Experiment.create_new_experiment method for more
+        details.
+
+        Will update the interface when the creation dialog is closed.
+        """
         exp = experiment.Experiment()
         dialog = QtWidgets.QDialog(self.window)
         dialog.setModal(True)
@@ -279,6 +464,22 @@ class Interface:
         exp.create_new_experiment(window=dialog)
 
     def view_experiment(self, item=None):
+        """Create dialog for viewing and interacting with an experiment.
+
+        Arguments:
+            item (QtWidgets.QTableWidgetItem):
+                optional argument
+
+        Returns: None
+
+        Can be called by a Qt5 event (in which case an item is needed), or
+        explicitly by pressing the view button.
+
+        See the experiment.ExperimentView.show_experiment method for more
+        details.
+
+        Will update the interface when the dialog is closed.
+        """
         forbidden_types = ["experiment_medium", "experiment_strain"]
         if item and item.item_type in forbidden_types:
             return
@@ -294,6 +495,15 @@ class Interface:
         exp_view.show_experiment(window=dialog)
 
     def delete_experiment(self):
+        """Delete an experiment.
+
+        Arguments: N/A
+        Returns: None
+
+        Uses the experiment.ExperimentView.delete_experiment method.
+
+        Refreshes the interface when complete.
+        """
         if (not hasattr(self.experiment_table, "selectedItems") or
                 not self.experiment_table.selectedItems()):
             return
@@ -304,6 +514,22 @@ class Interface:
         self._refresh_layout()
 
     def _clear_layout(self, layout):
+        """Remove all elements from a layout.
+
+        Arguments:
+            layout (QtWidgets.QHBoxLayout or
+                    QtWidgets.QVBoxLayout):
+                The layout to be cleared (may also accept other layouts, simply
+                needs the methods `count` and `takeAt`, though recursion may be
+                affected if children are other types).
+
+        Returns: None
+
+        Accesses each widget in a layout and deletes it.
+        Will recurse if the widget is itself a QtWidgets.QHBoxLayout or
+        QtWidgets.QVBoxLayout.
+        """
+
         for i in reversed(range(layout.count())):
             element = layout.takeAt(i)
             if isinstance(element, (QtWidgets.QHBoxLayout,
@@ -313,6 +539,11 @@ class Interface:
                 element.widget().deleteLater()
 
     def _refresh_layout(self):
+        """Recreate the base layout and all its contents.
+
+        Arguments: N/A
+        Returns: None
+        """
         # refresh table
         self._clear_layout(self.base_layout)
         self.decorate_window()
