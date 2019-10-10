@@ -353,14 +353,14 @@ class ExperimentView:
         self.main_layout.addWidget(outline_box)
 
     def outline_cells(self):
-        outliner = outline.Outliner(self._data, self.image_loader)
+        outliner = outline.Outliner(self._data, self.image_loader, self.window)
         desktop = QtWidgets.QDesktopWidget()
         outliner.set_screen_res(
             desktop.width(),
             desktop.height(),
             desktop.logicalDpiX(),
         )
-        outliner.start_outlining(self.window)
+        outliner.start_outlining()
         outliner.window.finished[int].connect(self.outline_finished)
 
     def outline_finished(self, *args):

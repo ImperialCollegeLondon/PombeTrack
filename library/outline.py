@@ -1,30 +1,27 @@
 #!/usr/bin/env python3
 
-import matplotlib
-matplotlib.use('Qt5Agg')
+import os
+import time
+import uuid
+
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+
+import matplotlib
 import matplotlib.figure
 import matplotlib.path
-import matplotlib.pyplot as plt
 import matplotlib.widgets
 import numpy as np
-import PyQt5.Qt as Qt
 import PyQt5.QtCore as QtCore
 import PyQt5.QtGui as QtGui
 import PyQt5.QtWidgets as QtWidgets
 import seaborn as sns
-import os
-import tifffile
-import time
-import uuid
 
 from . import balloon
 from . import database
-
 from . import segmentation
 
-
+matplotlib.use('Qt5Agg')
 sns.set_context("talk")
 sns.set_style("white")
 
@@ -38,8 +35,8 @@ class Plotter(FigureCanvas):
         self.decorate_axis(self.sub_ax)
 
         FigureCanvas.__init__(self, self.fig)
-        self.setParent(parent_window)
         self.parent_window = parent_window
+        self.setParent(self.parent_window)
         self.status_bar = status_bar
 
         FigureCanvas.setSizePolicy(
@@ -70,16 +67,26 @@ class Plotter(FigureCanvas):
         # self.region_halfwidth, self.region_halfheight = 100, 100
 
         self.cell_outlines = []
-        #  self.cell_outline_text = []
         self.sub_outlines = []
         self.subfigure_patches = []
         self.main_dragging = False
+        self.main_dragging_rect = None
+        self.main_dragging_background = None
         self.selected_outlines = []
         self.dragging = False
+        self.sub_dragging_background = None
+
         self.previous_id = None
         self.current_frame_idx = 0
         self.current_channel = 0
         self.current_slice = 0
+        self.cell_id = None
+        self.outline_id = None
+        self.full_coords = None
+        self.sub_outline = None
+        self.balloon_obj = None
+        self.centre_x, self.centre_y = None, None
+        self.offset_left, self.offset_top = None, None
 
         self.mpl_connect("key_press_event", self._key_press_event)
         self.mpl_connect("button_press_event", self._button_press_event)
@@ -109,94 +116,116 @@ class Plotter(FigureCanvas):
         self.current_status = status
         self.status_bar.repaint()
 
-    def automatic_segmentation(self, display = True):
+    def automatic_segmentation(self, display=True):
         self.set_status(
-        text="Preprocessing", status="working"
-            )
+            "Preprocessing",
+            status="working",
+        )
         # load_frame: frame, z-slice, channel
-        im_mid = self.load_frame(self.current_frame_idx, int(np.floor(self.num_slices / 2)), 0)
-        im_up = self.load_frame(self.current_frame_idx, int(np.floor(self.num_slices / 2) - 1), 0)
-        im = np.maximum(im_mid, im_up)
+        img_mid = self.load_frame(
+            self.current_frame_idx,
+            int(np.floor(self.num_slices / 2)),
+            0
+        )
+        img_up = self.load_frame(
+            self.current_frame_idx,
+            int(np.floor(self.num_slices / 2) - 1),
+            0
+        )
+        img = np.maximum(img_mid, img_up)
 
 
-        im_pp = segmentation.preprocessing(im)
-        im_i = segmentation.find_cellinterior(im_pp)
-        im_wat = segmentation.find_watershed(im_i)
+        img_pp = segmentation.preprocessing(img)
+        img_i = segmentation.find_cellinterior(img_pp)
+        img_wat = segmentation.find_watershed(img_i)
         #  bd = segmentation.find_bd(im_wat)
 
         if display:
             background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
 
-        cell_count=0
+        cell_count = 0
 
-        for index in range(1, im_wat.max()+1):
+        for index in range(1, img_wat.max()+1):
             self.set_status(
-            text="Processing cell {0} of {1}".format(
-                index, im_wat.max()), status="working"
+                "Processing cell {0} of {1}".format(index, img_wat.max()),
+                status="working",
             )
-            im_ii = im_wat == index
-            if (np.any(np.asarray(im_ii.nonzero()) == 0) or
-                    np.any(np.asarray(im_ii.nonzero()) == 2047)):
+            img_ii = img_wat == index
+            if (np.any(np.asarray(img_ii.nonzero()) == 0) or
+                    np.any(np.asarray(img_ii.nonzero()) == 2047)):
                 continue
 
-            im_ii_bd = segmentation.find_boundaries(im_ii, mode = 'inner')
+            img_ii_bd = segmentation.find_boundaries(img_ii, mode="inner")
             # Sort in radial
-            bd_ii_sorted = segmentation.sort_in_order(im_ii_bd)
+            bd_ii_sorted = segmentation.sort_in_order(img_ii_bd)
 
-                # Define the balloon object
-            balloon_obj, origin_y, origin_x, halfwidth = segmentation.find_balloon_obj(bd_ii_sorted.astype(int)[::5], im)
+            # Define the balloon object
+            balloon_obj, origin_y, origin_x, halfwidth = segmentation.find_balloon_obj(
+                bd_ii_sorted.astype(int)[::5],
+                img,
+            )
             #  Test if the cell exists
             overlap = False
-            outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
-            for i, outline in enumerate(outline_data):
+            outline_data = database.getOutlinesByFrameIdx(
+                self.current_frame_idx,
+                self._data.experiment_id
+            )
+            for outline in outline_data:
                 if not os.path.exists(outline.coords_path):
-                    # database.deleteOutlineById(outline.outline_id)
                     continue
-                if outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth):
+                if (outline.centre_x not in range(origin_x, origin_x + 2 * halfwidth) or
+                        outline.centre_y not in range(origin_y, origin_y + 2 * halfwidth)):
                     continue
 
-                polygonpath = matplotlib.path.Path(np.append(balloon_obj.get_coordinates(),\
-                        balloon_obj.get_coordinates()[1, :].reshape(1, 2), axis = 0), closed = True)
-                if polygonpath.contains_point([outline.centre_y-origin_y, outline.centre_x - origin_x]):
+                polygonpath = matplotlib.path.Path(
+                    np.append(balloon_obj.get_coordinates(),
+                              balloon_obj.get_coordinates()[1, :].reshape(1, 2),
+                              axis=0),
+                    closed=True
+                )
+                if polygonpath.contains_point([outline.centre_y-origin_y,
+                                               outline.centre_x - origin_x]):
                     overlap = True
-                    #  print(overlap)
 
             if overlap:
                 continue
-
-
-
 
             # Evolve the contour
             try:
                 sensitivity = self.image_percentile
                 area_init = balloon_obj.get_area()
-                for i in range(20):
-                    balloon_obj.evolve(image_percentile = sensitivity)
-                    if balloon_obj.get_area() > 1.5 * area_init or balloon_obj.get_area() < 0.5 * area_init:
-                        raise ValueError()
+                for _ in range(20):
+                    balloon_obj.evolve(image_percentile=sensitivity)
+                    if (balloon_obj.get_area() > 1.5 * area_init or
+                            balloon_obj.get_area() < 0.5 * area_init):
+                        raise ValueError
+
                 self.full_coords = balloon_obj.get_coordinates() + [origin_y, origin_x]
-                self.outline_id  =  str(uuid.uuid4())
-                self.cell_id  =  str(uuid.uuid4())
-                centre = [np.mean(self.full_coords[:, 0]).astype(int), np.mean(self.full_coords[:, 1]).astype(int)]
-                self.centre_y, self.centre_x = centre
-                self.save_outline(auto = True)
+                self.outline_id = str(uuid.uuid4())
+                self.cell_id = str(uuid.uuid4())
+                self.centre_y, self.centre_x = self.full_coords.mean(axis=0).astype(int)
+                self.save_outline(auto=True)
 
                 # Draw the cell
                 if display:
                     self.fig.canvas.restore_region(background)
-                    c  =  self.full_coords
-                    p  =  matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor = "r", fill = False, lw = 1)
-                    p._outline_id  =  self.outline_id
-                    self.main_ax.add_patch(p)
-                    self.cell_outlines.append(p)
-                    centre  =  c.mean(axis = 0)
-                    self.main_ax.draw_artist(p)
+                    outline_poly = matplotlib.patches.Polygon(
+                        np.array([self.full_coords[:, 1],
+                                  self.full_coords[:, 0]]).T,
+                        edgecolor="r",
+                        fill=False,
+                        lw=1
+                    )
+                    outline_poly.outline_id = self.outline_id
+                    self.main_ax.add_patch(outline_poly)
+                    self.cell_outlines.append(outline_poly)
+                    self.main_ax.draw_artist(outline_poly)
                     self.fig.canvas.blit(self.main_ax.bbox)
-                    background  =  self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
+                    background = self.fig.canvas.copy_from_bbox(self.main_ax.bbox)
             except ValueError:
                 continue
-            cell_count+=1
+
+            cell_count += 1
             self.draw()
         self.set_status(text="Auto segmentation finished with {0} cells".format(cell_count))
 
@@ -225,10 +254,11 @@ class Plotter(FigureCanvas):
     def refresh(self):
         self.draw()
 
-    def decorate_axis(self, ax):
-        ax.axis("off")
-        ax.set_aspect("equal")
-        ax.autoscale("off")
+    @staticmethod
+    def decorate_axis(axis):
+        axis.axis("off")
+        axis.set_aspect("equal")
+        axis.autoscale("off")
 
     def clear_sub_ax(self):
         self.sub_ax.clear()
@@ -243,8 +273,8 @@ class Plotter(FigureCanvas):
     def clear_sub_outlines(self):
         while True:
             try:
-                t = self.sub_outlines.pop()
-                t.remove()
+                outline_poly = self.sub_outlines.pop()
+                outline_poly.remove()
             except ValueError:
                 pass
             except IndexError:
@@ -271,53 +301,45 @@ class Plotter(FigureCanvas):
 
         while True:
             try:
-                t = self.cell_outlines.pop()
-                t.remove()
+                outline_poly = self.cell_outlines.pop()
+                outline_poly.remove()
             except IndexError:
                 break
 
-        #  while True:
-            #  try:
-                #  t = self.cell_outline_text.pop()
-                #  t.remove()
-            #  except IndexError:
-                #  break
-
-        selected_ids = [x._outline_id for x in self.selected_outlines]
+        selected_ids = [x.outline_id for x in self.selected_outlines]
         fresh_selections = []
-        outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
-        for i, outline in enumerate(outline_data):
+        outline_data = database.getOutlinesByFrameIdx(
+            self.current_frame_idx,
+            self._data.experiment_id,
+        )
+        for outline in outline_data:
             if not os.path.exists(outline.coords_path):
                 # database.deleteOutlineById(outline.outline_id)
                 continue
 
-            c = np.load(outline.coords_path)# + np.array([outline.offset_left, outline.offset_top])
-            p = matplotlib.patches.Polygon(np.array([c[:, 1], c[:, 0]]).T, edgecolor="r", fill=False, lw=1)
-            p._outline_id = outline.outline_id
-            p._cell_id = outline.cell_id
+            coords = np.load(outline.coords_path)
+            outline_poly = matplotlib.patches.Polygon(
+                np.array([coords[:, 1], coords[:, 0]]).T,
+                edgecolor="r",
+                fill=False,
+                lw=1
+            )
+            outline_poly.outline_id = outline.outline_id
+            outline_poly.cell_id = outline.cell_id
 
             if outline.outline_id in selected_ids:
                 prev_outline = self.selected_outlines[
                     selected_ids.index(outline.outline_id)
                 ]
-                if hasattr(prev_outline, "_modified") and prev_outline._modified:
-                    p.set_xy(prev_outline.get_xy())
-                    p._modified = True
-                p.set_edgecolor("yellow")
-                p._selected = True
-                fresh_selections.append(p)
+                if hasattr(prev_outline, "is_modified") and prev_outline.is_modified:
+                    outline_poly.set_xy(prev_outline.get_xy())
+                    outline_poly.is_modified = True
+                outline_poly.set_edgecolor("yellow")
+                outline_poly.is_selected = True
+                fresh_selections.append(outline_poly)
 
-            self.main_ax.add_patch(p)
-            self.cell_outlines.append(p)
-            centre = c.mean(axis=0)
-            #  t = self.main_ax.text(
-                #  centre[1], centre[0],
-                #  "{0}".format(i + 1),
-                #  verticalalignment="center",
-                #  horizontalalignment="center",
-                #  color="w",
-            #  )
-            #  self.cell_outline_text.append(t)
+            self.main_ax.add_patch(outline_poly)
+            self.cell_outlines.append(outline_poly)
 
         self.selected_outlines = fresh_selections
 
@@ -325,12 +347,12 @@ class Plotter(FigureCanvas):
         if auto:
             coords = self.full_coords
         elif explicit:
-            self.outline_id = explicit._outline_id
+            self.outline_id = explicit.outline_id
             outline_info = database.getOutlineById(self.outline_id)
-            xy = explicit.get_xy()
-            coords = np.array([xy[:, 1], xy[:, 0]]).T
-            self.cell_id = explicit._cell_id
-            self.previous_id = outline_info.parent_id
+            xy_coords = explicit.get_xy()
+            coords = np.array([xy_coords[:, 1], xy_coords[:, 0]]).T
+            self.cell_id = explicit.cell_id
+            self.previous_id = outline_info.parent_id  # pylint: disable=no-member
             self.centre_y, self.centre_x = coords.mean(axis=0)
         else:
             coords_offset = np.array([(n.x, n.y) for n in self.balloon_obj.nodes])
@@ -397,21 +419,24 @@ class Plotter(FigureCanvas):
         self._plot_nodes()
 
         self.clear_sub_outlines()
-        outline_data = database.getOutlinesByFrameIdx(self.current_frame_idx, self._data.experiment_id)
+        outline_data = database.getOutlinesByFrameIdx(
+            self.current_frame_idx,
+            self._data.experiment_id,
+        )
         for outline in outline_data:
             if not os.path.exists(outline.coords_path) or outline.outline_id == self.outline_id:
                 continue
 
-            c = np.load(outline.coords_path)
-            p = matplotlib.patches.Polygon(
-                np.array([c[:, 1], c[:, 0]]).T,
+            coords = np.load(outline.coords_path)
+            poly = matplotlib.patches.Polygon(
+                np.array([coords[:, 1], coords[:, 0]]).T,
                 edgecolor="r",
                 fill=False,
                 lw=1,
             )
-            p._outline_id = outline.outline_id
-            self.sub_ax.add_patch(p)
-            self.sub_outlines.append(p)
+            poly.outline_id = outline.outline_id
+            self.sub_ax.add_patch(poly)
+            self.sub_outlines.append(poly)
 
         self.draw()
 
@@ -435,25 +460,25 @@ class Plotter(FigureCanvas):
             )
 
         if patches:
-            for i in range(len(self.subfigure_patches)):
-                p = self.subfigure_patches.pop()
-                p.remove()
+            for _ in range(len(self.subfigure_patches)):
+                patch = self.subfigure_patches.pop()
+                patch.remove()
 
-            for node_idx, n in enumerate(nodes):
+            for node_idx, node in enumerate(nodes):
                 patch = matplotlib.patches.Circle(
-                    (n.y + self.offset_top,
-                     n.x + self.offset_left),
+                    (node.y + self.offset_top,
+                     node.x + self.offset_left),
                     1.5,
                     fc="y",
                 )
-                patch.this_node = n
+                patch.this_node = node
                 patch.node_idx = node_idx
                 self.subfigure_patches.append(patch)
                 self.sub_ax.add_artist(patch)
 
         self.draw()
 
-    def _slice_change(self, delta):
+    def slice_change(self, delta):
         if delta < 0 and self.current_slice <= 0:
             return
 
@@ -467,7 +492,7 @@ class Plotter(FigureCanvas):
         self.main_frame.set_clim([new_im.min(), new_im.max()])
         self.draw()
 
-    def _channel_change(self, delta):
+    def channel_change(self, delta):
         if delta < 0 and self.current_channel <= 0:
             return
 
@@ -481,7 +506,7 @@ class Plotter(FigureCanvas):
         self.main_frame.set_clim([new_im.min(), new_im.max()])
         self.draw()
 
-    def _frame_change(self, delta):
+    def frame_change(self, delta):
         if delta < 0 and self.current_frame_idx <= 0:
             return
 
@@ -501,46 +526,46 @@ class Plotter(FigureCanvas):
 
     def _key_press_event(self, evt):
         if evt.key == "left" or evt.key == "a":
-            self._channel_change(-1)
+            self.channel_change(-1)
 
         elif evt.key == "right" or evt.key == "d":
-            self._channel_change(1)
+            self.channel_change(1)
 
         elif evt.key == "up" or evt.key == "w":
-            self._frame_change(1)
+            self.frame_change(1)
 
         elif evt.key == "down" or evt.key == "s":
-            self._frame_change(-1)
+            self.frame_change(-1)
 
         elif evt.key == "q":
-            self._slice_change(-1)
+            self.slice_change(-1)
 
         elif evt.key == "e":
-            self._slice_change(1)
+            self.slice_change(1)
 
         elif evt.key == "r" and len(self.selected_outlines) > 1:
-            self._refine_multi()
+            self.refine_multi()
 
         elif evt.key == "r" and self.subfigure_patches:
-            self._refine_event()
+            self.refine_event()
 
         elif evt.key == "delete" and len(self.selected_outlines) > 1:
-            self._delete_multi()
+            self.delete_multi()
 
         elif evt.key == "delete" and self.subfigure_patches:
-            self._delete_event()
+            self.delete_event()
 
         elif evt.key == "." and len(self.selected_outlines) > 1:
-            self._refine_multi(1)
+            self.refine_multi(1)
 
         elif evt.key == "." and self.subfigure_patches:
-            self._refine_event(1)
+            self.refine_event(1)
 
         elif evt.key == "enter" and len(self.selected_outlines) > 1:
-            self._accept_multi()
+            self.accept_multi()
 
         elif evt.key == "enter" and self.subfigure_patches:
-            self._accept_event()
+            self.accept_event()
 
         elif evt.key == "shift" or evt.key == "control":
             pass
@@ -552,21 +577,21 @@ class Plotter(FigureCanvas):
         offset_left = int(round(centre[0] - self.region_halfwidth))
         offset_top = int(round(centre[1] - self.region_halfheight))
         centre_offset_left, centre_offset_top = 0, 0
-        im = self.load_frame()
+        img = self.load_frame()
         if offset_left < 0:
             centre_offset_left = -offset_left
             offset_left = 0
-        elif offset_left >= im.shape[0] - (self.region_halfwidth * 2):
-            centre_offset_left = im.shape[0] - (self.region_halfwidth * 2) - offset_left
-            offset_left = im.shape[0] - (self.region_halfwidth * 2)
+        elif offset_left >= img.shape[0] - (self.region_halfwidth * 2):
+            centre_offset_left = img.shape[0] - (self.region_halfwidth * 2) - offset_left
+            offset_left = img.shape[0] - (self.region_halfwidth * 2)
 
         if offset_top < 0:
             centre_offset_top = -offset_top
             offset_top = 0
-        elif offset_top >= im.shape[1] - (self.region_halfheight * 2):
-            centre_offset_top = im.shape[1] - (self.region_halfheight * 2) - offset_top
-            offset_top = im.shape[1] - (self.region_halfheight * 2)
-        del im
+        elif offset_top >= img.shape[1] - (self.region_halfheight * 2):
+            centre_offset_top = img.shape[1] - (self.region_halfheight * 2) - offset_top
+            offset_top = img.shape[1] - (self.region_halfheight * 2)
+        del img
 
         return offset_left, offset_top, centre_offset_left, centre_offset_top
 
@@ -590,31 +615,33 @@ class Plotter(FigureCanvas):
 
         elif evt.inaxes == self.sub_ax:
             if evt.button == 1:
-                for p in self.subfigure_patches:
-                    if p.contains_point((evt.x, evt.y)):
-                        p.set_visible(False)
+                for patch in self.subfigure_patches:
+                    if patch.contains_point((evt.x, evt.y)):
+                        patch.set_visible(False)
                         self.draw()
                         self.sub_dragging_background = self.fig.canvas.copy_from_bbox(
                             self.sub_ax.bbox
                         )
                         self.sub_ax.lines[0].set_color("red")
-                        p.set_visible(True)
-                        self.dragging = p
-                        p.set_facecolor("r")
+                        patch.set_visible(True)
+                        self.dragging = patch
+                        patch.set_facecolor("r")
                         # self.draw()
                         break
+
             elif evt.button == 3:
-                for p in self.subfigure_patches:
-                    if p.contains_point((evt.x, evt.y)):
-                        self.balloon_obj.remove_node(p.this_node)
+                for patch in self.subfigure_patches:
+                    if patch.contains_point((evt.x, evt.y)):
+                        self.balloon_obj.remove_node(patch.this_node)
                         self._plot_nodes()
                         self.draw()
 
     def check_selected_outlines(self):
-        if sum([hasattr(x, "_modified") and x._modified or False for x in self.selected_outlines]) > 0:
+        if sum([hasattr(x, "is_modified") and x.is_modified or False
+                for x in self.selected_outlines]) > 0:
             alert = QtWidgets.QMessageBox()
             message = ("The selected outlines have been modified"
-                        "\nWould you like to save them?")
+                       "\nWould you like to save them?")
             add_confirm = alert.question(
                 self.parent(),
                 "Save changes?",
@@ -631,7 +658,7 @@ class Plotter(FigureCanvas):
                         )
                     )
                     self.save_outline(auto=False, explicit=outline)
-                    outline._modified = False
+                    outline.is_modified = False
                 self.set_status(
                     "Modified outlines saved ({0} outlines)".format(
                         len(self.selected_outlines),
@@ -640,7 +667,8 @@ class Plotter(FigureCanvas):
                 self.plot_existing_outlines()
                 self.draw()
                 return True
-            elif add_confirm == QtWidgets.QMessageBox.No:
+
+            if add_confirm == QtWidgets.QMessageBox.No:
                 self.set_status(
                     "Modified outlines discarded ({0} outlines)".format(
                         len(self.selected_outlines),
@@ -648,12 +676,13 @@ class Plotter(FigureCanvas):
                 )
 
                 for outline in self.selected_outlines:
-                    outline._modified = False
+                    outline.is_modified = False
 
                 self.plot_existing_outlines()
                 self.draw()
                 return True
-            elif add_confirm == QtWidgets.QMessageBox.Cancel:
+
+            if add_confirm == QtWidgets.QMessageBox.Cancel:
                 self.set_status(clear=True)
                 return False
 
@@ -662,8 +691,8 @@ class Plotter(FigureCanvas):
     def deselect_outlines(self):
         for outline in self.selected_outlines:
             outline.set_edgecolor("red")
-            outline._selected = False
-            outline._modified = False
+            outline.is_selected = False
+            outline.is_modified = False
 
         self.selected_outlines = []
 
@@ -709,14 +738,14 @@ class Plotter(FigureCanvas):
         if not reductive_flag:
             for outline in new_outlines:
                 outline.set_edgecolor("yellow")
-                outline._selected = True
+                outline.is_selected = True
                 self.selected_outlines.append(outline)
 
         elif reductive_flag:
             for outline in new_outlines:
-                if hasattr(outline, "_selected") and outline._selected:
+                if hasattr(outline, "is_selected") and outline.is_selected:
                     outline.set_edgecolor("red")
-                    outline._selected = False
+                    outline.is_selected = False
                     self.selected_outlines.pop(
                         self.selected_outlines.index(outline)
                     )
@@ -731,15 +760,15 @@ class Plotter(FigureCanvas):
         elif len(self.selected_outlines) == 1:
             self._select_hit(self.selected_outlines[0])
 
-        elif len(self.selected_outlines) == 0:
+        elif not self.selected_outlines:
             self.clear_sub_ax()
             if (not additive_flag and not reductive_flag and
-                rect_width < 10 and rect_height < 10):
+                    rect_width < 10 and rect_height < 10):
                 self.previous_id = None
                 self.cell_id = str(uuid.uuid4())
                 centre = [evt.ydata, evt.xdata]
                 (self.offset_left, self.offset_top,
-                centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+                 centre_offset_left, centre_offset_top) = self.get_offsets(centre)
 
                 roi = self.load_frame(channel_idx=0)[
                     self.offset_left:self.offset_left + (self.region_halfwidth * 2),
@@ -780,10 +809,11 @@ class Plotter(FigureCanvas):
         if self.parent().toolbar.mode:
             return
 
-        elif self.main_dragging:
-            return self._button_release_main(evt)
+        if self.main_dragging:
+            self._button_release_main(evt)
+            return
 
-        elif evt.inaxes == self.sub_ax:
+        if evt.inaxes == self.sub_ax:
             if not self.dragging:
                 return
 
@@ -795,6 +825,7 @@ class Plotter(FigureCanvas):
             self.dragging.this_node.apply_changes()
             self._plot_nodes()
             self.dragging = False
+            return
 
     def _check_hit(self, evt):
         for outline in self.cell_outlines:
@@ -805,19 +836,19 @@ class Plotter(FigureCanvas):
 
     def _select_hit(self, outline):
         outline.set_edgecolor("yellow")
-        outline._selected = True
-        outline_info = database.getOutlineById(outline._outline_id)
-        self.previous_id = outline_info.parent_id
-        self.cell_id = outline_info.cell_id
-        centre = outline_info.centre_y, outline_info.centre_x
+        outline.is_selected = True
+        outline_info = database.getOutlineById(outline.outline_id)
+        self.previous_id = outline_info.parent_id  # pylint: disable=no-member
+        self.cell_id = outline_info.cell_id  # pylint: disable=no-member
+        centre = outline_info.centre_y, outline_info.centre_x  # pylint: disable=no-member
         (self.offset_left, self.offset_top,
          centre_offset_left, centre_offset_top) = self.get_offsets(centre)
         roi = self.load_frame(channel_idx=0)[
             self.offset_left:self.offset_left + (self.region_halfwidth * 2),
             self.offset_top:self.offset_top + (self.region_halfheight * 2),
         ]
-        self.outline_id = outline_info.outline_id
-        current_nodes = np.load(outline_info.coords_path)
+        self.outline_id = outline_info.outline_id  # pylint: disable=no-member
+        current_nodes = np.load(outline_info.coords_path)  # pylint: disable=no-member
         self.fit_outline(
             roi,
             init_nodes=current_nodes - np.array([self.offset_left, self.offset_top]),
@@ -850,15 +881,16 @@ class Plotter(FigureCanvas):
             self.sub_ax.draw_artist(self.dragging)
             self.fig.canvas.blit(self.sub_ax.bbox)
 
-    def _home_event(self):
-        f = self.load_frame()
-        self.main_ax.set_xlim([0, f.shape[0]])
-        self.main_ax.set_ylim([f.shape[1], 0])
+    def home_event(self):
+        frame = self.load_frame()
+        self.main_ax.set_xlim([0, frame.shape[0]])
+        self.main_ax.set_ylim([frame.shape[1], 0])
         self.sub_ax.set_xlim([0, self.region_halfwidth * 2])
         self.sub_ax.set_ylim([self.region_halfheight * 2, 0])
         self.draw()
 
-    def get_area(self, coords):
+    @staticmethod
+    def get_area(coords):
         area = np.dot(
             coords[:, 0],
             np.roll(coords[:, 1], 1)
@@ -868,7 +900,7 @@ class Plotter(FigureCanvas):
         )
         return area * 0.5
 
-    def _accept_event(self):
+    def accept_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
@@ -877,7 +909,7 @@ class Plotter(FigureCanvas):
         if self.balloon_obj.refining_cycles == 0:
             alert = QtWidgets.QMessageBox()
             message = ("The outline you are about to add has not been refined."
-                        "\nAre you sure you want to add it?")
+                       "\nAre you sure you want to add it?")
             add_confirm = alert.question(
                 self.parent(),
                 "Add outline?",
@@ -889,8 +921,8 @@ class Plotter(FigureCanvas):
 
         # check overlap with other outlines?
         # objects already exist (red lines) so can compare perhaps?
-        Xpoints, Ypoints = self.sub_ax.lines[0].get_data()
-        existing_points = np.row_stack([Xpoints, Ypoints]).T
+        x_points, y_points = self.sub_ax.lines[0].get_data()
+        existing_points = np.row_stack([x_points, y_points]).T
         for outline in self.sub_outlines:
             contains_new = sum(outline.get_path().contains_points(
                 existing_points,
@@ -914,9 +946,9 @@ class Plotter(FigureCanvas):
             if area_diff > 0.3:
                 alert = QtWidgets.QMessageBox()
                 message = ("The outline you are about to add has a large "
-                            "difference in cell area compared to its "
-                            "predecessor in the previous frame ({0:.0f}%).\n"
-                            "Are you sure you want to add it?")
+                           "difference in cell area compared to its "
+                           "predecessor in the previous frame ({0:.0f}%).\n"
+                           "Are you sure you want to add it?")
                 add_confirm = alert.question(
                     self.parent(),
                     "Add outline?",
@@ -937,9 +969,10 @@ class Plotter(FigureCanvas):
 
             # fit next
             centre = [offset_centre[0] + self.offset_left,
-                    offset_centre[1] + self.offset_top]
+                      offset_centre[1] + self.offset_top]
+
             (self.offset_left, self.offset_top,
-            centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+             centre_offset_left, centre_offset_top) = self.get_offsets(centre)
 
             if self.current_frame_idx == self.num_frames - 1:
                 bf_frame = self.load_frame()
@@ -950,12 +983,12 @@ class Plotter(FigureCanvas):
                 self.clear_sub_outlines()
                 self.draw()
                 return
-            else:
-                self.current_frame_idx += 1
-                bf_frame = self.load_frame()
-                self.main_frame.set_data(bf_frame)
-                self.plot_existing_outlines()
-                self.clear_sub_outlines()
+
+            self.current_frame_idx += 1
+            bf_frame = self.load_frame()
+            self.main_frame.set_data(bf_frame)
+            self.plot_existing_outlines()
+            self.clear_sub_outlines()
 
             roi = self.load_frame(channel_idx=0)[
                 self.offset_left:self.offset_left + (self.region_halfwidth * 2),
@@ -978,7 +1011,7 @@ class Plotter(FigureCanvas):
             self.draw()
             self.set_status("Outline saved")
 
-    def _accept_multi(self):
+    def accept_multi(self):
         for outline_num, outline in enumerate(self.selected_outlines):
             self.set_status(
                 "Saving {0: 2d} of {1} outlines".format(
@@ -1002,15 +1035,15 @@ class Plotter(FigureCanvas):
         # check difference in total area is small
         if self.previous_id:
             previous_outline_entry = database.getOutlineById(self.previous_id)
-            previous_outline = np.load(previous_outline_entry.coords_path)
-            if previous_outline_entry.cell_id == self.cell_id:
+            previous_outline = np.load(previous_outline_entry.coords_path)  # pylint: disable=no-member
+            if previous_outline_entry.cell_id == self.cell_id:  # pylint: disable=no-member
                 previous_area = self.get_area(previous_outline)
                 current_area = self.get_area(np.array([(n.x, n.y) for n in self.balloon_obj.nodes]))
                 area_diff = abs(previous_area - current_area) / previous_area
                 return area_diff
         return 0
 
-    def _delete_event(self):
+    def delete_event(self):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
@@ -1034,7 +1067,7 @@ class Plotter(FigureCanvas):
             self.draw()
             self.set_status("Outline deleted")
 
-    def _delete_multi(self):
+    def delete_multi(self):
         if len(self.selected_outlines) < 2:
             return
 
@@ -1053,12 +1086,12 @@ class Plotter(FigureCanvas):
                     ),
                     status="working",
                 )
-                database.deleteOutlineById(outline._outline_id)
+                database.deleteOutlineById(outline.outline_id)
                 database.updateExperimentById(
                     self._data.experiment_id,
                     verified=False,
                 )
-                database.deleteCellById(outline._cell_id)
+                database.deleteCellById(outline.cell_id)
 
             self.set_status("Outlines deleted ({0} outlines)".format(
                 len(self.selected_outlines)
@@ -1067,7 +1100,7 @@ class Plotter(FigureCanvas):
             self.plot_existing_outlines()
             self.draw()
 
-    def _refine_event(self, num_ref=10):
+    def refine_event(self, num_ref=10):
         if not hasattr(self, "outline_id") or not self.subfigure_patches or self.outline_id is None:
             return
 
@@ -1089,13 +1122,13 @@ class Plotter(FigureCanvas):
                 return
 
         if self.selected_outlines:
-            self.selected_outlines[0]._modified = True
+            self.selected_outlines[0].is_modified = True
 
         self.set_status("Refinement complete ({0} cycles)".format(num_ref))
         self._plot_nodes()
         self.draw()
 
-    def _refine_multi(self, num_ref=10):
+    def refine_multi(self, num_ref=10):
         if len(self.selected_outlines) < 2:
             return
 
@@ -1109,29 +1142,25 @@ class Plotter(FigureCanvas):
                 status="working"
             )
 
-            outline_info = database.getOutlineById(outline._outline_id)
-            centre = outline_info.centre_y, outline_info.centre_x
-            (offset_left, offset_top,
-             centre_offset_left, centre_offset_top) = self.get_offsets(centre)
+            outline_info = database.getOutlineById(outline.outline_id)
+            centre = outline_info.centre_y, outline_info.centre_x  # pylint: disable=no-member
+            offset_left, offset_top, _, _ = self.get_offsets(centre)
             roi = self.load_frame(channel_idx=0)[
                 offset_left:offset_left + (self.region_halfwidth * 2),
                 offset_top:offset_top + (self.region_halfheight * 2),
             ]
-            if hasattr(outline, "_modified") and outline._modified:
-                xy = outline.get_xy()
-                current_nodes = np.array([xy[:, 1], xy[:, 0]]).T
+            if hasattr(outline, "is_modified") and outline.is_modified:
+                xy_coords = outline.get_xy()
+                current_nodes = np.array([xy_coords[:, 1], xy_coords[:, 0]]).T
             else:
-                current_nodes = np.load(outline_info.coords_path)
-
-            balloon_centre = [self.region_halfwidth - centre_offset_left,
-                              self.region_halfheight - centre_offset_top]
+                current_nodes = np.load(outline_info.coords_path)  # pylint: disable=no-member
 
             balloon_obj = balloon.Balloon(
                 current_nodes - np.array([offset_left, offset_top]),
                 roi
             )
             balloon_obj.refining_cycles = 1
-            for i in range(num_ref):
+            for _i in range(num_ref):
                 try:
                     balloon_obj.evolve(image_percentile=self.image_percentile)
                 except ValueError:
@@ -1142,7 +1171,7 @@ class Plotter(FigureCanvas):
                 offset_left,
             ])
             outline.set_xy(coords)
-            outline._modified = True
+            outline.is_modified = True
             self.main_ax.draw_artist(outline)
 
         self.set_status(
@@ -1198,93 +1227,103 @@ class Toolbar(NavigationToolbar):
         NavigationToolbar.__init__(self, figure_canvas, parent=None)
 
     def _icon(self, name):
+        """Note used by matplotlib toolbar internally"""
         path = os.path.join("resources", name)
         if not os.path.exists(path):
             path = os.path.join(self.basedir, name)
 
-        pm = QtGui.QPixmap(path)
-        if hasattr(pm, "setDevicePixelRatio"):
-            pm.setDevicePixelRatio(self.canvas._dpi_ratio)
+        pixmap = QtGui.QPixmap(path)
+        if hasattr(pixmap, "setDevicePixelRatio"):
+            # no other way to avoid using _dpi_ratio that I know of
+            pixmap.setDevicePixelRatio(self.canvas._dpi_ratio)  # pylint: disable=protected-access
 
-        return QtGui.QIcon(pm)
+        return QtGui.QIcon(pixmap)
 
-    def home_event(self, *args, **kwargs):
-        self.canvas._home_event()
+    def home_event(self):
+        self.canvas.home_event()
 
     def auto_segmentation(self):
-        startt=time.time()
+        startt = time.time()
         self.canvas.automatic_segmentation()
         #  self.canvas.plot_existing_outlines()
         #  self.canvas.refresh()
 
-        print(time.time()-startt)
+        print(time.time() - startt)
 
 
     def delete(self):
         if len(self.canvas.selected_outlines) > 1:
-            self.canvas._delete_multi()
+            self.canvas.delete_multi()
         else:
-            self.canvas._delete_event()
+            self.canvas.delete_event()
 
     def refine(self):
         if len(self.canvas.selected_outlines) > 1:
-            self.canvas._refine_multi()
+            self.canvas.refine_multi()
         else:
-            self.canvas._refine_event()
+            self.canvas.refine_event()
 
     def refine_single(self):
         if len(self.canvas.selected_outlines) > 1:
-            self.canvas._refine_multi(1)
+            self.canvas.refine_multi(1)
         else:
-            self.canvas._refine_event(1)
+            self.canvas.refine_event(1)
 
     def accept(self):
         if len(self.canvas.selected_outlines) > 1:
-            self.canvas._accept_multi()
+            self.canvas.accept_multi()
         else:
-            self.canvas._accept_event()
+            self.canvas.accept_event()
 
     def channel_prev(self):
-        self.canvas._channel_change(-1)
+        self.canvas.channel_change(-1)
 
     def channel_next(self):
-        self.canvas._channel_change(1)
+        self.canvas.channel_change(1)
 
     def frame_next(self):
-        self.canvas._frame_change(1)
+        self.canvas.frame_change(1)
 
     def frame_prev(self):
-        self.canvas._frame_change(-1)
+        self.canvas.frame_change(-1)
 
     def slice_next(self):
-        self.canvas._slice_change(1)
+        self.canvas.slice_change(1)
 
     def slice_prev(self):
-        self.canvas._slice_change(-1)
+        self.canvas.slice_change(-1)
 
 
 class Outliner:
-    def __init__(self, experiment_data, image_loader):
+    def __init__(self, experiment_data, image_loader, parent_window):
         self.experiment_data = experiment_data
         self.image_loader = image_loader
+
+        self.plot = None
+        self.tolerance_widget = QtWidgets.QLineEdit()
+        self.parent_window = parent_window
+        self.window = QtWidgets.QDialog(self.parent_window)
+
+        # must be set later
+        self.screen_dpi = None
+        self.max_width_px = None
+        self.max_height_px = None
 
     def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
         self.max_width_px = max_width_px
         self.max_height_px = max_height_px
         self.screen_dpi = screen_dpi
 
-    def _px_to_in(self, px):
-        return px / self.screen_dpi
+    def _px_to_in(self, pixels):
+        return pixels / self.screen_dpi
 
-    def start_outlining(self, parent_window):
+    def start_outlining(self):
         if not hasattr(self, "max_width_px"):
             raise ValueError("Screen resolution has not been set")
 
         dim = (self._px_to_in(self.max_width_px * 0.5),
                self._px_to_in(self.max_height_px * 0.5))
 
-        self.parent_window = parent_window
-        self.window = QtWidgets.QDialog(self.parent_window)
         self.window.setModal(True)
         self.window.setGeometry(
             0, 60,
@@ -1298,15 +1337,15 @@ class Outliner:
         menubar = QtWidgets.QMenuBar(self.window)
         file_menu = menubar.addMenu("&File")
         quit_action = QtWidgets.QAction("&Close", menubar)
-        quit_action.triggered[bool].connect(lambda: self.window.close())
+        quit_action.triggered.connect(self.window.close)
         file_menu.addAction(quit_action)
         main_layout.setMenuBar(menubar)
 
         # add tolerance box thing
         label = QtWidgets.QLabel("Tolerance:")
-        self.tolerance_widget = QtWidgets.QLineEdit()
         self.tolerance_widget.setText("1.0")
-        self.tolerance_widget.textChanged[str].connect(lambda text: self._submit_tolerance(text))
+        # pylint suppression, this lambda is absolutely required for some reason
+        self.tolerance_widget.textChanged.connect(lambda text: self._submit_tolerance(text))  # pylint: disable=unnecessary-lambda
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(label)
         layout.addWidget(self.tolerance_widget)
