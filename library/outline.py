@@ -1511,6 +1511,16 @@ class Outliner:
             max_height_px=None,
         )
 
+        self.plot = None
+        self.tolerance_widget = QtWidgets.QLineEdit()
+        self.parent_window = parent_window
+        self.window = QtWidgets.QDialog(self.parent_window)
+
+        # must be set later
+        self.screen_dpi = None
+        self.max_width_px = None
+        self.max_height_px = None
+
     def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
         self.screen_attributes.update({
             "max_width_px": max_width_px,
