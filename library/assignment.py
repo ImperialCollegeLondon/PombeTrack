@@ -1002,7 +1002,7 @@ class Assigner:
                 "experiment_id": self.experiment_data.experiment_id,
                 "cell_id": cell_id,
                 "descendants": descendants.checkState() == 2,
-                "outlines": outlines.checkState() == 2,
+                "draw_outlines": outlines.checkState() == 2,
                 "frames": frames.checkState() == 2,
                 "scale": scalebar.checkState() == 2,
                 "channels": channels.checkState() == 2,
