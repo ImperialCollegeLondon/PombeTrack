@@ -30,8 +30,8 @@ class Interface:
     VERSION = (0, 5)
     def __init__(self):
         self.check_database()
+        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
         self.app = QtWidgets.QApplication([])
-        self.app.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
         main_font = QtGui.QFont("Fira Sans", 11)
         self.app.setFont(main_font)
         self.window = QtWidgets.QWidget()
