@@ -323,13 +323,23 @@ class ExperimentView:
         if self._data.outlined:
             outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
             num_outlines = len(outlines)
-            num_cells = len(pd.DataFrame(outlines).cell_id.unique())
-            label_str = "{0} outlines have been defined arranged as {1} cells{2}".format(
-                num_outlines,
-                num_cells,
-                self._data.verified and " " or " (unverified)"
-            )
-            label = QtWidgets.QLabel(label_str)
+            if num_outlines == 0:
+                database.updateExperimentById(
+                    self._data.experiment_id,
+                    outlined=False,
+                    verified=False,
+                    analysed=False,
+                )
+                self._data = database.getExperimentById(self._data.experiment_id)
+                label = QtWidgets.QLabel("No outlines have been created")
+            else:
+                num_cells = len(pd.DataFrame(outlines).cell_id.unique())
+                label_str = "{0} outlines have been defined arranged as {1} cells{2}".format(
+                    num_outlines,
+                    num_cells,
+                    self._data.verified and " " or " (unverified)"
+                )
+                label = QtWidgets.QLabel(label_str)
         else:
             label = QtWidgets.QLabel("No outlines have been created.")
 
