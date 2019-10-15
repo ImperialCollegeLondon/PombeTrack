@@ -1517,9 +1517,11 @@ class Outliner:
         self.window = QtWidgets.QDialog(self.parent_window)
 
         # must be set later
-        self.screen_dpi = None
-        self.max_width_px = None
-        self.max_height_px = None
+        self.screen_attributes = dict(
+            screen_dpi=None,
+            max_width_px=None,
+            max_height_px=None,
+        )
 
     def set_screen_res(self, max_width_px, max_height_px, screen_dpi):
         self.screen_attributes.update({
