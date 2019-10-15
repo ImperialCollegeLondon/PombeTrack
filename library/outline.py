@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 
+""" Module that handles outlining (automated and manually supervised)
+
+The interface opens with a toolbar containing standard matplotlib icons: home,
+pan, zoom, save; and custom controls for PombeTrack: automatic segmentation,
+accept, delete, refine, change channel, change frame, and change slice.
+
+Underneath the toolbar is an input box for the "tolerance" parameter, which
+refers to the expandability of the balloon (see library.balloon).
+
+Below this is a status indicator which will contain text when certain
+operations are performed.
+
+The main interface consists of two matplotlib panels, a "main" panel on the
+left which displays the whole field-of-view of a particular frame, and a right
+"sub" panel, which is used to display and control the outlining procedure.
+See the Plotter class below for how these panels are controlled.
+"""
+
 import os
 import time
 import uuid
@@ -26,6 +44,12 @@ sns.set_context("talk")
 sns.set_style("white")
 
 class DragRect:
+    """ Convenience class for controlling a draggable select box on the main axis.
+
+    Arguments:
+        bound_fig (matplotlib.figure.Figure): the figure containing the axis.
+        target_ax (matplotlib.axes.Axes): the axis in question.
+    """
     INACTIVE = 0
     ACTIVE = 1
     def __init__(self, bound_fig, target_ax):
@@ -39,6 +63,17 @@ class DragRect:
 
     @staticmethod
     def init_rect():
+        """ Create a placeholder rectangle object.
+
+        Arguments: N/A
+        Returns:
+            rect (matplotlib.patches.Rectangle):
+                Placeholder with zero width and height for the draggable
+                rectangle.
+
+        The rectangle is initialised with zero width and height, with a yellow
+        border colour and a partially transparent gray fill colour.
+        """
         rect = matplotlib.patches.Rectangle(
             (0, 0),
             0, 0,
@@ -48,6 +83,20 @@ class DragRect:
         return rect
 
     def place(self, pos_x, pos_y):
+        """ Set the bottom left corner of the rectangle, and draw it.
+
+        Arguments:
+            pos_x (float): x coordinate.
+            pos_y (float): y coordinate.
+
+        Returns:
+            None
+
+        If the rectangle has not yet been drawn to the axis, it will be added,
+        and the current state of the axis (pre-drawing) saved.
+        This saving of the "background" permits smooth animations when the
+        rectangle is modified.
+        """
         self.rect.set_xy((pos_x, pos_y))
         if self.status == self.INACTIVE:
             self.axis.add_patch(self.rect)
@@ -60,6 +109,19 @@ class DragRect:
         self.fig.canvas.draw()
 
     def resize(self, evt):
+        """ Change the size of the rectangle according to a mouse event.
+
+        Arguments:
+            evt (matplotlib.backend_bases.MouseEvent):
+                Mouse event triggering the resizing.
+
+        Returns:
+            None
+
+        Determines what size the rectangle should be according to the position
+        of the mouse cursor, then animates the new rectangle smoothly (using
+        blitting).
+        """
         self.fig.canvas.restore_region(self.background)
         width, height = self.get_dimensions(evt)
         self.rect.set_width(width)
@@ -68,6 +130,22 @@ class DragRect:
         self.fig.canvas.blit(self.axis.bbox)
 
     def get_dimensions(self, evt=None):
+        """ Calculate the size of the rectangle.
+
+        Arguments:
+            evt (matplotlib.backend_bases.MouseEvent):
+                Mouse event that triggered a resizing (see DragRect.resize).
+                Optional argument, will return the current size if omitted.
+
+        Returns:
+            rect_width (float): Width in pixels of the rectangle.
+            rect_height (float): Height in pixels of the rectangle.
+
+        If the evt argument is passed, the width/height will be calculated
+        according to the distance from the mouse cursor to the rectangle bottom
+        left corner (negative if necessary).
+        """
+
         if not evt or not evt.xdata or not evt.ydata or evt.inaxes != self.axis:
             rect_width = self.rect.get_width()
             rect_height = self.rect.get_height()
@@ -78,6 +156,17 @@ class DragRect:
         return rect_width, rect_height
 
     def get_path(self, transform=True):
+        """ Get path for the rectangle.
+
+        Arguments:
+            transform (bool):
+                Whether to transform the path into axis coordinates.
+                Defaults to True.
+
+        Returns:
+            rect_path (matplotlib.path.Path):
+                The Path describing the rectangle.
+        """
         rect_path = self.rect.get_path()
         if transform:
             rect_transform = self.rect.get_transform()
@@ -87,6 +176,13 @@ class DragRect:
         return rect_path
 
     def reset(self):
+        """ Remove the rectangle from the axis.
+
+        Arguments: N/A
+        Returns: None
+
+        Only removes the rectangle if one exists.
+        """
         if self.is_active():
             self.status = self.INACTIVE
             self.rect.remove()
