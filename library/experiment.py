@@ -267,8 +267,8 @@ class ExperimentView:
                 centre_y, centre_x = centre
 
                 # Save to database
-                offset_left=0
-                offset_top=0
+                # offset_left=0
+                # offset_top=0
                 coords_path = os.path.join(
                     self.outline_store,
                     "{0}.npy".format(outline_id)
@@ -281,8 +281,8 @@ class ExperimentView:
                     "image_path": self._data.image_path,
                     "frame_idx": self.current_frame_idx,
                     "coords_path": coords_path,
-                    "offset_left": offset_left,
-                    "offset_top": offset_top,
+                    # "offset_left": offset_left,
+                    # "offset_top": offset_top,
                     "parent_id": "",
                     "centre_x":int(centre_x),
                     "centre_y":int(centre_y),
