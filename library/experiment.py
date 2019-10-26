@@ -203,7 +203,11 @@ class ExperimentView:
             )
         # load_frame: frame, z-slice, channel
         im_mid = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2)), 0)
-        im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
+        try:
+            im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
+        except:
+            self.set_status(text="Preprocessing failed since not enough z-stacks are provided")
+        
         im = np.maximum(im_mid, im_up)
 
 
