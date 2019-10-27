@@ -189,12 +189,14 @@ class ExperimentView:
         )
         if not os.path.exists(self.outline_store):
             os.makedirs(self.outline_store)
-        startt=time.time()
+        # startt=time.time()
         for ff in range(0,self.image_loader.num_frames):
             self.current_frame_idx=ff
             self.auto_one()
         self.set_status(text="Auto segmentation finished")
-        print(time.time()-startt)
+        # print(time.time()-startt)
+        self.outline_finished()
+        
 
     def auto_one(self):
         self.set_status(
