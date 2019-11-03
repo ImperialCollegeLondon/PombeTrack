@@ -70,6 +70,8 @@ When satisified with the outline, click “Accept” to record coordinates of th
 
 The “Delete” button can be used to remove false contours from automatic or manual segmentation. Multiple selection is available via dragging through the image panel, and selection can be added by clicking or dragging on cells while holding Shift button:
 
+<div style="text-align:center"><img src="./tutorial/outline5.png" /></div>
+
 ![outline5](./tutorial/outline5.png)
 
 After manual or automatic segmentation, the number of segmented cells will appear on the experiment rows of the main window:
