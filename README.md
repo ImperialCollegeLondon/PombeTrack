@@ -21,7 +21,7 @@ The following main window will be shown:
 
 ## 2. Add new experiment:
 
-From the main window, click “Add new experiment” button to launche a window for importing new data.
+From the main window, click “Add new experiment” button to launch a window for importing new data.
 
 <p align="center"><img src="./tutorial/new_experiment.PNG" /></p>
 
