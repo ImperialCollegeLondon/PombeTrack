@@ -34,7 +34,7 @@ After data import, new experiments will be added to the main window:
 
 <p align="center"><img src="./tutorial/main2.PNG" /></p>
 
-3. View Experiment:
+## 3. View Experiment:
 
 From main window, click “View experiment” button or double click on the experiment row to open a window for processing this experiment. Clicking “Delete experiment” button will remove the current selected experiment row and all associated data. Double clicking on Medium and Strain of the experiment row enables their modification.
 
