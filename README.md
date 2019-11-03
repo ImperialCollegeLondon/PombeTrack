@@ -16,3 +16,5 @@ or :
 if in Linux.
 
 The following main window will be shown:
+
+[main1](./tutorial/main1.PNG)
