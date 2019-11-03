@@ -48,11 +48,11 @@ For automatic segmentation, click “Start Auto”. Progress will be shown in �
 
 To view and manually segment the cells, click “Outline Cells” from the “View Experiment” window. The window initially shows the full image and all existing segmented cells (if any in the database):
 
-![outline2](./tutorial/outline2.PNG)
+![outline2](./tutorial/outline2.png)
 
 In “Outline cells” window, the following bar will be shown at the top:
 
-![outline1](./tutorial/outline1.PNG)
+![outline1](./tutorial/outline1.png)
 
 Functions of the buttons are shown as labelled, and can be found together with keyboard short-cut by navigating the cursor onto the buttons. The Frame changing buttons will only appear when the imported data is time-lapse image.
 
@@ -60,17 +60,17 @@ Functions of the buttons are shown as labelled, and can be found together with k
 
 For manual segmentation, select the correct channel, z-stack, then use “Pan” and “Zoom” to help finding the cell to be outlined, and click on interior of the cell:
 
-![outline3](./tutorial/outline3.PNG)
+![outline3](./tutorial/outline3.png)
 
 Click the two “Refine” buttons to evolve the active contour. The left “Refine” button performs 10 steps of evolution, while the right performs a single evolution. “Tolerance” affect how much the contour can progress into the dark region (usually the cell boundaries). “Tolerance” value has a maximum of 100, and can be changed to allow active contour to traverse the dark regions in cell interior. Nodes of the outline in the right panel can also be dragged with mouse cursor to manually adjust the contour when automatic evolution is hindered by heterogeneous cell interior. 
 
 When satisified with the outline, click “Accept” to record coordinates of the outline into database (if the image mode is movie, the image view will automatically switch to the same position of the next frame):
 
-![outline4](./tutorial/outline4.PNG)
+![outline4](./tutorial/outline4.png)
 
 The “Delete” button can be used to remove false contours from automatic or manual segmentation. Multiple selection is available via dragging through the image panel, and selection can be added by clicking or dragging on cells while holding Shift button:
 
-![outline5](./tutorial/outline5.PNG)
+![outline5](./tutorial/outline5.png)
 
 After manual or automatic segmentation, the number of segmented cells will appear on the experiment rows of the main window:
 
