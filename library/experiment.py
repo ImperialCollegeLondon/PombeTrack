@@ -189,12 +189,14 @@ class ExperimentView:
         )
         if not os.path.exists(self.outline_store):
             os.makedirs(self.outline_store)
-        startt=time.time()
+        # startt=time.time()
         for ff in range(0,self.image_loader.num_frames):
             self.current_frame_idx=ff
             self.auto_one()
         self.set_status(text="Auto segmentation finished")
-        print(time.time()-startt)
+        # print(time.time()-startt)
+        self.outline_finished()
+        
 
     def auto_one(self):
         self.set_status(
@@ -203,7 +205,11 @@ class ExperimentView:
             )
         # load_frame: frame, z-slice, channel
         im_mid = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2)), 0)
-        im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
+        try:
+            im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
+        except:
+            self.set_status(text="Preprocessing failed since not enough z-stacks are provided")
+        
         im = np.maximum(im_mid, im_up)
 
 
@@ -267,8 +273,8 @@ class ExperimentView:
                 centre_y, centre_x = centre
 
                 # Save to database
-                offset_left=0
-                offset_top=0
+                # offset_left=0
+                # offset_top=0
                 coords_path = os.path.join(
                     self.outline_store,
                     "{0}.npy".format(outline_id)
@@ -281,8 +287,8 @@ class ExperimentView:
                     "image_path": self._data.image_path,
                     "frame_idx": self.current_frame_idx,
                     "coords_path": coords_path,
-                    "offset_left": offset_left,
-                    "offset_top": offset_top,
+                    # "offset_left": offset_left,
+                    # "offset_top": offset_top,
                     "parent_id": "",
                     "centre_x":int(centre_x),
                     "centre_y":int(centre_y),
