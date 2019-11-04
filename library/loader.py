@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+import json
 import numpy as np
 import os
 import tifffile
+
 
 class ImageLoaderMulti:
     """ This class stores images in memory with image series """
@@ -36,6 +38,14 @@ class ImageLoaderMulti:
 
     def get_pixel_conversion(self):
         with tifffile.TiffFile(self.paths[0]) as im_frames:
+            if (hasattr(im_frames, "imagej_metadata") and
+                    "Info" in im_frames.imagej_metadata):
+                try:
+                    info = json.loads(im_frames.imagej_metadata["Info"])
+                    return info["PixelSize_um"]
+                except json.decoder.JSONDecodeError:
+                    pass
+
             try:
                 xres = im_frames.pages[0].tags["XResolution"].value
             except KeyError:
@@ -100,12 +110,22 @@ class ImageLoaderSingle:
 
     def get_pixel_conversion(self):
         with tifffile.TiffFile(self.path) as im_frames:
+            print(im_frames.imagej_metadata)
+            if (hasattr(im_frames, "imagej_metadata") and
+                    "Info" in im_frames.imagej_metadata):
+                try:
+                    info = json.loads(im_frames.imagej_metadata["Info"])
+                    return info["PixelSize_um"]
+                except json.decoder.JSONDecodeError:
+                    pass
+
             try:
                 xres = im_frames.pages[0].tags["XResolution"].value
             except KeyError:
                 return None
 
         px_um = xres[1] / xres[0]
+        print(xres, px_um)
         return px_um
 
     def load_frame(self, frame_idx, slice_idx=0, channel_idx=0):

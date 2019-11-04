@@ -89,8 +89,11 @@ class ExperimentView:
         self._addDetails()
         self._addBatchAuto()
         self._addOutline()
-        self._addLineageVerification()
-        self._addAnalysis()
+        if self._data.image_mode == "movie":
+            self._addLineageVerification()
+            self._addMovieAnalysis()
+        elif self._data.image_mode == "static":
+            self._addStaticAnalysis()
 
     def delete_experiment(self, close_window=True):
         # confirm first
@@ -196,7 +199,7 @@ class ExperimentView:
         self.set_status(text="Auto segmentation finished")
         # print(time.time()-startt)
         self.outline_finished()
-        
+
 
     def auto_one(self):
         self.set_status(
@@ -209,7 +212,7 @@ class ExperimentView:
             im_up = self.image_loader.load_frame(self.current_frame_idx, int(np.floor(self.image_loader.num_slices / 2) - 1), 0)
         except:
             self.set_status(text="Preprocessing failed since not enough z-stacks are provided")
-        
+
         im = np.maximum(im_mid, im_up)
 
 
@@ -319,33 +322,24 @@ class ExperimentView:
             except ValueError:
                 continue
 
-
-
-
-
     def _addOutline(self):
         outline_box = QtWidgets.QGroupBox("Outlines")
         layout = QtWidgets.QVBoxLayout()
         if self._data.outlined:
             outlines = database.getOutlinesByExperimentId(self._data.experiment_id)
             num_outlines = len(outlines)
-            if num_outlines == 0:
-                database.updateExperimentById(
-                    self._data.experiment_id,
-                    outlined=False,
-                    verified=False,
-                    analysed=False,
-                )
-                self._data = database.getExperimentById(self._data.experiment_id)
-                label = QtWidgets.QLabel("No outlines have been created")
-            else:
-                num_cells = len(pd.DataFrame(outlines).cell_id.unique())
+            num_cells = len(pd.DataFrame(outlines).cell_id.unique())
+            if self._data.image_mode == "movie":
                 label_str = "{0} outlines have been defined arranged as {1} cells{2}".format(
                     num_outlines,
                     num_cells,
                     self._data.verified and " " or " (unverified)"
                 )
-                label = QtWidgets.QLabel(label_str)
+            else:
+                label_str = "{0} outlines have been defined".format(
+                    num_outlines
+                )
+            label = QtWidgets.QLabel(label_str)
         else:
             label = QtWidgets.QLabel("No outlines have been created.")
 
@@ -415,11 +409,11 @@ class ExperimentView:
         self._data = database.getExperimentById(self._data.experiment_id)
         self._refreshLayout()
 
-    def _addAnalysis(self):
+    def _addMovieAnalysis(self):
         if self._data.verified:
             box = QtWidgets.QGroupBox("Analysis")
             layout = QtWidgets.QVBoxLayout()
-            self.analyser = analysis.Analyser(self, self._data, self.image_loader)
+            self.analyser = analysis.MovieAnalyser(self, self._data, self.image_loader)
             desktop = QtWidgets.QDesktopWidget()
             self.analyser.set_screen_res(
                 desktop.width(),
@@ -429,6 +423,37 @@ class ExperimentView:
             box.setLayout(layout)
             self.main_layout.addWidget(box)
             self.analyser.construct_box(layout)
+
+    def _addStaticAnalysis(self):
+        box = QtWidgets.QGroupBox("Analysis")
+        layout = QtWidgets.QVBoxLayout()
+
+        # explorer_btn = QtWidgets.QPushButton("Explore data")
+        # explorer_btn.clicked[bool].connect(lambda: self.explore_data())
+
+        process_btn = QtWidgets.QPushButton("Process data")
+
+        status_label = QtWidgets.QLabel("Status:")
+        status_bar = QtWidgets.QStatusBar()
+        status_layout = QtWidgets.QHBoxLayout()
+        status_layout.setAlignment(QtCore.Qt.AlignLeft)
+        status_layout.addWidget(status_label)
+        status_layout.addWidget(status_bar)
+
+        # layout.addWidget(explorer_btn)
+        layout.addWidget(process_btn)
+        layout.addLayout(status_layout)
+        box.setLayout(layout)
+        self.main_layout.addWidget(box)
+
+        self.analyser = analysis.StaticAnalyser(
+            layout,
+            self._data,
+            self.image_loader,
+            status_bar,
+        )
+        process_btn.clicked[bool].connect(lambda: self.analyser.process_data())
+
 
     def _clearLayout(self, l):
         for i in reversed(range(l.count())):
@@ -589,6 +614,9 @@ class Experiment:
                     self.setNumZ(1)
 
                 self.setNumF(len(self.image_files))
+
+                # ensure each image only has a single frame?
+                # check num_slices/num_channels are the same?
 
     def setImageMode(self, imagemode, state, check=True):
         static_test = (

@@ -20,11 +20,104 @@ import seaborn as sns
 import skimage.draw
 import skimage.measure
 import skimage.morphology
+import time
 import uuid
 
 from . import database
 
-class Analyser:
+
+class BaseAnalyser:
+    def get_signal_from_coords(self, coords, img):
+        rr, cc = skimage.draw.polygon(
+            coords[:, 0], coords[:, 1]
+        )
+        blank = np.zeros_like(img)
+        blank[rr, cc] = img[rr, cc]
+        signal = blank.sum()
+        num_pixels = len(rr)
+        return signal, num_pixels
+
+    def get_cell_area(self, outline, is_coords=False):
+        if not is_coords:
+            coords = np.load(outline.coords_path)
+        else:
+            coords = outline
+
+        px = self.image_loader.get_pixel_conversion()
+        area = 0.5 * np.abs(
+            np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) -
+            np.dot(coords[:, 1], np.roll(coords[:, 0], 1))
+        ) * px * px
+        return area
+
+
+class StaticAnalyser(BaseAnalyser):
+    def __init__(self, parent_layout, experiment_data, image_loader, status_bar):
+        self.parent_layout = parent_layout
+        self._data = experiment_data
+        self.image_loader = image_loader
+        self.status_bar = status_bar
+        self.current_status = None
+
+    def set_status(self, text=None, clear=False, status=None):
+        if not clear and text is not None:
+            self.status_bar.showMessage(text)
+        else:
+            self.status_bar.clearMessage()
+
+        if not status and self.current_status:
+            QtGui.QGuiApplication.restoreOverrideCursor()
+        elif status == "working" and self.current_status != status:
+            QtGui.QGuiApplication.setOverrideCursor(QtGui.QCursor(
+                QtCore.Qt.WaitCursor
+            ))
+
+        self.current_status = status
+        self.status_bar.repaint()
+
+    def process_data(self):
+        self.set_status("Loading outlines", status="working")
+        for frame_idx in range(self._data.num_frames):
+            outlines = database.getOutlinesByFrameIdx(
+                frame_idx,
+                self._data.experiment_id
+            )
+            if not outlines:
+                self.set_status("Skipping frame {0}".format(
+                    frame_idx + 1,
+                ))
+                continue
+            ims = []
+            for channel_idx in range(self._data.num_channels):
+                ims.append(
+                    self.image_loader.load_frame(frame_idx, 0, channel_idx)
+                )
+
+
+            for outline_idx, outline in enumerate(outlines):
+                self.set_status("Processing outline {0} in frame {1} ({2} of {3})".format(
+                    outline.outline_id,
+                    frame_idx + 1,
+                    outline_idx + 1,
+                    len(outlines),
+                ))
+                coords = np.load(outline.coords_path)
+                outline_data = {
+                    "area": self.get_cell_area(coords, True),
+                }
+                for channel_idx in range(self._data.num_channels):
+                    signal = self.get_signal_from_coords(
+                        coords,
+                        ims[channel_idx],
+                    )[0]
+                    outline_data["c{0}".format(channel_idx + 1)] = signal
+
+                print(outline_data)
+
+        self.set_status("Done")
+
+
+class MovieAnalyser(BaseAnalyser):
     def __init__(self, experiment_view, experiment_data, image_loader):
         self.ASSIGNING = False
         self.experiment_view = experiment_view
@@ -415,33 +508,10 @@ class Analyser:
     def get_interdivision_time(self, outlines):
         return outlines.birth_h.iloc[-1]
 
-    def get_cell_area(self, outline, is_coords=False):
-        if not is_coords:
-            coords = np.load(outline.coords_path)
-        else:
-            coords = outline
-
-        px = self.image_loader.get_pixel_conversion()
-        area = 0.5 * np.abs(
-            np.dot(coords[:, 0], np.roll(coords[:, 1], 1)) -
-            np.dot(coords[:, 1], np.roll(coords[:, 0], 1))
-        ) * px * px
-        return area
-
     def recalculate_background(self):
         self.background = self.calculate_signal(self.wildtype_outlines, channel=2, replace=True, show_progress=True)
         self.calculate_signal(self.wildtype_outlines, channel=1, replace=True, show_progress=True)
         self.experiment_view._refreshLayout()
-
-    def get_signal_from_coords(self, coords, img):
-        rr, cc = skimage.draw.polygon(
-            coords[:, 0], coords[:, 1]
-        )
-        blank = np.zeros_like(img)
-        blank[rr, cc] = img[rr, cc]
-        signal = blank.sum()
-        num_pixels = len(rr)
-        return signal, num_pixels
 
     def calculate_signal(self, outlines, stat=np.mean, channel=2, replace=False, show_progress=False, save=True):
         if not database.checkTable("signals"):
